@@ -2,9 +2,10 @@
 
 The evidence store uses Python's `sqlite3` with a local file database. The file
 is operational data and belongs outside Git, for example under ignored `var/`.
-There is no graph database, image inference, OCR, camera stream, or image upload
-processor in this slice. Evidence references are recorded metadata; referenced
-bytes are not downloaded, hashed, or automatically inspected.
+There is no graph database, image inference, OCR, or camera stream. The separate
+[image asset store](image-evidence.md) validates uploaded bytes and binds hashed
+assets to observations in this database. Legacy external text references remain
+unmanaged and are never fetched. Uploads do not infer component identity.
 
 Register a return batch, its returns, and each physical component once. Recording
 another observation links to that component's existing ID. The store checks the

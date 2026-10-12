@@ -10,26 +10,37 @@ from pydantic import ValidationError
 from starlette.responses import Response
 
 from rekit.api.health import router as health_router
+from rekit.api.assets import router as assets_router
 from rekit.api.workflow import router as workflow_router
 from rekit.auth import AuthConfig, AuthDirectory
 from rekit.catalog.models import Catalog
 from rekit.evidence.store import ConflictError, EvidenceStore, NotFoundError
+from rekit.evidence.assets import (
+    AssetCorruptError, AssetInvalidError, AssetMissingError, AssetTooLargeError,
+    AssetUnavailableError, AssetUnsupportedError, ImageAssetStore,
+)
 from rekit.inventory.store import InventoryStore
 from rekit.recovery.models import DispositionPolicy
 
 
-def create_app(inventory: InventoryStore | None = None, auth: AuthConfig | None = None) -> FastAPI:
+def create_app(
+    inventory: InventoryStore | None = None, auth: AuthConfig | None = None,
+    assets: ImageAssetStore | None = None,
+) -> FastAPI:
     """Build the HTTP application without loading models or opening a database."""
     app = FastAPI(
         title="ReKit API",
         description=(
-            "Local operator-confirmed recovery workflow. Evidence is supplied metadata; "
-            "visual inference and automatic image validation are not implemented. "
+            "Local operator-confirmed recovery workflow with verified image storage. "
+            "Image identity and condition require human review; visual inference is not implemented. "
             "Economic values are scenario estimates."
         ),
     )
     app.state.inventory = inventory
     app.state.auth = AuthDirectory(auth) if auth is not None else None
+    if assets is not None and (inventory is None or assets.evidence.path != inventory.evidence.path):
+        raise ValueError("Image and inventory stores must share the same evidence database.")
+    app.state.assets = assets
 
     @app.middleware("http")
     async def private_responses(
@@ -64,8 +75,20 @@ def create_app(inventory: InventoryStore | None = None, auth: AuthConfig | None 
     async def invalid_business_input(_request: Request, error: ValueError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(error)})
 
+    asset_errors = {
+        AssetMissingError: 410, AssetCorruptError: 409, AssetUnavailableError: 503,
+        AssetTooLargeError: 413, AssetUnsupportedError: 415, AssetInvalidError: 422,
+    }
+
+    async def asset_error(_request: Request, error: Exception) -> JSONResponse:
+        return JSONResponse(status_code=asset_errors[type(error)], content={"detail": str(error)})
+
+    for error_type in asset_errors:
+        app.add_exception_handler(error_type, asset_error)
+
     app.include_router(health_router)
     app.include_router(workflow_router)
+    app.include_router(assets_router)
     return app
 
 
@@ -83,7 +106,8 @@ def create_configured_app() -> FastAPI:
     catalog = Catalog.model_validate_json(Path(values["REKIT_CATALOG_PATH"]).read_text(encoding="utf-8"))
     policy = DispositionPolicy.model_validate_json(Path(values["REKIT_DISPOSITION_POLICY_PATH"]).read_text(encoding="utf-8"))
     evidence = EvidenceStore(Path(values["REKIT_DATABASE_PATH"]), catalog)
-    return create_app(InventoryStore(evidence, policy), auth=auth)
+    asset_root = Path(os.environ.get("REKIT_EVIDENCE_DIR") or evidence.path.parent / "evidence")
+    return create_app(InventoryStore(evidence, policy), auth=auth, assets=ImageAssetStore(evidence, asset_root))
 
 
 app = create_app()

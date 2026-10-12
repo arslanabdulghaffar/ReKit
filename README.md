@@ -22,6 +22,8 @@ inference is a required future integration; it has not been deployed or measured
   cancellation, explicit completion confirmation, completed-kit lineage, and audit.
 - FastAPI routes connecting intake through completion, with validated contracts,
   conflict responses, and idempotent execution commands.
+- Authenticated operators and explicit roles, plus bounded JPEG/PNG/WebP intake,
+  immutable asset records, content hashes, private retrieval, and multiple views.
 - A synthetic three-return example producing two kits, negative API scenarios,
   exhaustive-search planner checks, real SQLite race/rollback tests, and a small
   greedy comparison. These are software tests, not customer or model benchmarks.
@@ -48,6 +50,7 @@ To run the persistent local API with the synthetic catalog and policy:
 ```powershell
 .\.venv\Scripts\python.exe scripts/create_operator.py --operator alice
 $env:REKIT_AUTH_CONFIG_PATH = '.\.secrets\operators.json'
+$env:REKIT_EVIDENCE_DIR = '.\var\evidence'
 $env:REKIT_DATABASE_PATH = '.\var\synthetic-rekit.sqlite3'
 $env:REKIT_CATALOG_PATH = '.\tests\fixtures\synthetic_catalog.json'
 $env:REKIT_DISPOSITION_POLICY_PATH = '.\tests\fixtures\synthetic_disposition_policy.json'
@@ -88,8 +91,9 @@ This is not production-ready. [Named operator credentials and roles](docs/operat
 protect workflow routes and bind audit actors. Keep the printed token private,
 enter it at local sign-in, and bind to loopback. Service credentials cannot perform
 human verification or approval. Stolen human tokens can still impersonate operators.
-Evidence and final confirmation contain references, not uploaded, hashed, or
-independently inspected assets. Human-visible assembly confirmation does not prove
+Managed [image evidence](docs/image-evidence.md) is decoded and hashed; legacy
+text references remain unmanaged. Images are not proof of scene authenticity.
+Human-visible assembly confirmation does not prove
 hidden functionality or safety. Model confidence statements are not calibrated
 probabilities.
 
@@ -105,7 +109,7 @@ qualification, authenticated multi-user deployment, or external warehouse/paymen
 integration. A plan cannot be cancelled after partial completion. If new evidence
 blocks its remaining work, a future supervised recovery operation is needed.
 
-Camera capture, image storage, detection/segmentation, OCR, visual matching,
+Live camera capture, detection/segmentation, OCR, visual matching,
 vision-language inference, active recapture guidance, richer rebuild instructions,
 frontend screens, and Evolus are not implemented. No AMD benchmark or visual-model
 accuracy result is claimed. AMD cloud qualification remains a required delivery
@@ -113,7 +117,7 @@ gate once access and resource use are authorized.
 
 ## Dependencies and secrets
 
-`pyproject.toml` pins FastAPI, Pydantic, Uvicorn, and OR-Tools at runtime, plus pytest
+`pyproject.toml` pins FastAPI, Pydantic, Uvicorn, OR-Tools, and Pillow at runtime, plus pytest
 and HTTPX for tests. SQLite comes from Python. No PyTorch, ROCm, or vLLM package is
 required by the backend; keep future AMD serving in a separate environment. The
 existing local PyTorch 2.9.0+cu128 environment is preserved. Transitive packages are

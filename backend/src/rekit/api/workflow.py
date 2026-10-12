@@ -18,7 +18,7 @@ from rekit.inventory.execution import (
     InventorySnapshot, StoredPlan,
 )
 from rekit.inventory.store import InventoryStore
-from rekit.recovery.models import EconomicScenario, SolverSettings
+from rekit.recovery.models import EconomicScenario, RecoveryActionKind, SolverSettings
 
 
 router = APIRouter(tags=["operator workflow"])
@@ -105,6 +105,32 @@ def _same_component(path_id: str, body_id: str) -> None:
         raise HTTPException(status_code=422, detail="Path and payload physical component IDs must match.")
 
 
+def _assert_asset_reference(http: Request, component_id: str, reference: str) -> None:
+    if reference.lower().startswith("asset:"):
+        if http.app.state.assets is None:
+            raise HTTPException(status_code=503, detail="Image evidence storage is not configured.")
+        http.app.state.assets.assert_observation_reference(component_id, reference)
+
+
+def _assert_verification_assets(
+    http: Request, inventory: InventoryStore, component_id: str, observation_ids: tuple[str, ...],
+) -> None:
+    history = inventory.evidence.history(component_id)
+    requested = set(observation_ids)
+    for event in history.events:
+        if event.kind == "observation" and event.event_id in requested:
+            _assert_asset_reference(http, component_id, event.payload.evidence_reference)
+
+
+def _assert_current_assets(http: Request, inventory: InventoryStore, component_id: str) -> None:
+    if http.app.state.assets is not None:
+        http.app.state.assets.assert_current_assets(component_id)
+        return
+    verification = inventory.evidence.current(component_id).verification
+    if verification is not None:
+        _assert_verification_assets(http, inventory, component_id, verification.evidence_observation_ids)
+
+
 @router.post("/batches", response_model=ReturnBatch, status_code=201)
 def register_batch(batch: ReturnBatch, actor: IntakeOperator, inventory: InventoryDependency) -> ReturnBatch:
     return inventory.evidence.register_batch(batch)
@@ -122,7 +148,7 @@ def register_component(component: PhysicalComponent, actor: IntakeOperator, inve
 
 
 @router.post("/components/{component_id}/evidence", response_model=CurrentEvidence)
-def record_evidence(component_id: Identifier, request: EvidenceRequest, actor: IntakeOperator, inventory: InventoryDependency) -> CurrentEvidence:
+def record_evidence(component_id: Identifier, request: EvidenceRequest, http: Request, actor: IntakeOperator, inventory: InventoryDependency) -> CurrentEvidence:
     """Record supplied metadata or hypotheses without running visual inference."""
     _same_component(component_id, request.payload.physical_component_id)
     payload = request.payload
@@ -131,6 +157,7 @@ def record_evidence(component_id: Identifier, request: EvidenceRequest, actor: I
             raise HTTPException(status_code=403, detail="Service actors cannot submit operator-source assertions.")
         payload = type(payload).model_validate(payload.model_dump(mode="json") | {"source_reference": actor.actor_id})
     if isinstance(request, ObservationRequest):
+        _assert_asset_reference(http, component_id, payload.evidence_reference)
         return inventory.evidence.record_observation(payload)
     if isinstance(request, ProposalRequest):
         return inventory.evidence.record_proposal(payload)
@@ -138,10 +165,11 @@ def record_evidence(component_id: Identifier, request: EvidenceRequest, actor: I
 
 
 @router.post("/components/{component_id}/verification", response_model=CurrentEvidence)
-def verify_component(component_id: Identifier, request: VerificationRequest, actor: Reviewer, inventory: InventoryDependency) -> CurrentEvidence:
+def verify_component(component_id: Identifier, request: VerificationRequest, http: Request, actor: Reviewer, inventory: InventoryDependency) -> CurrentEvidence:
     """Record an explicit operator verification or a versioned identity correction."""
     _same_component(component_id, request.verification.physical_component_id)
     verification = OperatorVerification.model_validate(request.verification.model_dump(mode="json") | {"operator_id": actor.actor_id})
+    _assert_verification_assets(http, inventory, component_id, verification.evidence_observation_ids)
     return inventory.evidence.verify(verification, request.expected_version)
 
 
@@ -180,9 +208,13 @@ def get_plan(plan_id: Identifier, actor: Viewer, inventory: InventoryDependency)
 
 
 @router.post("/plans/{plan_id}/approve", response_model=StoredPlan)
-def approve_plan(plan_id: Identifier, command: ApprovalInput, actor: Approver, inventory: InventoryDependency) -> StoredPlan:
+def approve_plan(plan_id: Identifier, command: ApprovalInput, http: Request, actor: Approver, inventory: InventoryDependency) -> StoredPlan:
     """Human approval and exclusive reservation commit together in one transaction."""
     bound = ApprovalCommand.model_validate(command.model_dump(mode="json") | {"operator_id": actor.actor_id})
+    for action in inventory.get_plan(plan_id).plan.selected_actions:
+        if action.kind in (RecoveryActionKind.REBUILD, RecoveryActionKind.SALVAGE, RecoveryActionKind.LIQUIDATE):
+            for component_id in action.component_ids:
+                _assert_current_assets(http, inventory, component_id)
     return inventory.approve(plan_id, bound)
 
 
@@ -195,10 +227,23 @@ def cancel_plan(plan_id: Identifier, command: CancellationInput, actor: Approver
 @router.post("/plans/{plan_id}/actions/{action_id}/complete", response_model=StoredPlan)
 def complete_action(
     plan_id: Identifier, action_id: Identifier, command: CompletionInput,
-    actor: Executor, inventory: InventoryDependency,
+    http: Request, actor: Executor, inventory: InventoryDependency,
 ) -> StoredPlan:
     """Consume reserved identities only after explicit operator completion evidence."""
     bound = CompletionCommand.model_validate(command.model_dump(mode="json") | {"operator_id": actor.actor_id})
+    stored = inventory.get_plan(plan_id)
+    action = next((item for item in stored.plan.selected_actions if item.action_id == action_id), None)
+    if action is not None:
+        for component_id in action.component_ids:
+            _assert_current_assets(http, inventory, component_id)
+        for reference in command.evidence_references:
+            if reference.lower().startswith("asset:"):
+                if http.app.state.assets is None:
+                    raise HTTPException(status_code=503, detail="Image evidence storage is not configured.")
+                asset = http.app.state.assets.metadata(reference[6:])
+                if asset.physical_component_id not in action.component_ids:
+                    raise HTTPException(status_code=409, detail="Completion image belongs to another physical component.")
+                _assert_asset_reference(http, asset.physical_component_id, reference)
     return inventory.complete_action(plan_id, action_id, bound)
 
 

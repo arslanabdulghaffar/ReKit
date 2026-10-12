@@ -54,8 +54,9 @@ auditability; a privileged database editor can still alter the database.
 - The HTTP API binds named actors and roles from server-configured bearer credentials.
   Internal Python store methods are trusted application calls, not a separate API.
   Use loopback deployment; bearer theft and local administrators remain trusted-boundary risks.
-- Evidence references are metadata. The system does not fetch, hash, inspect, or
-  independently authenticate their underlying files.
+- Managed `asset:` references point to decoded, hashed local images. HTTP approval
+  and completion check required managed evidence integrity. Legacy text references
+  remain unmanaged; image content is not proof of a true scene or hidden properties.
 - Completion confirms the recorded assembly/disposition. It does not establish
   hidden functionality, electrical safety, or compliance with external testing.
 - Labor and demand limits apply to each scenario plan. There is no shared labor

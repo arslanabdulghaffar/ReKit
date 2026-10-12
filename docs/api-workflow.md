@@ -12,6 +12,7 @@ From the repository root in PowerShell:
 ```powershell
 .\.venv\Scripts\python.exe scripts/create_operator.py --operator alice
 $env:REKIT_AUTH_CONFIG_PATH = '.\.secrets\operators.json'
+$env:REKIT_EVIDENCE_DIR = '.\var\evidence'
 $env:REKIT_DATABASE_PATH = '.\var\synthetic-rekit.sqlite3'
 $env:REKIT_CATALOG_PATH = '.\tests\fixtures\synthetic_catalog.json'
 $env:REKIT_DISPOSITION_POLICY_PATH = '.\tests\fixtures\synthetic_disposition_policy.json'
@@ -81,8 +82,9 @@ version for the next command. An exact operation retry remains idempotent.
   completion confirmation or attempts to inject planner authority.
 - 503: the workflow has no configured store.
 
-The local API has no evidence upload, frontend, rate limiting, or external service
-integration yet. Local bearer credentials identify configured actors; they do not
+The local API includes [managed image uploads and authorized retrieval](image-evidence.md).
+It has no frontend, rate limiting, or external service integration yet.
+Local bearer credentials identify configured actors; they do not
 prove a human is physically present or that submitted evidence is true. Unknown or
 conflicting evidence still requires review and cannot enter a rebuild. Approved
 visible-condition rules do not establish hidden functionality or safety.

@@ -13,6 +13,7 @@ dependencies = [
     "pydantic==2.14.1",
     "uvicorn==0.54.0",
     "ortools==9.15.6755",
+    "pillow==12.3.0",
 ]
 
 [project.optional-dependencies]
