@@ -4,7 +4,7 @@ ReKit recovers complete product kits from incomplete returns. Its planned workfl
 
 ## Current implementation status
 
-The FastAPI application implements `GET /health`. Catalog/BOM/compatibility and evidence/identity/eligibility domain contracts are implemented and tested. SQLite now persists intake and append-only evidence history, with version-checked human verification. CPU CP-SAT recovery planning enforces complete BOMs, compatibility, component uniqueness, labor, demand, and disposition policy using integer scenario economics. Reservation/execution workflows and product screens are not yet implemented. No model, dataset, container, or inference deployment is included. Environment examples describe future configuration and are not proof of a working integration. See [domain contracts](domain-contracts.md) [evidence persistence](evidence-provenance.md), and [recovery planning](recovery-planning.md) for the current boundaries.
+The FastAPI application implements `GET /health`. Catalog/BOM/compatibility and evidence/identity/eligibility domain contracts are implemented and tested. SQLite now persists intake and append-only evidence history, with version-checked human verification. CPU CP-SAT recovery planning enforces complete BOMs, compatibility, component uniqueness, labor, demand, and disposition policy using integer scenario economics. SQLite inventory execution supports versioned proposals, atomic approval/reservation, cancellation, and operator-confirmed completion. HTTP integration and product screens remain unimplemented. No model, dataset, container, or inference deployment is included. Environment examples describe future configuration and are not proof of a working integration. See [domain contracts](domain-contracts.md) [evidence persistence](evidence-provenance.md), [recovery planning](recovery-planning.md), and [inventory execution](inventory-workflow.md) for the current boundaries.
 
 ## Repository boundaries
 
@@ -18,9 +18,9 @@ The FastAPI application implements `GET /health`. Catalog/BOM/compatibility and 
 | `backend/src/rekit/catalog/` | Approved products, BOM revisions, allowed substitutions, compatibility constraints, and visible-condition policies. |
 | `backend/src/rekit/recovery/` | Deterministic feasibility, CPU OR-Tools CP-SAT allocation, economic assumptions, and comparisons of feasible alternatives. |
 | `backend/src/rekit/workflows/` | Human corrections and approvals, application use cases, rebuild instructions, and completion verification orchestration. |
-| `backend/src/rekit/inventory/` | Transactional persistence, availability, reservation, consumption, release, and audit records. SQLite is the initial planned storage engine. |
+| `backend/src/rekit/inventory/` | Transactional persistence, availability, reservation, consumption, release, and audit records. SQLite is the current storage engine. |
 | `backend/src/rekit/integrations/evolus/` | Optional Evolus integration through application contracts; absent by default. |
-| `tests/backend/` | Health, domain, compatibility, evidence persistence, and recovery correctness tests. |
+| `tests/backend/` | Health, domain, compatibility, evidence persistence, recovery correctness, and transactional inventory tests. |
 | `evaluation/` | Planned evidence datasets/manifests, perception and decision quality checks, performance measurements, and AMD qualification records. |
 | `deploy/amd/` | Planned reproducible AMD deployment instructions and runtime/model compatibility records. |
 | `docs/` | Architecture decisions, implementation sequence, and acceptance gates. |
@@ -96,7 +96,7 @@ An approval binds an actor and decision to a specific plan version, component al
 
 Optimization runs outside the inventory write transaction against a versioned snapshot. On reservation, a short transaction checks that the approved plan remains current and each required component is eligible and available, reserves all required identities, and appends the audit record. Any failed check rolls back the entire reservation. Never partially reserve a kit or hold a write lock while invoking a model or solver.
 
-SQLite persistence must enforce at most one active allocation for a physical component using database constraints and guarded state transitions, not application prechecks alone. Planned safeguards include explicit transactions, enabled foreign-key enforcement, a bounded lock/busy policy, checked affected-row counts, and stale-version/conflict responses. The exact schema and journal configuration are intentionally deferred.
+SQLite persistence must enforce at most one active allocation for a physical component using database constraints and guarded state transitions, not application prechecks alone. Implemented safeguards include explicit transactions, enabled foreign-key enforcement, a bounded lock/busy policy, checked affected-row counts, and stale-version/conflict responses. The schema uses exclusive component allocations and append-only audit records; default SQLite journaling is retained.
 
 Inventory mutations and their audit records commit together. State transitions should support idempotency keys for retried commands, actor/time/reason attribution, and explicit reservation expiry/release behavior. The rebuild/verification flow rechecks the actual reserved identities before consumption, creates completed-kit inventory once, and preserves component lineage. A failed completion must not both consume components and leave them available.
 

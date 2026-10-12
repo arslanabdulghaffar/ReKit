@@ -45,9 +45,9 @@ and authorization will be needed before serving untrusted users.
 
 `EvidenceStore.inventory_items()` derives held/eligible snapshots from current
 evidence. This is not a reservation or stock-consumption operation. Kit-specific
-compatibility remains a separate deterministic catalog check. Inventory
-execution will share the same database so future approval and reservation can
-recheck evidence versions atomically.
+compatibility remains a separate deterministic catalog check. [Inventory execution](inventory-workflow.md) shares the same database to recheck
+evidence versions atomically. Use its inventory snapshot for availability; evidence
+eligibility alone does not establish that stock is unreserved or unconsumed.
 
 Use file databases for persistence and tests. `:memory:` is intentionally not
 supported because each operation opens and closes its own connection.

@@ -20,8 +20,10 @@ observations, identity proposals, uncertainty, and version-checked human
 verification while retaining history. See [domain contracts](docs/domain-contracts.md).
 The CPU [recovery planner](docs/recovery-planning.md) evaluates rebuilds, whole-return
 liquidation, donor retention, salvage, and holds against explicit scenario economics.
-There is no AI inference, reservation behavior, frontend application,
-or Evolus integration yet. The environment example is a future configuration
+The [inventory workflow](docs/inventory-workflow.md) persists proposals, atomically
+approves and reserves stock, and records explicitly confirmed completion with audit
+history. These domain operations are not yet connected to HTTP routes.
+There is no AI inference, frontend application, or Evolus integration yet. The environment example is a future configuration
 contract and is not loaded by the current application.
 
 ## Run in the existing Windows environment

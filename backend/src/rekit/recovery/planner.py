@@ -46,6 +46,11 @@ def _input_hash(problem: RecoveryProblem) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def problem_fingerprint(problem: RecoveryProblem) -> str:
+    """Validate and fingerprint the complete catalog, evidence, policy, and economics snapshot."""
+    return _input_hash(_validated_problem(problem))
+
+
 def _action(
     kind: RecoveryActionKind,
     component_ids: tuple[str, ...],
