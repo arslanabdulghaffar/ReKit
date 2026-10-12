@@ -1,7 +1,7 @@
 """Physical items, observations, and human assertions are distinct contracts."""
 
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -148,3 +148,50 @@ def validate_intake(
     for component in components:
         if component.source_return_id not in return_ids:
             raise ValueError(f"Unknown source return: {component.source_return_id}")
+
+
+class UncertaintyFlag(_Record):
+    flag_id: Identifier
+    physical_component_id: Identifier
+    reason: Text
+    source: AssertionSource
+    source_reference: Text
+    created_at: AwareDatetime
+
+
+class EvidenceEvent(_Record):
+    sequence: Annotated[int, Field(strict=True, gt=0)]
+    event_id: Identifier
+    kind: Literal["observation", "proposal", "uncertainty", "verification"]
+    payload: Observation | IdentityProposal | UncertaintyFlag | OperatorVerification
+    recorded_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def payload_matches_kind(self) -> Self:
+        expected_type, id_field = {
+            "observation": (Observation, "observation_id"),
+            "proposal": (IdentityProposal, "proposal_id"),
+            "uncertainty": (UncertaintyFlag, "flag_id"),
+            "verification": (OperatorVerification, "verification_id"),
+        }[self.kind]
+        if not isinstance(self.payload, expected_type) or getattr(self.payload, id_field) != self.event_id:
+            raise ValueError("Evidence event kind and ID must match its typed payload")
+        return self
+
+
+class EvidenceHistory(_Record):
+    component: PhysicalComponent
+    current: CurrentEvidence
+    events: tuple[EvidenceEvent, ...]
+
+    @model_validator(mode="after")
+    def component_history_matches(self) -> Self:
+        component_id = self.component.physical_component_id
+        if self.current.physical_component_id != component_id or any(
+            event.payload.physical_component_id != component_id for event in self.events
+        ):
+            raise ValueError("Evidence history contains a different physical component")
+        sequences = [event.sequence for event in self.events]
+        if sequences != sorted(set(sequences)):
+            raise ValueError("Evidence events must be in unique increasing sequence order")
+        return self

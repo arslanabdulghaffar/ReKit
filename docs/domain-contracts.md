@@ -32,9 +32,9 @@ that configuration's approved revisions and allowed visible conditions.
 Call collection validation at use-case boundaries. Individual Pydantic models
 cannot validate references to an external catalog or database. Never use
 `model_construct` or unvalidated `model_copy(update=...)` for untrusted input or
-state transitions. Later persistence must check that referenced observations
-exist and belong to the verified physical item, and enforce version checks and
-atomic allocation. Those operations are outside the domain-contract slice.
+state transitions. The [evidence store](evidence-provenance.md) now checks that
+referenced observations exist and belong to the verified physical item, and
+enforces evidence-version checks. Atomic allocation remains outside this slice.
 
 No model confidence scores are interpreted as probabilities. There is no visual
 inference or automatic approval in these contracts.

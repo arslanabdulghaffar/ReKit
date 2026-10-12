@@ -4,7 +4,7 @@ ReKit recovers complete product kits from incomplete returns. Its planned workfl
 
 ## Current implementation status
 
-The FastAPI application implements `GET /health`. Catalog/BOM/compatibility and evidence/identity/eligibility domain contracts are implemented and tested. Persistence, optimization, execution workflows, and product screens are not yet implemented. No model, dataset, container, or inference deployment is included. Environment examples describe future configuration and are not proof of a working integration. See [domain contracts](domain-contracts.md) for the current validation boundary.
+The FastAPI application implements `GET /health`. Catalog/BOM/compatibility and evidence/identity/eligibility domain contracts are implemented and tested. SQLite now persists intake and append-only evidence history, with version-checked human verification. Optimization, reservation/execution workflows, and product screens are not yet implemented. No model, dataset, container, or inference deployment is included. Environment examples describe future configuration and are not proof of a working integration. See [domain contracts](domain-contracts.md) and [evidence persistence](evidence-provenance.md) for the current boundaries.
 
 ## Repository boundaries
 

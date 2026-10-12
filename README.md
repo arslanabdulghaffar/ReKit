@@ -15,9 +15,11 @@ not certify inference, database, or deployment readiness.
 
 Catalog, BOM, revision compatibility, physical identity, observations, human
 verification, and inventory eligibility now have validated domain contracts.
-See [domain contracts](docs/domain-contracts.md). There is no AI inference,
-optimizer, database persistence, reservation behavior, frontend application, or
-Evolus integration yet. The environment example is a future configuration
+The SQLite [evidence store](docs/evidence-provenance.md) now persists intake,
+observations, identity proposals, uncertainty, and version-checked human
+verification while retaining history. See [domain contracts](docs/domain-contracts.md).
+There is no AI inference, optimizer, reservation behavior, frontend application,
+or Evolus integration yet. The environment example is a future configuration
 contract and is not loaded by the current application.
 
 ## Run in the existing Windows environment
