@@ -1,0 +1,64 @@
+# Python environments, packaging, and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.ipynb_checkpoints/
+
+# Secrets: only explicitly named example environment files belong in Git
+.env
+.env.*
+!.env.example
+.envrc
+.secrets/
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local operational data, customer evidence, model weights, and generated outputs
+var/
+data/
+datasets/
+uploads/
+models/
+weights/
+checkpoints/
+artifacts/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.safetensors
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.gguf
+*.log
+
+# Frontend dependencies and generated output
+node_modules/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Local editor and operating-system state
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
