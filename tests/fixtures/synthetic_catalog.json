@@ -1,0 +1,30 @@
+{
+  "catalog_id": "synthetic-demo-catalog",
+  "version": "1",
+  "synthetic": true,
+  "description": "Synthetic test catalog only. These kits and approval actors are invented fixtures, not merchant or safety evidence.",
+  "families": [
+    {"family_id": "demo-kit", "name": "Synthetic demonstration kit", "required_component_types": ["body", "adapter"]}
+  ],
+  "component_types": [
+    {"component_type_id": "body", "family_id": "demo-kit", "name": "Synthetic body"},
+    {"component_type_id": "adapter", "family_id": "demo-kit", "name": "Synthetic adapter"}
+  ],
+  "revisions": [
+    {"component_type_id": "body", "revision": "A"},
+    {"component_type_id": "adapter", "revision": "A"},
+    {"component_type_id": "adapter", "revision": "B"}
+  ],
+  "configurations": [
+    {"configuration_id": "standard-kit", "family_id": "demo-kit", "version": "1", "bom": [
+      {"component_type_id": "body", "quantity": 1},
+      {"component_type_id": "adapter", "quantity": 1}
+    ]}
+  ],
+  "policies": [
+    {"policy_id": "synthetic-standard-policy", "version": "1", "configuration_id": "standard-kit", "approved_by": "synthetic-policy-author", "approved_at": "2026-10-13T00:00:00+09:00", "rules": [
+      {"component_type_id": "body", "allowed_revisions": ["A"], "allowed_conditions": ["acceptable"]},
+      {"component_type_id": "adapter", "allowed_revisions": ["A"], "allowed_conditions": ["acceptable"]}
+    ]}
+  ]
+}

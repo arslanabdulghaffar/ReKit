@@ -2,9 +2,9 @@
 
 ReKit recovers complete product kits from incomplete returns. Its planned workflow combines traceable visual evidence, approved product rules, deterministic recovery planning, human decisions, and transactional inventory. AMD Developer Cloud inference is a required part of the hackathon delivery.
 
-## Foundation status
+## Current implementation status
 
-Task 1 implements only the FastAPI application, `GET /health`, and its automated test. The packages below establish ownership boundaries; they do not implement AI, catalog rules, optimization, inventory persistence, approvals, or product screens. No model, dataset, container, database schema, or inference deployment is included. Environment examples describe future configuration and are not proof of a working integration.
+The FastAPI application implements `GET /health`. Catalog/BOM/compatibility and evidence/identity/eligibility domain contracts are implemented and tested. Persistence, optimization, execution workflows, and product screens are not yet implemented. No model, dataset, container, or inference deployment is included. Environment examples describe future configuration and are not proof of a working integration. See [domain contracts](domain-contracts.md) for the current validation boundary.
 
 ## Repository boundaries
 

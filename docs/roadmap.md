@@ -1,6 +1,6 @@
 # ReKit implementation roadmap
 
-This roadmap is a sequence of planned increments with review gates. Task 1 stops at the repository foundation and a tested health endpoint. None of the later functionality is implemented by this task.
+This roadmap describes the original delivery sequence. Overnight Mission 01 now authorizes seven sequential, separately tested and published increments: foundation validation, domain contracts, evidence persistence, CPU optimization, transactional inventory, API integration, and final evaluation. The foundation and domain contracts are implemented. The mission explicitly allows CPU backend development while AMD cloud credits are pending; its ordering supersedes the earlier requirement below to qualify AMD before implementing the optimizer. AMD qualification remains mandatory before claiming inference readiness or completing the AMD demonstration. No paid cloud use or model download is authorized in this mission.
 
 ## 1. Foundation: current task
 

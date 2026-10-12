@@ -1,1 +1,1 @@
-"""Planned physical-item evidence, capture lineage, and observation provenance."""
+"""Physical-item, observation, and operator-verification contracts."""

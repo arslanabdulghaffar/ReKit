@@ -1,1 +1,1 @@
-"""Planned transactional custody, exclusive reservations, and inventory audit."""
+"""Verified eligibility contracts and the boundary for transactional inventory."""

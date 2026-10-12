@@ -8,15 +8,17 @@ component reservation, rebuild instructions, and completed-kit verification.
 
 ## Current scope
 
-Task 1 provides a modular repository foundation and a functioning FastAPI
+The repository provides a modular backend foundation and a functioning FastAPI
 `GET /health` endpoint returning HTTP 200 with `{"status":"ok"}`. The automated
 test covers the public response contract. This is process liveness only; it does
 not certify inference, database, or deployment readiness.
 
-The other modules are documented boundaries with docstring-only package files.
-There is no AI inference, optimizer, database schema, inventory behavior, frontend
-application, or Evolus integration yet. The environment example is a future
-configuration contract and is not loaded by the current application.
+Catalog, BOM, revision compatibility, physical identity, observations, human
+verification, and inventory eligibility now have validated domain contracts.
+See [domain contracts](docs/domain-contracts.md). There is no AI inference,
+optimizer, database persistence, reservation behavior, frontend application, or
+Evolus integration yet. The environment example is a future configuration
+contract and is not loaded by the current application.
 
 ## Run in the existing Windows environment
 
@@ -108,6 +110,8 @@ staging; ignore rules do not detect secrets embedded in ordinary source files.
 - [Frontend boundary](frontend/README.md)
 - [Foundation inspection and validation record](docs/foundation-report.md)
 
-Stop at Task 1 for review. The next proposed implementation is the evidence and
-catalog domain contracts with invariant tests, alongside early AMD runtime/model
-qualification. Product functionality starts only after that review.
+Overnight Mission 01 authorizes the local, operator-confirmed backend through
+evidence persistence, CPU recovery planning, transactional execution, and API
+integration. AMD cloud qualification remains pending and is required before
+claiming real inference or a complete AMD demonstration. No cloud use is part of
+this mission.
