@@ -1,0 +1,105 @@
+{
+  "fixture_id": "synthetic-three-returns-two-kits",
+  "synthetic": true,
+  "description": "Invented components, evidence references, operators, approvals, and economic estimates. This fixture performs no inference and provides no physical or safety evidence.",
+  "catalog_file": "synthetic_catalog.json",
+  "disposition_policy_file": "synthetic_disposition_policy.json",
+  "batch": {
+    "batch_id": "synthetic-batch-001",
+    "received_at": "2026-10-13T10:00:00+09:00"
+  },
+  "returns": [
+    {"return_id": "synthetic-return-bodies", "batch_id": "synthetic-batch-001", "product_family_id": "demo-kit", "declared_configuration_id": "standard-kit", "received_at": "2026-10-13T10:00:00+09:00"},
+    {"return_id": "synthetic-return-adapter-001", "batch_id": "synthetic-batch-001", "product_family_id": "demo-kit", "declared_configuration_id": "standard-kit", "received_at": "2026-10-13T10:00:00+09:00"},
+    {"return_id": "synthetic-return-adapter-002", "batch_id": "synthetic-batch-001", "product_family_id": "demo-kit", "declared_configuration_id": "standard-kit", "received_at": "2026-10-13T10:00:00+09:00"}
+  ],
+  "components": [
+    {
+      "component": {"physical_component_id": "synthetic-body-001", "source_return_id": "synthetic-return-bodies", "registered_at": "2026-10-13T10:01:00+09:00"},
+      "observation": {
+        "observation_id": "synthetic-observation-body-001", "physical_component_id": "synthetic-body-001", "source_return_id": "synthetic-return-bodies",
+        "captured_at": "2026-10-13T10:02:00+09:00", "evidence_reference": "synthetic://captures/body-001",
+        "source": "operator", "source_reference": "synthetic-capture-operator", "visible_marking": "body", "visible_revision": "A"
+      },
+      "verification": {
+        "verification_id": "synthetic-verification-body-001", "physical_component_id": "synthetic-body-001",
+        "identity": {"component_type_id": "body", "revision": "A"}, "operator_id": "synthetic-reviewer",
+        "verified_at": "2026-10-13T10:03:00+09:00", "evidence_observation_ids": ["synthetic-observation-body-001"],
+        "visible_condition": "acceptable", "reason": "Synthetic operator assertion of visible identity and condition; no functional or safety claim."
+      }
+    },
+    {
+      "component": {"physical_component_id": "synthetic-body-002", "source_return_id": "synthetic-return-bodies", "registered_at": "2026-10-13T10:01:00+09:00"},
+      "observation": {
+        "observation_id": "synthetic-observation-body-002", "physical_component_id": "synthetic-body-002", "source_return_id": "synthetic-return-bodies",
+        "captured_at": "2026-10-13T10:02:00+09:00", "evidence_reference": "synthetic://captures/body-002",
+        "source": "operator", "source_reference": "synthetic-capture-operator", "visible_marking": "body", "visible_revision": "A"
+      },
+      "verification": {
+        "verification_id": "synthetic-verification-body-002", "physical_component_id": "synthetic-body-002",
+        "identity": {"component_type_id": "body", "revision": "A"}, "operator_id": "synthetic-reviewer",
+        "verified_at": "2026-10-13T10:03:00+09:00", "evidence_observation_ids": ["synthetic-observation-body-002"],
+        "visible_condition": "acceptable", "reason": "Synthetic operator assertion of visible identity and condition; no functional or safety claim."
+      }
+    },
+    {
+      "component": {"physical_component_id": "synthetic-adapter-001", "source_return_id": "synthetic-return-adapter-001", "registered_at": "2026-10-13T10:01:00+09:00"},
+      "observation": {
+        "observation_id": "synthetic-observation-adapter-001", "physical_component_id": "synthetic-adapter-001", "source_return_id": "synthetic-return-adapter-001",
+        "captured_at": "2026-10-13T10:02:00+09:00", "evidence_reference": "synthetic://captures/adapter-001",
+        "source": "operator", "source_reference": "synthetic-capture-operator", "visible_marking": "adapter", "visible_revision": "A"
+      },
+      "verification": {
+        "verification_id": "synthetic-verification-adapter-001", "physical_component_id": "synthetic-adapter-001",
+        "identity": {"component_type_id": "adapter", "revision": "A"}, "operator_id": "synthetic-reviewer",
+        "verified_at": "2026-10-13T10:03:00+09:00", "evidence_observation_ids": ["synthetic-observation-adapter-001"],
+        "visible_condition": "acceptable", "reason": "Synthetic operator assertion of visible identity and condition; no functional or safety claim."
+      }
+    },
+    {
+      "component": {"physical_component_id": "synthetic-adapter-002", "source_return_id": "synthetic-return-adapter-002", "registered_at": "2026-10-13T10:01:00+09:00"},
+      "observation": {
+        "observation_id": "synthetic-observation-adapter-002", "physical_component_id": "synthetic-adapter-002", "source_return_id": "synthetic-return-adapter-002",
+        "captured_at": "2026-10-13T10:02:00+09:00", "evidence_reference": "synthetic://captures/adapter-002",
+        "source": "operator", "source_reference": "synthetic-capture-operator", "visible_marking": "adapter", "visible_revision": "A"
+      },
+      "verification": {
+        "verification_id": "synthetic-verification-adapter-002", "physical_component_id": "synthetic-adapter-002",
+        "identity": {"component_type_id": "adapter", "revision": "A"}, "operator_id": "synthetic-reviewer",
+        "verified_at": "2026-10-13T10:03:00+09:00", "evidence_observation_ids": ["synthetic-observation-adapter-002"],
+        "visible_condition": "acceptable", "reason": "Synthetic operator assertion of visible identity and condition; no functional or safety claim."
+      }
+    }
+  ],
+  "scenario": {
+    "scenario_id": "synthetic-two-kit-economics",
+    "description": "Invented USD cents for a two-kit workflow demonstration, not realized merchant revenue.",
+    "currency": "USD",
+    "valuation_date": "2026-10-13",
+    "labor_cost_per_minute_cents": 25,
+    "labor_capacity_minutes": 60,
+    "kits": [{"configuration_id": "standard-kit", "selling_price_cents": 10000, "labor_minutes": 30, "other_cost_cents": 500, "demand_limit": 2}],
+    "components": [
+      {"physical_component_id": "synthetic-body-001", "donor_value_cents": 600, "salvage_value_cents": 100},
+      {"physical_component_id": "synthetic-body-002", "donor_value_cents": 600, "salvage_value_cents": 100},
+      {"physical_component_id": "synthetic-adapter-001", "donor_value_cents": 200, "salvage_value_cents": 100},
+      {"physical_component_id": "synthetic-adapter-002", "donor_value_cents": 200, "salvage_value_cents": 100}
+    ],
+    "returns": [
+      {"return_id": "synthetic-return-bodies", "liquidation_value_cents": 800},
+      {"return_id": "synthetic-return-adapter-001", "liquidation_value_cents": 100},
+      {"return_id": "synthetic-return-adapter-002", "liquidation_value_cents": 100}
+    ],
+    "scenario_estimate": true
+  },
+  "expected": {
+    "return_count": 3,
+    "physical_component_count": 4,
+    "completed_kit_count": 2,
+    "configuration_id": "standard-kit",
+    "modeled_value_cents": 17500,
+    "cash_recovery_cents": 17500,
+    "retained_value_cents": 0,
+    "labor_minutes": 60
+  }
+}

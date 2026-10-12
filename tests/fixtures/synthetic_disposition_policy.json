@@ -1,0 +1,14 @@
+{
+  "policy_id": "synthetic-recovery-dispositions",
+  "version": "1",
+  "approved_by": "synthetic-policy-author",
+  "approved_at": "2026-10-13T00:00:00+09:00",
+  "liquidation_allowed_return_ids": [
+    "synthetic-return-bodies",
+    "synthetic-return-adapter-001",
+    "synthetic-return-adapter-002"
+  ],
+  "liquidation_allowed_conditions": ["acceptable"],
+  "salvage_allowed_component_types": ["body", "adapter"],
+  "salvage_allowed_conditions": ["acceptable", "damaged"]
+}

@@ -4,14 +4,14 @@ ReKit recovers complete product kits from incomplete returns. Its planned workfl
 
 ## Current implementation status
 
-The FastAPI application implements `GET /health`. Catalog/BOM/compatibility and evidence/identity/eligibility domain contracts are implemented and tested. SQLite now persists intake and append-only evidence history, with version-checked human verification. CPU CP-SAT recovery planning enforces complete BOMs, compatibility, component uniqueness, labor, demand, and disposition policy using integer scenario economics. SQLite inventory execution supports versioned proposals, atomic approval/reservation, cancellation, and operator-confirmed completion. HTTP integration and product screens remain unimplemented. No model, dataset, container, or inference deployment is included. Environment examples describe future configuration and are not proof of a working integration. See [domain contracts](domain-contracts.md) [evidence persistence](evidence-provenance.md), [recovery planning](recovery-planning.md), and [inventory execution](inventory-workflow.md) for the current boundaries.
+FastAPI exposes `GET /health` and the [operator-confirmed workflow API](api-workflow.md). Catalog/BOM/compatibility and evidence/identity/eligibility domain contracts are implemented and tested. SQLite now persists intake and append-only evidence history, with version-checked human verification. CPU CP-SAT recovery planning enforces complete BOMs, compatibility, component uniqueness, labor, demand, and disposition policy using integer scenario economics. SQLite inventory execution supports versioned proposals, atomic approval/reservation, cancellation, and operator-confirmed completion. Product screens remain unimplemented. No model, dataset, container, or inference deployment is included. The configured app factory reads local catalog, policy, and database paths; inference and Evolus variables remain future configuration. See [domain contracts](domain-contracts.md), [evidence persistence](evidence-provenance.md), [recovery planning](recovery-planning.md), and [inventory execution](inventory-workflow.md) for the current boundaries.
 
 ## Repository boundaries
 
 | Location | Responsibility |
 | --- | --- |
 | `frontend/` | Planned React, TypeScript, and Vite operator interface for capture, evidence review, recovery comparison, approval, rebuilding, and verification. |
-| `backend/src/rekit/api/` | HTTP routing and request/response translation, wired by `backend/src/rekit/main.py`. The health route is the only implemented application endpoint. |
+| `backend/src/rekit/api/` | HTTP routing and request/response translation, wired by `backend/src/rekit/main.py`. Routes delegate to evidence and inventory operations; the default app leaves workflows unconfigured. |
 | `backend/src/rekit/inference/` | Planned perception contracts and orchestration for localization, OCR, visual matching, and vision-language interpretation. |
 | `backend/src/rekit/inference/adapters/` | Provider-specific implementations. Production targets AMD Developer Cloud with ROCm, vLLM, and a qualified open vision-language model; local PyTorch/CUDA and mock adapters support development. |
 | `backend/src/rekit/evidence/` | Physical-component identity, return/capture relationships, immutable source evidence, observations, provenance, and requests for additional evidence. |
@@ -20,7 +20,7 @@ The FastAPI application implements `GET /health`. Catalog/BOM/compatibility and 
 | `backend/src/rekit/workflows/` | Human corrections and approvals, application use cases, rebuild instructions, and completion verification orchestration. |
 | `backend/src/rekit/inventory/` | Transactional persistence, availability, reservation, consumption, release, and audit records. SQLite is the current storage engine. |
 | `backend/src/rekit/integrations/evolus/` | Optional Evolus integration through application contracts; absent by default. |
-| `tests/backend/` | Health, domain, compatibility, evidence persistence, recovery correctness, and transactional inventory tests. |
+| `tests/backend/` | Health, domain, compatibility, evidence persistence, recovery correctness, transactional inventory, and complete API workflow tests. |
 | `evaluation/` | Planned evidence datasets/manifests, perception and decision quality checks, performance measurements, and AMD qualification records. |
 | `deploy/amd/` | Planned reproducible AMD deployment instructions and runtime/model compatibility records. |
 | `docs/` | Architecture decisions, implementation sequence, and acceptance gates. |
@@ -48,7 +48,7 @@ Do not add a generic framework, event bus, shared `utils` layer, or speculative 
 9. **Reserve and rebuild.** Revalidate the approved plan against current evidence, policies, and inventory, then atomically reserve all required components and record the audit event. Generate instructions from the approved BOM and actual reservations.
 10. **Verify and close.** Verify the assembled kit using required evidence and policy checks, record human confirmation where required, then atomically record consumption/output inventory and audit history. Failed or interrupted work follows an explicit hold/release/rework path.
 
-These steps describe planned behavior. The health endpoint does not exercise or certify any step in this workflow.
+These steps describe the complete target workflow. The current API exercises the operator-confirmed evidence-to-completion path; capture/perception and richer rebuild instructions remain planned. The health endpoint certifies none of these capabilities.
 
 ## Evidence, identity, and provenance invariants
 

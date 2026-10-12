@@ -22,9 +22,11 @@ The CPU [recovery planner](docs/recovery-planning.md) evaluates rebuilds, whole-
 liquidation, donor retention, salvage, and holds against explicit scenario economics.
 The [inventory workflow](docs/inventory-workflow.md) persists proposals, atomically
 approves and reserves stock, and records explicitly confirmed completion with audit
-history. These domain operations are not yet connected to HTTP routes.
-There is no AI inference, frontend application, or Evolus integration yet. The environment example is a future configuration
-contract and is not loaded by the current application.
+history. The [operator-confirmed API](docs/api-workflow.md) now connects intake,
+evidence review, planning, approval, reservations, and completion.
+There is no AI inference, frontend application, or Evolus integration yet.
+The configured factory reads three explicit process variables; `.env` files are
+not loaded automatically.
 
 ## Run in the existing Windows environment
 
@@ -46,7 +48,8 @@ Invoke-RestMethod -Uri http://127.0.0.1:8000/health
 
 The development API documentation is at `http://127.0.0.1:8000/docs`. Stop the
 server with Ctrl+C. No secrets, GPU, external service, or `.env` file are required
-for the health endpoint and test.
+for the health endpoint and tests. See [API startup and routes](docs/api-workflow.md)
+to run the configured SQLite workflow.
 
 The test uses [HTTPX's ASGI transport](https://www.python-httpx.org/advanced/transports/#asgi-transport)
 with Python's standard event loop, so no async pytest plugin is needed. It
