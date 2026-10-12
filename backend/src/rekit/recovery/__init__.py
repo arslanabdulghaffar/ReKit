@@ -1,1 +1,1 @@
-"""Planned CPU optimization, economic assumptions, and recovery alternatives."""
+"""CPU recovery optimization and deterministic scenario economics."""

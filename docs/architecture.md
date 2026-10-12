@@ -4,7 +4,7 @@ ReKit recovers complete product kits from incomplete returns. Its planned workfl
 
 ## Current implementation status
 
-The FastAPI application implements `GET /health`. Catalog/BOM/compatibility and evidence/identity/eligibility domain contracts are implemented and tested. SQLite now persists intake and append-only evidence history, with version-checked human verification. Optimization, reservation/execution workflows, and product screens are not yet implemented. No model, dataset, container, or inference deployment is included. Environment examples describe future configuration and are not proof of a working integration. See [domain contracts](domain-contracts.md) and [evidence persistence](evidence-provenance.md) for the current boundaries.
+The FastAPI application implements `GET /health`. Catalog/BOM/compatibility and evidence/identity/eligibility domain contracts are implemented and tested. SQLite now persists intake and append-only evidence history, with version-checked human verification. CPU CP-SAT recovery planning enforces complete BOMs, compatibility, component uniqueness, labor, demand, and disposition policy using integer scenario economics. Reservation/execution workflows and product screens are not yet implemented. No model, dataset, container, or inference deployment is included. Environment examples describe future configuration and are not proof of a working integration. See [domain contracts](domain-contracts.md) [evidence persistence](evidence-provenance.md), and [recovery planning](recovery-planning.md) for the current boundaries.
 
 ## Repository boundaries
 
@@ -20,7 +20,7 @@ The FastAPI application implements `GET /health`. Catalog/BOM/compatibility and 
 | `backend/src/rekit/workflows/` | Human corrections and approvals, application use cases, rebuild instructions, and completion verification orchestration. |
 | `backend/src/rekit/inventory/` | Transactional persistence, availability, reservation, consumption, release, and audit records. SQLite is the initial planned storage engine. |
 | `backend/src/rekit/integrations/evolus/` | Optional Evolus integration through application contracts; absent by default. |
-| `tests/backend/` | Executable backend tests; currently the health contract only. |
+| `tests/backend/` | Health, domain, compatibility, evidence persistence, and recovery correctness tests. |
 | `evaluation/` | Planned evidence datasets/manifests, perception and decision quality checks, performance measurements, and AMD qualification records. |
 | `deploy/amd/` | Planned reproducible AMD deployment instructions and runtime/model compatibility records. |
 | `docs/` | Architecture decisions, implementation sequence, and acceptance gates. |
@@ -82,7 +82,7 @@ Models and agents may propose observations, questions, summaries, or draft expla
 
 ## Recovery optimization and economics
 
-The planned CPU CP-SAT model chooses assignments of unique eligible components to candidate kits. Hard constraints cover component exclusivity, complete BOM quantities, approved revisions/substitutions, visible-condition eligibility, current availability, and applicable operational capacities. Economic preference is an objective, never a mechanism for bypassing those constraints.
+The CPU CP-SAT model chooses assignments of unique eligible components to candidate kits. Hard constraints cover component exclusivity, complete BOM quantities, approved revisions/substitutions, visible-condition eligibility, current availability, and applicable operational capacities. Economic preference is an objective, never a mechanism for bypassing those constraints.
 
 Economic inputs should make recovered value, repair/inspection/assembly labor, replacement parts, logistics, disposal or alternative recovery value, and capacity assumptions explicit where relevant. Distinguish measured prices/costs from estimates, state currency and units, and avoid double-counting common costs when comparing alternatives.
 

@@ -12,6 +12,7 @@ dependencies = [
     "fastapi==0.143.0",
     "pydantic==2.14.1",
     "uvicorn==0.54.0",
+    "ortools==9.15.6755",
 ]
 
 [project.optional-dependencies]

@@ -18,7 +18,9 @@ verification, and inventory eligibility now have validated domain contracts.
 The SQLite [evidence store](docs/evidence-provenance.md) now persists intake,
 observations, identity proposals, uncertainty, and version-checked human
 verification while retaining history. See [domain contracts](docs/domain-contracts.md).
-There is no AI inference, optimizer, reservation behavior, frontend application,
+The CPU [recovery planner](docs/recovery-planning.md) evaluates rebuilds, whole-return
+liquidation, donor retention, salvage, and holds against explicit scenario economics.
+There is no AI inference, reservation behavior, frontend application,
 or Evolus integration yet. The environment example is a future configuration
 contract and is not loaded by the current application.
 
