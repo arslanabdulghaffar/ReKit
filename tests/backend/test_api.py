@@ -5,6 +5,7 @@ from copy import deepcopy
 import json
 import os
 from pathlib import Path
+import secrets
 import subprocess
 import sys
 
@@ -12,6 +13,7 @@ from fastapi import FastAPI
 import httpx
 import pytest
 
+from rekit.auth import Actor, ActorKind, AuthConfig, OperatorCredential, Role, token_digest
 from rekit.catalog.models import Catalog
 from rekit.evidence.store import EvidenceStore
 from rekit.inventory.store import InventoryStore
@@ -20,11 +22,26 @@ from rekit.recovery.models import DispositionPolicy
 
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
+API_TEST_TOKEN = secrets.token_urlsafe(32)
+
+
+def make_auth_config() -> AuthConfig:
+    return AuthConfig(operators=(OperatorCredential(
+        actor=Actor(actor_id="synthetic-reviewer", kind=ActorKind.HUMAN, roles=tuple(Role)),
+        token_sha256=token_digest(API_TEST_TOKEN),
+    ),))
+
+
+def auth_headers() -> dict[str, str]:
+    return {"Authorization": f"Bearer {API_TEST_TOKEN}"}
 
 
 @pytest.fixture
 def recovery_fixture() -> dict:
-    return json.loads((FIXTURES / "synthetic_recovery.json").read_text(encoding="utf-8"))
+    fixture = json.loads((FIXTURES / "synthetic_recovery.json").read_text(encoding="utf-8"))
+    for record in fixture["components"]:
+        record["verification"].pop("operator_id")
+    return fixture
 
 
 @pytest.fixture
@@ -33,7 +50,7 @@ def api(tmp_path: Path, recovery_fixture: dict) -> FastAPI:
     policy = DispositionPolicy.model_validate_json(
         (FIXTURES / recovery_fixture["disposition_policy_file"]).read_text(encoding="utf-8")
     )
-    return create_app(InventoryStore(EvidenceStore(tmp_path / "api.sqlite3", catalog), policy))
+    return create_app(InventoryStore(EvidenceStore(tmp_path / "api.sqlite3", catalog), policy), auth=make_auth_config())
 
 
 def checked(response: httpx.Response, expected_status: int = 200):
@@ -59,14 +76,14 @@ async def intake(client: httpx.AsyncClient, fixture: dict, *, verify: bool = Fal
 
 def approval_command(stored: dict, operation_id: str = "synthetic-approval-001") -> dict:
     return {
-        "operation_id": operation_id, "operator_id": "synthetic-reviewer",
+        "operation_id": operation_id,
         "expected_version": stored["version"], "reason": "Synthetic operator reviewed the proposed allocation.",
     }
 
 
 def completion_command(stored: dict, action: dict, index: int) -> dict:
     return {
-        "operation_id": f"synthetic-completion-{index}", "operator_id": "synthetic-reviewer",
+        "operation_id": f"synthetic-completion-{index}",
         "expected_version": stored["version"], "reason": "Synthetic explicit confirmation of the exact rebuilt contents.",
         "confirmed": True, "component_ids": action["component_ids"],
         "evidence_references": [f"synthetic://completed-kits/{index}"],
@@ -76,7 +93,7 @@ def completion_command(stored: dict, action: dict, index: int) -> dict:
 
 def test_http_three_incomplete_returns_become_two_explicitly_confirmed_kits(api: FastAPI, recovery_fixture: dict) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             fixture = recovery_fixture
             expected = fixture["expected"]
             assert fixture["synthetic"] is True
@@ -155,7 +172,7 @@ def test_http_three_incomplete_returns_become_two_explicitly_confirmed_kits(api:
 
 def test_ambiguous_and_incompatible_evidence_cannot_automatically_form_kits(api: FastAPI, recovery_fixture: dict) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             await intake(client, recovery_fixture)
             for record in recovery_fixture["components"][:2]:
                 component_id = record["component"]["physical_component_id"]
@@ -197,7 +214,7 @@ def test_ambiguous_and_incompatible_evidence_cannot_automatically_form_kits(api:
 
 def test_http_not_found_conflict_validation_and_path_identity_errors(api: FastAPI, recovery_fixture: dict) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             checked(await client.get("/plans/missing-plan"), 404)
             await intake(client, recovery_fixture, verify=True)
             first, second = recovery_fixture["components"][:2]
@@ -226,7 +243,7 @@ def test_http_not_found_conflict_validation_and_path_identity_errors(api: FastAP
             assert checked(await client.post(f"/plans/{plan_id}/approve", json=command)) == approved
             checked(await client.post(f"/plans/{plan_id}/approve", json=command | {"reason": "Changed request"}), 409)
             checked(await client.post(f"/plans/{plan_id}/cancel", json={
-                "operation_id": "synthetic-stale-cancel", "operator_id": "synthetic-reviewer",
+                "operation_id": "synthetic-stale-cancel",
                 "expected_version": 1, "reason": "Synthetic stale command.",
             }), 409)
             assert len(checked(await client.get(f"/plans/{plan_id}/audit"))) == 2
@@ -237,7 +254,7 @@ def test_http_not_found_conflict_validation_and_path_identity_errors(api: FastAP
 @pytest.mark.parametrize("authority_field", ["catalog", "policy", "inventory"])
 def test_planning_rejects_client_supplied_authority(api: FastAPI, recovery_fixture: dict, authority_field: str) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             response = await client.post("/plans", json={"scenario": recovery_fixture["scenario"], authority_field: {}})
             checked(response, 422)
             assert checked(await client.get("/inventory")) == {"items": [], "completed_kits": []}
@@ -248,7 +265,7 @@ def test_planning_rejects_client_supplied_authority(api: FastAPI, recovery_fixtu
 @pytest.mark.parametrize("confirmation", [None, False, 1])
 def test_http_completion_requires_explicit_boolean_confirmation(api: FastAPI, recovery_fixture: dict, confirmation: object) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             await intake(client, recovery_fixture, verify=True)
             proposed = checked(await client.post("/plans", json={"scenario": recovery_fixture["scenario"]}), 201)
             plan_id = proposed["plan"]["plan_id"]
@@ -270,7 +287,7 @@ def test_http_completion_requires_explicit_boolean_confirmation(api: FastAPI, re
 
 def test_business_validation_error_does_not_echo_server_inventory_or_catalog(api: FastAPI, recovery_fixture: dict) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             await intake(client, recovery_fixture, verify=True)
             incomplete_scenario = deepcopy(recovery_fixture["scenario"])
             incomplete_scenario["components"].pop()
@@ -289,6 +306,10 @@ def configure_environment(monkeypatch: pytest.MonkeyPatch, database_path: Path) 
     monkeypatch.setenv("REKIT_DATABASE_PATH", str(database_path))
     monkeypatch.setenv("REKIT_CATALOG_PATH", str(FIXTURES / "synthetic_catalog.json"))
     monkeypatch.setenv("REKIT_DISPOSITION_POLICY_PATH", str(FIXTURES / "synthetic_disposition_policy.json"))
+    existing_directory = database_path.parent if database_path.parent.exists() else database_path.parent.parent
+    auth_path = existing_directory / "api-test-auth.json"
+    auth_path.write_text(make_auth_config().model_dump_json(), encoding="utf-8")
+    monkeypatch.setenv("REKIT_AUTH_CONFIG_PATH", str(auth_path))
 
 
 def test_default_app_is_unconfigured_and_fresh_import_does_not_create_a_database(
@@ -299,7 +320,7 @@ def test_default_app_is_unconfigured_and_fresh_import_does_not_create_a_database
     default_app = create_app()
 
     async def requests() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=default_app), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=default_app), base_url="http://testserver", headers=auth_headers()) as client:
             assert checked(await client.get("/health")) == {"status": "ok"}
             checked(await client.get("/inventory"), 503)
 
@@ -311,7 +332,7 @@ def test_default_app_is_unconfigured_and_fresh_import_does_not_create_a_database
     assert not database_path.parent.exists()
 
 
-@pytest.mark.parametrize("missing_name", ["REKIT_DATABASE_PATH", "REKIT_CATALOG_PATH", "REKIT_DISPOSITION_POLICY_PATH"])
+@pytest.mark.parametrize("missing_name", ["REKIT_DATABASE_PATH", "REKIT_CATALOG_PATH", "REKIT_DISPOSITION_POLICY_PATH", "REKIT_AUTH_CONFIG_PATH"])
 def test_configured_factory_requires_all_paths_before_creating_database(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing_name: str,
 ) -> None:
@@ -331,7 +352,7 @@ def test_configured_factory_loads_trusted_fixture_files_and_temp_database(
     configured = create_configured_app()
 
     async def requests() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=configured), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=configured), base_url="http://testserver", headers=auth_headers()) as client:
             assert checked(await client.get("/health")) == {"status": "ok"}
             assert checked(await client.get("/inventory")) == {"items": [], "completed_kits": []}
 
@@ -341,7 +362,7 @@ def test_configured_factory_loads_trusted_fixture_files_and_temp_database(
 
 def test_http_unknown_identity_stays_held_and_cannot_be_operator_verified(api: FastAPI, recovery_fixture: dict) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             await intake(client, recovery_fixture)
             record = recovery_fixture["components"][0]
             component_id = record["component"]["physical_component_id"]
@@ -377,7 +398,7 @@ def test_http_repeated_observations_and_identity_correction_preserve_stock_and_h
     api: FastAPI, recovery_fixture: dict,
 ) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             await intake(client, recovery_fixture, verify=True)
             record = recovery_fixture["components"][2]
             component_id = record["component"]["physical_component_id"]
@@ -422,7 +443,7 @@ def test_http_repeated_observations_and_identity_correction_preserve_stock_and_h
 
 def test_http_insufficient_inventory_cannot_invent_a_second_kit(api: FastAPI, recovery_fixture: dict) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             reduced = deepcopy(recovery_fixture)
             missing_id = "synthetic-body-002"
             reduced["components"] = [record for record in reduced["components"]
@@ -449,7 +470,7 @@ def test_http_insufficient_inventory_cannot_invent_a_second_kit(api: FastAPI, re
 
 def test_http_uneconomic_rebuild_retains_donors_without_claiming_cash(api: FastAPI, recovery_fixture: dict) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             await intake(client, recovery_fixture, verify=True)
             scenario = deepcopy(recovery_fixture["scenario"])
             scenario["kits"][0]["selling_price_cents"] = 500
@@ -467,7 +488,7 @@ def test_http_uneconomic_rebuild_retains_donors_without_claiming_cash(api: FastA
 
 def test_concurrent_http_approvals_reserve_shared_components_for_only_one_plan(api: FastAPI, recovery_fixture: dict) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             await intake(client, recovery_fixture, verify=True)
             first = checked(await client.post("/plans", json={"scenario": recovery_fixture["scenario"]}), 201)
             second = checked(await client.post("/plans", json={"scenario": recovery_fixture["scenario"]}), 201)
@@ -493,7 +514,7 @@ def test_concurrent_http_approvals_reserve_shared_components_for_only_one_plan(a
 
 def test_http_stale_evidence_blocks_approval_without_partial_reservation(api: FastAPI, recovery_fixture: dict) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             await intake(client, recovery_fixture, verify=True)
             proposed = checked(await client.post("/plans", json={"scenario": recovery_fixture["scenario"]}), 201)
             record = recovery_fixture["components"][0]
@@ -516,13 +537,13 @@ def test_http_stale_evidence_blocks_approval_without_partial_reservation(api: Fa
 
 def test_http_cancellation_releases_reservations_and_prevents_later_completion(api: FastAPI, recovery_fixture: dict) -> None:
     async def workflow() -> None:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver", headers=auth_headers()) as client:
             await intake(client, recovery_fixture, verify=True)
             proposed = checked(await client.post("/plans", json={"scenario": recovery_fixture["scenario"]}), 201)
             plan_id = proposed["plan"]["plan_id"]
             approved = checked(await client.post(f"/plans/{plan_id}/approve", json=approval_command(proposed)))
             command = {
-                "operation_id": "synthetic-cancellation", "operator_id": "synthetic-reviewer",
+                "operation_id": "synthetic-cancellation",
                 "expected_version": approved["version"], "reason": "Synthetic operator cancelled before rebuilding began.",
             }
             cancelled = checked(await client.post(f"/plans/{plan_id}/cancel", json=command))

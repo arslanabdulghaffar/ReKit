@@ -51,8 +51,9 @@ auditability; a privileged database editor can still alter the database.
 
 ## Current limits
 
-- Operator IDs are asserted by the caller; identity authentication and roles are
-  not implemented. Use the API only on a trusted local machine until that exists.
+- The HTTP API binds named actors and roles from server-configured bearer credentials.
+  Internal Python store methods are trusted application calls, not a separate API.
+  Use loopback deployment; bearer theft and local administrators remain trusted-boundary risks.
 - Evidence references are metadata. The system does not fetch, hash, inspect, or
   independently authenticate their underlying files.
 - Completion confirms the recorded assembly/disposition. It does not establish

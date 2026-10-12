@@ -40,8 +40,9 @@ The implementation follows Python's [explicit SQLite transaction control](https:
 and SQLite's [transaction semantics](https://www.sqlite.org/lang_transaction.html).
 The database pins its catalog contents; opening it against changed catalog
 content fails rather than silently changing approved policy. Catalog migration
-is not implemented. Operator identifiers are recorded assertions; authentication
-and authorization will be needed before serving untrusted users.
+is not implemented. Operator identifiers on HTTP verification requests are now bound to authenticated
+server-configured actors; client identity overrides are rejected. Captured/verified
+timestamps are reported metadata, while server event timestamps record admission.
 
 `EvidenceStore.inventory_items()` derives held/eligible snapshots from current
 evidence. This is not a reservation or stock-consumption operation. Kit-specific

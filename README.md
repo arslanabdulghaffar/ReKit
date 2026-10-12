@@ -46,6 +46,8 @@ comparisons. Expected outputs and assumptions are in [evaluation](evaluation/REA
 To run the persistent local API with the synthetic catalog and policy:
 
 ```powershell
+.\.venv\Scripts\python.exe scripts/create_operator.py --operator alice
+$env:REKIT_AUTH_CONFIG_PATH = '.\.secrets\operators.json'
 $env:REKIT_DATABASE_PATH = '.\var\synthetic-rekit.sqlite3'
 $env:REKIT_CATALOG_PATH = '.\tests\fixtures\synthetic_catalog.json'
 $env:REKIT_DISPOSITION_POLICY_PATH = '.\tests\fixtures\synthetic_disposition_policy.json'
@@ -59,7 +61,8 @@ The policy and catalog files are trusted server inputs, not client overrides.
 The default `rekit.main:app` opens no database: `/health` returns HTTP 200 with
 `{"status":"ok"}`, and workflow routes return 503. Health reports process
 liveness only. Use the configured factory above for the working recovery API.
-No `.env` file is loaded automatically.
+No `.env` file is loaded automatically. Workflow requests need an operator bearer
+token; the provisioning command refuses to overwrite existing credentials.
 
 ## Repository boundaries
 
@@ -81,8 +84,10 @@ No `.env` file is loaded automatically.
 
 ## Limits and unimplemented work
 
-This is not production-ready. Operator IDs are caller assertions; authentication
-and role enforcement are absent. Bind to loopback and use trusted local callers.
+This is not production-ready. [Named operator credentials and roles](docs/operator-auth.md)
+protect workflow routes and bind audit actors. Keep the printed token private,
+enter it at local sign-in, and bind to loopback. Service credentials cannot perform
+human verification or approval. Stolen human tokens can still impersonate operators.
 Evidence and final confirmation contain references, not uploaded, hashed, or
 independently inspected assets. Human-visible assembly confirmation does not prove
 hidden functionality or safety. Model confidence statements are not calibrated
@@ -128,6 +133,6 @@ Read [architecture](docs/architecture.md), [domain contracts](docs/domain-contra
 [inventory execution](docs/inventory-workflow.md), and the [roadmap](docs/roadmap.md).
 The [foundation report](docs/foundation-report.md) is a historical inspection record.
 
-The smallest next task is authenticated operator identity and role checks for
-verification, approval, and completion. Evidence-asset provenance and AMD inference
-qualification follow; none of that additional work is part of this mission.
+Mission 02 adds authenticated authority, secure image evidence, a connected operator
+workbench, and integration validation. AMD inference remains a separate future task
+after local vision work and explicit qualification authorization.

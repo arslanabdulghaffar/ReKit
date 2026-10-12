@@ -5,9 +5,9 @@ import json
 import sqlite3
 from uuid import uuid4
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
-from rekit.catalog.models import Catalog, VisibleCondition
+from rekit.catalog.models import Catalog, Identifier, VisibleCondition
 from rekit.evidence.models import VerificationState
 from rekit.evidence.store import ConflictError, EvidenceStore, NotFoundError, _canonical
 from rekit.inventory.execution import (
@@ -234,7 +234,11 @@ class InventoryStore:
             (plan_id, operation_id, operator_id, kind, version, reason, datetime.now(UTC).isoformat(), action_id),
         )
 
-    def request_plan(self, scenario: EconomicScenario, settings: SolverSettings = SolverSettings()) -> StoredPlan:
+    def request_plan(
+        self, scenario: EconomicScenario, settings: SolverSettings = SolverSettings(),
+        *, requested_by: str = "system-planner",
+    ) -> StoredPlan:
+        requested_by = TypeAdapter(Identifier).validate_python(requested_by)
         scenario = EconomicScenario.model_validate(scenario.model_dump(mode="json", warnings=False))
         settings = SolverSettings.model_validate(settings.model_dump(mode="json", warnings=False))
         with self.evidence._read() as connection:
@@ -262,7 +266,7 @@ class InventoryStore:
             operation_id = f"proposal:{uuid4()}"
             self._record_operation(connection, operation_id, "proposed", plan.plan_id, None, plan)
             self._append_audit(
-                connection, plan_id=plan.plan_id, operation_id=operation_id, operator_id="system-planner",
+                connection, plan_id=plan.plan_id, operation_id=operation_id, operator_id=requested_by,
                 kind="proposed", version=1, reason="Generated a recovery proposal using explicit scenario estimates; no inventory was reserved.",
             )
             return self._stored(connection, plan.plan_id)

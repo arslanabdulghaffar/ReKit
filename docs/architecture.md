@@ -92,7 +92,7 @@ Alternatives must remain feasible against the same stated input snapshot. Show t
 
 ## Approvals, inventory, and audit
 
-An approval binds an actor and decision to a specific plan version, component allocation, evidence state, catalog/policy versions, and economics. A later change does not inherit approval automatically. The current API records caller-supplied operator assertions and has no authentication or role enforcement; it is limited to trusted local use. Authenticated operator authority is the next implementation gate.
+An approval binds an actor and decision to a specific plan version, component allocation, evidence state, catalog/policy versions, and economics. A later change does not inherit approval automatically. The API authenticates server-configured named actors and explicit roles. Verification, approval/cancellation, and completion require human principals; service credentials cannot exercise those gates. Request bodies cannot override audit actor identity. Bearer possession does not prove physical human presence; this remains a local deployment with the limits documented in [operator authentication](operator-auth.md).
 
 Optimization runs outside the inventory write transaction against a versioned snapshot. On reservation, a short transaction checks that the approved plan remains current and each required component is eligible and available, reserves all required identities, and appends the audit record. Any failed check rolls back the entire reservation. Never partially reserve a kit or hold a write lock while invoking a model or solver.
 

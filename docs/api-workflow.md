@@ -1,14 +1,17 @@
 # Operator-confirmed backend API
 
 The API exposes the implemented catalog, evidence, planner, and inventory logic.
-It performs no image inference and does not authenticate evidence assets or
-operator identity. Run it on a trusted local machine with loopback binding.
+It performs no image inference. Workflow routes require a named operator/service
+bearer credential and explicit roles. See [authentication](operator-auth.md) for
+provisioning and threat limits. Run locally with loopback binding.
 
 ## Start a configured local server
 
 From the repository root in PowerShell:
 
 ```powershell
+.\.venv\Scripts\python.exe scripts/create_operator.py --operator alice
+$env:REKIT_AUTH_CONFIG_PATH = '.\.secrets\operators.json'
 $env:REKIT_DATABASE_PATH = '.\var\synthetic-rekit.sqlite3'
 $env:REKIT_CATALOG_PATH = '.\tests\fixtures\synthetic_catalog.json'
 $env:REKIT_DISPOSITION_POLICY_PATH = '.\tests\fixtures\synthetic_disposition_policy.json'
@@ -59,8 +62,9 @@ Hold values remain zero regardless of an input donor valuation. Each scenario
 identifies its currency, valuation date, labor rate, prices, and noncash donor
 values. Reported recovery amounts are estimates, never actual receipts.
 
-Approval, cancellation, and completion carry `operation_id`, `operator_id`,
-`expected_version`, and `reason`. Approval performs reservation in the same
+Approval, cancellation, and completion carry `operation_id`,
+`expected_version`, and `reason`. The server binds the authenticated actor; client
+`operator_id` fields are rejected in verification and execution requests. Approval performs reservation in the same
 transaction, so there is no separate reservation endpoint or approval bypass.
 Completion additionally requires `confirmed: true`, exact `component_ids`, final
 `evidence_references`, and a `completed_kit_id` for rebuilds. Merely approving a
@@ -69,15 +73,17 @@ version for the next command. An exact operation retry remains idempotent.
 
 ## Error behavior and limits
 
+- 401: missing or invalid bearer credentials.
+- 403: wrong role or a service principal attempting a human action.
 - 404: an entity or evidence reference ID is unknown.
 - 409: an identity, idempotency key, version, policy, allocation, or state conflicts.
 - 422: malformed contracts or invalid business input, including absent explicit
   completion confirmation or attempts to inject planner authority.
 - 503: the workflow has no configured store.
 
-The local API has no user authentication, role enforcement, evidence upload,
-frontend, rate limiting, or external service integration. Caller-supplied operator
-IDs describe assertions; they are not authenticated human identities. Unknown or
+The local API has no evidence upload, frontend, rate limiting, or external service
+integration yet. Local bearer credentials identify configured actors; they do not
+prove a human is physically present or that submitted evidence is true. Unknown or
 conflicting evidence still requires review and cannot enter a rebuild. Approved
 visible-condition rules do not establish hidden functionality or safety.
 

@@ -1,21 +1,24 @@
 """FastAPI composition root with explicit, server-owned workflow configuration."""
 
 import os
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
+from starlette.responses import Response
 
 from rekit.api.health import router as health_router
 from rekit.api.workflow import router as workflow_router
+from rekit.auth import AuthConfig, AuthDirectory
 from rekit.catalog.models import Catalog
 from rekit.evidence.store import ConflictError, EvidenceStore, NotFoundError
 from rekit.inventory.store import InventoryStore
 from rekit.recovery.models import DispositionPolicy
 
 
-def create_app(inventory: InventoryStore | None = None) -> FastAPI:
+def create_app(inventory: InventoryStore | None = None, auth: AuthConfig | None = None) -> FastAPI:
     """Build the HTTP application without loading models or opening a database."""
     app = FastAPI(
         title="ReKit API",
@@ -26,6 +29,21 @@ def create_app(inventory: InventoryStore | None = None) -> FastAPI:
         ),
     )
     app.state.inventory = inventory
+    app.state.auth = AuthDirectory(auth) if auth is not None else None
+
+    @app.middleware("http")
+    async def private_responses(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response = await call_next(request)
+        if request.url.path != "/health":
+            response.headers["Cache-Control"] = "no-store"
+            vary = response.headers.get("Vary", "")
+            fields = [field.strip() for field in vary.split(",") if field.strip()]
+            if not any(field.lower() == "authorization" for field in fields):
+                fields.append("Authorization")
+            response.headers["Vary"] = ", ".join(fields)
+        return response
 
     @app.exception_handler(NotFoundError)
     async def not_found(_request: Request, error: NotFoundError) -> JSONResponse:
@@ -53,15 +71,19 @@ def create_app(inventory: InventoryStore | None = None) -> FastAPI:
 
 def create_configured_app() -> FastAPI:
     """Explicit Uvicorn factory; configuration files are trusted server inputs."""
-    names = ("REKIT_DATABASE_PATH", "REKIT_CATALOG_PATH", "REKIT_DISPOSITION_POLICY_PATH")
+    names = ("REKIT_DATABASE_PATH", "REKIT_CATALOG_PATH", "REKIT_DISPOSITION_POLICY_PATH", "REKIT_AUTH_CONFIG_PATH")
     values = {name: os.environ.get(name, "") for name in names}
     missing = [name for name, value in values.items() if not value.strip()]
     if missing:
         raise RuntimeError(f"Required server configuration is missing: {', '.join(missing)}")
+    try:
+        auth = AuthConfig.model_validate_json(Path(values["REKIT_AUTH_CONFIG_PATH"]).read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        raise RuntimeError("Authentication configuration could not be loaded or is invalid.") from None
     catalog = Catalog.model_validate_json(Path(values["REKIT_CATALOG_PATH"]).read_text(encoding="utf-8"))
     policy = DispositionPolicy.model_validate_json(Path(values["REKIT_DISPOSITION_POLICY_PATH"]).read_text(encoding="utf-8"))
     evidence = EvidenceStore(Path(values["REKIT_DATABASE_PATH"]), catalog)
-    return create_app(InventoryStore(evidence, policy))
+    return create_app(InventoryStore(evidence, policy), auth=auth)
 
 
 app = create_app()

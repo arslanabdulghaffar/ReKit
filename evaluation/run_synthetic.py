@@ -4,11 +4,13 @@ import asyncio
 from collections import Counter
 import json
 from pathlib import Path
+import secrets
 from tempfile import TemporaryDirectory
 
 import httpx
 import ortools
 
+from rekit.auth import Actor, ActorKind, AuthConfig, OperatorCredential, Role, token_digest
 from rekit.catalog.models import Catalog
 from rekit.evidence.models import Observation, OperatorVerification, PhysicalComponent, ReturnBatch, ReturnRecord
 from rekit.evidence.store import EvidenceStore
@@ -46,8 +48,16 @@ async def run_end_to_end(fixture: dict) -> dict:
     policy = DispositionPolicy.model_validate_json((FIXTURES / fixture["disposition_policy_file"]).read_text(encoding="utf-8"))
     with TemporaryDirectory(prefix="rekit-evaluation-") as temporary:
         inventory = InventoryStore(EvidenceStore(Path(temporary) / "workflow.sqlite3", catalog), policy)
-        app = create_app(inventory)
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://synthetic.local") as client:
+        token = secrets.token_urlsafe(32)
+        auth = AuthConfig(operators=(OperatorCredential(
+            actor=Actor(actor_id="synthetic-reviewer", kind=ActorKind.HUMAN, roles=tuple(Role)),
+            token_sha256=token_digest(token),
+        ),))
+        app = create_app(inventory, auth=auth)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://synthetic.local",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
             _checked(await client.post("/batches", json=fixture["batch"]), 201)
             for returned in fixture["returns"]:
                 _checked(await client.post("/returns", json=returned), 201)
@@ -61,7 +71,7 @@ async def run_end_to_end(fixture: dict) -> dict:
                 if before_review["compatible"]:
                     raise AssertionError("An unverified observation became compatible inventory")
                 _checked(await client.post(f"/components/{component_id}/verification", json={
-                    "verification": record["verification"], "expected_version": current["version"],
+                    "verification": {key: value for key, value in record["verification"].items() if key != "operator_id"}, "expected_version": current["version"],
                 }))
                 verified = _checked(await client.get(f"/components/{component_id}/compatibility?configuration_id=standard-kit"))
                 if not verified["compatible"]:
@@ -72,7 +82,7 @@ async def run_end_to_end(fixture: dict) -> dict:
             if plan["status"] != "OPTIMAL" or any(action["kind"] != "rebuild" for action in plan["selected_actions"]):
                 raise AssertionError("The expected synthetic rebuilds were not found by the solver")
             stored = _checked(await client.post(f"/plans/{plan_id}/approve", json={
-                "operation_id": "evaluation-approval", "operator_id": "synthetic-reviewer",
+                "operation_id": "evaluation-approval",
                 "expected_version": stored["version"], "reason": "Synthetic operator approves the computed recovery scenario.",
             }))
             reserved = _checked(await client.get("/inventory"))
@@ -80,7 +90,7 @@ async def run_end_to_end(fixture: dict) -> dict:
                 raise AssertionError("Approval did not exclusively reserve the intended inventory")
             for index, action in enumerate(plan["selected_actions"], start=1):
                 command = {
-                    "operation_id": f"evaluation-completion-{index}", "operator_id": "synthetic-reviewer",
+                    "operation_id": f"evaluation-completion-{index}",
                     "expected_version": stored["version"], "reason": "Synthetic explicit confirmation of the actual reserved identities.",
                     "confirmed": True, "component_ids": action["component_ids"],
                     "evidence_references": [f"synthetic://evaluation/completed/{index}"],
