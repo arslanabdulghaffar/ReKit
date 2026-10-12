@@ -17,11 +17,11 @@ FastAPI exposes `GET /health` and the [operator-confirmed workflow API](api-work
 | `backend/src/rekit/evidence/` | Physical-component identity, return/capture relationships, immutable source evidence, observations, provenance, and requests for additional evidence. |
 | `backend/src/rekit/catalog/` | Approved products, BOM revisions, allowed substitutions, compatibility constraints, and visible-condition policies. |
 | `backend/src/rekit/recovery/` | Deterministic feasibility, CPU OR-Tools CP-SAT allocation, economic assumptions, and comparisons of feasible alternatives. |
-| `backend/src/rekit/workflows/` | Human corrections and approvals, application use cases, rebuild instructions, and completion verification orchestration. |
+| `backend/src/rekit/workflows/` | Planned richer review/rebuild/rework orchestration; current approval and completion operations live with transactional inventory. |
 | `backend/src/rekit/inventory/` | Transactional persistence, availability, reservation, consumption, release, and audit records. SQLite is the current storage engine. |
 | `backend/src/rekit/integrations/evolus/` | Optional Evolus integration through application contracts; absent by default. |
 | `tests/backend/` | Health, domain, compatibility, evidence persistence, recovery correctness, transactional inventory, and complete API workflow tests. |
-| `evaluation/` | Planned evidence datasets/manifests, perception and decision quality checks, performance measurements, and AMD qualification records. |
+| `evaluation/` | Executable synthetic CPU recovery and greedy comparisons; planned perception datasets, performance measurements, and AMD qualification records. |
 | `deploy/amd/` | Planned reproducible AMD deployment instructions and runtime/model compatibility records. |
 | `docs/` | Architecture decisions, implementation sequence, and acceptance gates. |
 
@@ -92,7 +92,7 @@ Alternatives must remain feasible against the same stated input snapshot. Show t
 
 ## Approvals, inventory, and audit
 
-An approval binds an actor and decision to a specific plan version, component allocation, evidence state, catalog/policy versions, and economics. A later change does not inherit approval automatically. Define roles and authorization when workflow endpoints are implemented; a local health endpoint is not an authorization system.
+An approval binds an actor and decision to a specific plan version, component allocation, evidence state, catalog/policy versions, and economics. A later change does not inherit approval automatically. The current API records caller-supplied operator assertions and has no authentication or role enforcement; it is limited to trusted local use. Authenticated operator authority is the next implementation gate.
 
 Optimization runs outside the inventory write transaction against a versioned snapshot. On reservation, a short transaction checks that the approved plan remains current and each required component is eligible and available, reserves all required identities, and appends the audit record. Any failed check rolls back the entire reservation. Never partially reserve a kit or hold a write lock while invoking a model or solver.
 
@@ -104,7 +104,7 @@ Database concurrency tests must demonstrate that competing reservations cannot a
 
 ## Evaluation and operational boundaries
 
-Evaluation will track localization, OCR, candidate matching, identity association, evidence-request usefulness, visible-condition limitations, and human correction rates on appropriately labeled evidence. Separately test compatibility rules, solver feasibility/economics, reservation concurrency, and completed-kit lineage. Avoid evaluation leakage across views of the same physical item or return. Record dataset, policy, model, and runtime versions with results.
+Current evaluation covers synthetic CPU planning, API integration, and SQLite consistency. Future perception evaluation will track localization, OCR, candidate matching, identity association, evidence-request usefulness, visible-condition limitations, and human correction rates on appropriately labeled evidence. Separately test compatibility rules, solver feasibility/economics, reservation concurrency, and completed-kit lineage. Avoid evaluation leakage across views of the same physical item or return. Record dataset, policy, model, and runtime versions with results.
 
 AMD benchmarks must report the actual hardware/runtime/model, request shapes, image sizes, concurrency, latency, memory use, and failure rate under the tested workload. An inference benchmark is separate from an end-to-end decision quality result. The implementation roadmap defines when these measurements become required.
 

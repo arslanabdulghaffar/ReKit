@@ -337,3 +337,209 @@ def test_configured_factory_loads_trusted_fixture_files_and_temp_database(
 
     asyncio.run(requests())
     assert database_path.is_file()
+
+
+def test_http_unknown_identity_stays_held_and_cannot_be_operator_verified(api: FastAPI, recovery_fixture: dict) -> None:
+    async def workflow() -> None:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+            await intake(client, recovery_fixture)
+            record = recovery_fixture["components"][0]
+            component_id = record["component"]["physical_component_id"]
+            unknown_identity = {"component_type_id": "synthetic-unknown-part", "revision": "A"}
+            current = checked(await client.post(f"/components/{component_id}/evidence", json={
+                "kind": "proposal", "payload": {
+                    "proposal_id": "synthetic-unknown-identity-proposal", "physical_component_id": component_id,
+                    "observation_id": record["observation"]["observation_id"],
+                    "proposed_identity": unknown_identity, "created_at": record["observation"]["captured_at"],
+                },
+            }))
+            assert current["state"] == "unresolved"
+            assert current["verification"] is None
+            before = checked(await client.get(f"/components/{component_id}/history"))
+            checked(await client.post(f"/components/{component_id}/verification", json={
+                "verification": record["verification"] | {"identity": unknown_identity},
+                "expected_version": current["version"],
+            }), 422)
+            assert checked(await client.get(f"/components/{component_id}/history")) == before
+            decision = checked(await client.get(f"/components/{component_id}/compatibility?configuration_id=standard-kit"))
+            assert decision["compatible"] is False
+            proposed = checked(await client.post("/plans", json={"scenario": recovery_fixture["scenario"]}), 201)
+            assert {action["kind"] for action in proposed["plan"]["selected_actions"]} == {"hold"}
+            inventory = checked(await client.get("/inventory"))
+            assert len(inventory["items"]) == recovery_fixture["expected"]["physical_component_count"]
+            assert {entry["availability"] for entry in inventory["items"]} == {"held"}
+            assert inventory["completed_kits"] == []
+
+    asyncio.run(workflow())
+
+
+def test_http_repeated_observations_and_identity_correction_preserve_stock_and_history(
+    api: FastAPI, recovery_fixture: dict,
+) -> None:
+    async def workflow() -> None:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+            await intake(client, recovery_fixture, verify=True)
+            record = recovery_fixture["components"][2]
+            component_id = record["component"]["physical_component_id"]
+            new_observation = record["observation"] | {
+                "observation_id": "synthetic-adapter-close-up", "evidence_reference": "synthetic://captures/adapter-close-up",
+                "visible_revision": "B",
+            }
+            request = {"kind": "observation", "payload": new_observation}
+            current = checked(await client.post(f"/components/{component_id}/evidence", json=request))
+            assert current["state"] == "review_required"
+            assert current["verification"]["verification_id"] == record["verification"]["verification_id"]
+            before_retry = checked(await client.get(f"/components/{component_id}/history"))
+            assert checked(await client.post(f"/components/{component_id}/evidence", json=request)) == current
+            assert checked(await client.get(f"/components/{component_id}/history")) == before_retry
+            correction = record["verification"] | {
+                "verification_id": "synthetic-corrected-adapter-identity",
+                "identity": {"component_type_id": "adapter", "revision": "B"},
+                "supersedes_verification_id": record["verification"]["verification_id"],
+                "evidence_observation_ids": [record["observation"]["observation_id"], new_observation["observation_id"]],
+                "reason": "Synthetic operator correction after reading the additional close-up.",
+            }
+            corrected = checked(await client.post(f"/components/{component_id}/verification", json={
+                "verification": correction, "expected_version": current["version"],
+            }))
+            assert corrected["version"] == current["version"] + 1
+            assert corrected["verification"]["identity"]["revision"] == "B"
+            history = checked(await client.get(f"/components/{component_id}/history"))
+            assertions = [event["payload"] for event in history["events"] if event["kind"] == "verification"]
+            assert [assertion["verification_id"] for assertion in assertions] == [
+                record["verification"]["verification_id"], correction["verification_id"],
+            ]
+            assert [assertion["identity"]["revision"] for assertion in assertions] == ["A", "B"]
+            assert assertions[1]["supersedes_verification_id"] == assertions[0]["verification_id"]
+            inventory = checked(await client.get("/inventory"))
+            ids = [entry["item"]["component"]["physical_component_id"] for entry in inventory["items"]]
+            assert len(ids) == len(set(ids)) == recovery_fixture["expected"]["physical_component_count"]
+            decision = checked(await client.get(f"/components/{component_id}/compatibility?configuration_id=standard-kit"))
+            assert decision["compatible"] is False
+
+    asyncio.run(workflow())
+
+
+def test_http_insufficient_inventory_cannot_invent_a_second_kit(api: FastAPI, recovery_fixture: dict) -> None:
+    async def workflow() -> None:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+            reduced = deepcopy(recovery_fixture)
+            missing_id = "synthetic-body-002"
+            reduced["components"] = [record for record in reduced["components"]
+                                     if record["component"]["physical_component_id"] != missing_id]
+            reduced["scenario"]["components"] = [estimate for estimate in reduced["scenario"]["components"]
+                                                  if estimate["physical_component_id"] != missing_id]
+            await intake(client, reduced, verify=True)
+            proposed = checked(await client.post("/plans", json={"scenario": reduced["scenario"]}), 201)
+            plan = proposed["plan"]
+            assert plan["status"] == "OPTIMAL"
+            assert reduced["scenario"]["kits"][0]["demand_limit"] == 2
+            assert sum(action["kind"] == "rebuild" for action in plan["selected_actions"]) == 1
+            assert sum(action["kind"] == "retain" for action in plan["selected_actions"]) == 1
+            assigned = [identifier for action in plan["selected_actions"] for identifier in action["component_ids"]]
+            assert len(assigned) == len(set(assigned)) == 3
+            assert missing_id not in assigned
+            assert plan["cash_recovery_cents"] == 8750
+            assert plan["retained_value_cents"] == 200
+            assert plan["modeled_value_cents"] == 8950
+            assert checked(await client.get("/inventory"))["completed_kits"] == []
+
+    asyncio.run(workflow())
+
+
+def test_http_uneconomic_rebuild_retains_donors_without_claiming_cash(api: FastAPI, recovery_fixture: dict) -> None:
+    async def workflow() -> None:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+            await intake(client, recovery_fixture, verify=True)
+            scenario = deepcopy(recovery_fixture["scenario"])
+            scenario["kits"][0]["selling_price_cents"] = 500
+            proposed = checked(await client.post("/plans", json={"scenario": scenario}), 201)
+            plan = proposed["plan"]
+            assert plan["status"] == "OPTIMAL"
+            assert {action["kind"] for action in plan["selected_actions"]} == {"retain"}
+            assert plan["retained_value_cents"] == plan["modeled_value_cents"] == 1600
+            assert plan["cash_recovery_cents"] == 0
+            assert plan["labor_minutes"] == 0
+            assert checked(await client.get("/inventory"))["completed_kits"] == []
+
+    asyncio.run(workflow())
+
+
+def test_concurrent_http_approvals_reserve_shared_components_for_only_one_plan(api: FastAPI, recovery_fixture: dict) -> None:
+    async def workflow() -> None:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+            await intake(client, recovery_fixture, verify=True)
+            first = checked(await client.post("/plans", json={"scenario": recovery_fixture["scenario"]}), 201)
+            second = checked(await client.post("/plans", json={"scenario": recovery_fixture["scenario"]}), 201)
+            responses = await asyncio.gather(
+                client.post(f"/plans/{first['plan']['plan_id']}/approve", json=approval_command(first, "synthetic-racing-approval-1")),
+                client.post(f"/plans/{second['plan']['plan_id']}/approve", json=approval_command(second, "synthetic-racing-approval-2")),
+            )
+            assert sorted(response.status_code for response in responses) == [200, 409]
+            winner = next(response.json() for response in responses if response.status_code == 200)
+            inventory = checked(await client.get("/inventory"))
+            assert {entry["availability"] for entry in inventory["items"]} == {"reserved"}
+            assert {entry["plan_id"] for entry in inventory["items"]} == {winner["plan"]["plan_id"]}
+            ids = [entry["item"]["component"]["physical_component_id"] for entry in inventory["items"]]
+            assert len(ids) == len(set(ids)) == recovery_fixture["expected"]["physical_component_count"]
+            assert inventory["completed_kits"] == []
+            audit_events = []
+            for stored in (first, second):
+                audit_events.extend(checked(await client.get(f"/plans/{stored['plan']['plan_id']}/audit")))
+            assert sum(event["kind"] == "approved" for event in audit_events) == 1
+
+    asyncio.run(workflow())
+
+
+def test_http_stale_evidence_blocks_approval_without_partial_reservation(api: FastAPI, recovery_fixture: dict) -> None:
+    async def workflow() -> None:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+            await intake(client, recovery_fixture, verify=True)
+            proposed = checked(await client.post("/plans", json={"scenario": recovery_fixture["scenario"]}), 201)
+            record = recovery_fixture["components"][0]
+            component_id = record["component"]["physical_component_id"]
+            changed_observation = record["observation"] | {
+                "observation_id": "synthetic-post-plan-observation", "evidence_reference": "synthetic://captures/post-plan-view",
+            }
+            checked(await client.post(f"/components/{component_id}/evidence", json={"kind": "observation", "payload": changed_observation}))
+            before_inventory = checked(await client.get("/inventory"))
+            plan_id = proposed["plan"]["plan_id"]
+            before_audit = checked(await client.get(f"/plans/{plan_id}/audit"))
+            checked(await client.post(f"/plans/{plan_id}/approve", json=approval_command(proposed)), 409)
+            assert checked(await client.get(f"/plans/{plan_id}")) == proposed
+            assert checked(await client.get("/inventory")) == before_inventory
+            assert checked(await client.get(f"/plans/{plan_id}/audit")) == before_audit
+            assert not any(entry["availability"] == "reserved" for entry in before_inventory["items"])
+
+    asyncio.run(workflow())
+
+
+def test_http_cancellation_releases_reservations_and_prevents_later_completion(api: FastAPI, recovery_fixture: dict) -> None:
+    async def workflow() -> None:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url="http://testserver") as client:
+            await intake(client, recovery_fixture, verify=True)
+            proposed = checked(await client.post("/plans", json={"scenario": recovery_fixture["scenario"]}), 201)
+            plan_id = proposed["plan"]["plan_id"]
+            approved = checked(await client.post(f"/plans/{plan_id}/approve", json=approval_command(proposed)))
+            command = {
+                "operation_id": "synthetic-cancellation", "operator_id": "synthetic-reviewer",
+                "expected_version": approved["version"], "reason": "Synthetic operator cancelled before rebuilding began.",
+            }
+            cancelled = checked(await client.post(f"/plans/{plan_id}/cancel", json=command))
+            assert cancelled["state"] == "cancelled"
+            assert cancelled["version"] == approved["version"] + 1
+            assert checked(await client.post(f"/plans/{plan_id}/cancel", json=command)) == cancelled
+            inventory = checked(await client.get("/inventory"))
+            assert {entry["availability"] for entry in inventory["items"]} == {"available"}
+            assert all(entry["plan_id"] is None and entry["action_id"] is None for entry in inventory["items"])
+            action = cancelled["plan"]["selected_actions"][0]
+            checked(await client.post(
+                f"/plans/{plan_id}/actions/{action['action_id']}/complete", json=completion_command(cancelled, action, 1),
+            ), 409)
+            assert checked(await client.get("/inventory")) == inventory
+            assert inventory["completed_kits"] == []
+            assert [event["kind"] for event in checked(await client.get(f"/plans/{plan_id}/audit"))] == [
+                "proposed", "approved", "cancelled",
+            ]
+
+    asyncio.run(workflow())

@@ -1,8 +1,75 @@
 # Evaluation and benchmarking boundary
 
-This directory defines the future evaluation scope. Task 1 adds no datasets,
-model weights, benchmark runner, or generated results. The executable test in
-the foundation covers only the backend health endpoint.
+The current runner exercises synthetic backend recovery and compares CPU planning
+with a simple greedy baseline. It performs no perception inference, downloads no
+data, and measures no AMD performance or operator time savings.
+
+## Reproduce the synthetic evaluation
+
+From the repository root in the existing environment:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_synthetic.py
+.\.venv\Scripts\python.exe -m pytest -q -W error
+.\.venv\Scripts\python.exe -m pip check
+```
+
+The runner uses [synthetic recovery inputs](../tests/fixtures/synthetic_recovery.json)
+and [controlled comparison cases](fixtures/recovery_cases.json). It creates a
+temporary SQLite database, exercises real HTTP application routes in process,
+uses actual CP-SAT results, validates expected outputs, prints JSON, and removes
+the temporary database. Re-running does not reuse or mutate operational inventory.
+
+Expected fixture results (all amounts are scenario estimates in USD cents):
+
+| Case | CP-SAT modeled value | Greedy modeled value | Modeled difference |
+| --- | ---: | ---: | ---: |
+| Two-kit operator workflow | 17,500 | Not compared | Not compared |
+| Scarce components across competing BOMs | 4,000 | 2,800 | 1,200 |
+| Uneconomic rebuilds | 400 | 400 | 0 |
+
+The workflow starts with three individually incomplete returns: two bodies in
+one return and one adapter in each of the other two. Explicit synthetic operator
+verifications permit two rebuilds. Each contributes 10,000 sale estimate minus
+750 labor and 500 other costs = 8,750 cents. Approval reserves four physical
+components; only the two subsequent confirmations create completed kits.
+
+For the allocation comparison, two bodies and two adapters can make two standard
+kits worth 2,000 cents each, or one larger kit needing two bodies and one adapter
+worth 2,700 cents. Each donor has a retained asset estimate of 100 cents. Greedy
+selects the greatest positive incremental value relative to retaining its donors,
+then rejects overlapping actions and respects labor/demand limits. It fills
+remaining stock with retain/hold actions. Its larger kit contributes 2,700 cash
+estimate plus a 100-cent retained adapter. CP-SAT instead selects the two standard
+kits for 4,000 modeled cents. The 1,200-cent difference is specific to this
+constructed case and is not evidence of business uplift.
+
+Both algorithms retain all four donors in the uneconomic case, so their 400-cent
+modeled values contain zero cash recovery. All greedy allocations pass the same
+deterministic feasibility validation; greedy shares candidate generation with
+CP-SAT but uses a different allocation strategy. Independent exhaustive subset
+oracles in tests verify tiny-case optima. This is a correctness check, not an
+independent implementation of every catalog rule or a production-scale benchmark.
+
+## Executable coverage
+
+| Required behavior | Tests |
+| --- | --- |
+| Valid reconstruction and final confirmation | `test_api.py`, `test_evaluation.py` |
+| Incompatible revision, unknown identity, insufficient stock | `test_api.py`, `test_catalog.py`, `test_recovery.py` |
+| Repeated observations and corrected identity | `test_api.py`, `test_evidence_store.py` |
+| Uneconomic rebuild and price/labor sensitivity | `test_api.py`, `test_recovery.py`, `test_evaluation.py` |
+| Conflicting reservations, stale approvals, cancelled plans | `test_api.py`, `test_inventory.py` |
+| Transaction rollback, idempotency, audit and lineage | `test_inventory.py`, `test_evidence_store.py` |
+| Exhaustive optimizer oracle and greedy comparison | `test_recovery.py`, `test_evaluation.py` |
+
+The solver timeout test uses a real zero-second limit. Additional non-optimal/error
+status branches are explicitly simulated to test reporting behavior; they are not
+represented as observed production solver outcomes. The tests do not fabricate
+visual-model outputs or replace the end-to-end planner with a hardcoded plan.
+
+The sections below describe future evidence collection and AMD/perception
+measurement requirements, not results already obtained.
 
 ## Evidence and ground truth
 

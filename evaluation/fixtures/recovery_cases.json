@@ -1,0 +1,44 @@
+{
+  "synthetic": true,
+  "scenario_estimate": true,
+  "description": "Invented CPU planning cases, not realized merchant revenue, visual-model accuracy, operator time savings, or AMD measurements.",
+  "inventory_fixture": "tests/fixtures/synthetic_recovery.json",
+  "catalog_extension": {
+    "configuration": {
+      "configuration_id": "large-kit", "family_id": "demo-kit", "version": "1",
+      "bom": [{"component_type_id": "body", "quantity": 2}, {"component_type_id": "adapter", "quantity": 1}]
+    },
+    "policy": {
+      "policy_id": "synthetic-large-policy", "version": "1", "configuration_id": "large-kit",
+      "approved_by": "synthetic-policy-author", "approved_at": "2026-10-13T00:00:00+09:00",
+      "rules": [
+        {"component_type_id": "body", "allowed_revisions": ["A"], "allowed_conditions": ["acceptable"]},
+        {"component_type_id": "adapter", "allowed_revisions": ["A"], "allowed_conditions": ["acceptable"]}
+      ]
+    }
+  },
+  "cases": [
+    {
+      "case_id": "synthetic-scarce-components",
+      "description": "Greedy takes one larger kit; two smaller kits recover more modeled value from the same four components.",
+      "currency": "USD", "valuation_date": "2026-10-13",
+      "labor_cost_per_minute_cents": 0, "labor_capacity_minutes": 60, "donor_value_per_component_cents": 100,
+      "kits": [
+        {"configuration_id": "standard-kit", "selling_price_cents": 2000, "labor_minutes": 10, "other_cost_cents": 0, "demand_limit": 2},
+        {"configuration_id": "large-kit", "selling_price_cents": 2700, "labor_minutes": 10, "other_cost_cents": 0, "demand_limit": 1}
+      ],
+      "expected": {"cp_sat_modeled_value_cents": 4000, "greedy_modeled_value_cents": 2800, "modeled_difference_cents": 1200}
+    },
+    {
+      "case_id": "synthetic-uneconomic-rebuilds",
+      "description": "Both methods retain four donor assets because neither approved rebuild improves the scenario value.",
+      "currency": "USD", "valuation_date": "2026-10-13",
+      "labor_cost_per_minute_cents": 0, "labor_capacity_minutes": 60, "donor_value_per_component_cents": 100,
+      "kits": [
+        {"configuration_id": "standard-kit", "selling_price_cents": 100, "labor_minutes": 10, "other_cost_cents": 0, "demand_limit": 2},
+        {"configuration_id": "large-kit", "selling_price_cents": 250, "labor_minutes": 10, "other_cost_cents": 0, "demand_limit": 1}
+      ],
+      "expected": {"cp_sat_modeled_value_cents": 400, "greedy_modeled_value_cents": 400, "modeled_difference_cents": 0}
+    }
+  ]
+}

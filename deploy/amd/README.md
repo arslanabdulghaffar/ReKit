@@ -8,7 +8,7 @@ Backend API -> inference adapter -> AMD Developer Cloud Linux service
                                    ROCm + vLLM + compatible open VLM
 ```
 
-Task 1 documents this boundary only. No cloud resources, inference server,
+Overnight Mission 01 leaves this inference boundary unimplemented. No cloud resources, inference server,
 deployment manifests, models, datasets, or containers are provisioned or
 downloaded. The health endpoint is an API liveness check and does not assert
 inference readiness.
@@ -58,7 +58,7 @@ The repository [.env.example](../../.env.example) describes future server-side
 settings. `REKIT_INFERENCE_PROVIDER=amd_vllm` names the intended provider;
 `REKIT_INFERENCE_BASE_URL` is an intentionally unusable example address.
 `REKIT_INFERENCE_MODEL` and `REKIT_INFERENCE_API_KEY` remain empty until the
-service is selected. The Task 1 app does not load these settings or call that
+service is selected. The current app does not load these inference settings or call that
 endpoint.
 
 Future deployment must keep credentials server-side, use authenticated network

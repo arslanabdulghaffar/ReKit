@@ -1,126 +1,133 @@
 # ReKit
 
-ReKit is an AMD-powered multimodal product-return recovery system for the AMD
-Developer Hackathon ACT III. Its intended workflow turns incomplete returns into
-recoverable kits through evidence capture, layered perception, approved BOM and
-compatibility checks, economic recovery planning, human approval, exclusive
-component reservation, rebuild instructions, and completed-kit verification.
+ReKit is being built for the AMD Developer Hackathon ACT III to recover complete
+product kits from compatible components across incomplete returns. The target
+system combines guided capture, AMD multimodal inference, traceable evidence,
+approved BOMs, economic planning, human review, and transactional execution.
 
-## Current scope
+The current implementation is a local, operator-confirmed Python backend. AMD
+inference is a required future integration; it has not been deployed or measured.
 
-The repository provides a modular backend foundation and a functioning FastAPI
-`GET /health` endpoint returning HTTP 200 with `{"status":"ok"}`. The automated
-test covers the public response contract. This is process liveness only; it does
-not certify inference, database, or deployment readiness.
+## What works
 
-Catalog, BOM, revision compatibility, physical identity, observations, human
-verification, and inventory eligibility now have validated domain contracts.
-The SQLite [evidence store](docs/evidence-provenance.md) now persists intake,
-observations, identity proposals, uncertainty, and version-checked human
-verification while retaining history. See [domain contracts](docs/domain-contracts.md).
-The CPU [recovery planner](docs/recovery-planning.md) evaluates rebuilds, whole-return
-liquidation, donor retention, salvage, and holds against explicit scenario economics.
-The [inventory workflow](docs/inventory-workflow.md) persists proposals, atomically
-approves and reserves stock, and records explicitly confirmed completion with audit
-history. The [operator-confirmed API](docs/api-workflow.md) now connects intake,
-evidence review, planning, approval, reservations, and completion.
-There is no AI inference, frontend application, or Evolus integration yet.
-The configured factory reads three explicit process variables; `.env` files are
-not loaded automatically.
+- Validated product families, configurations, BOM quantities, revisions, and
+  deterministic compatibility and visible-condition policies.
+- Stable physical-component IDs, return provenance, multiple observations per
+  item, unverified hypotheses, uncertainty flags, and versioned human corrections.
+  SQLite preserves evidence history instead of replacing earlier assertions.
+- Real CPU OR-Tools CP-SAT planning for rebuilds, whole-return liquidation,
+  donor retention, salvage, and holds. It enforces component exclusivity, complete
+  BOMs, compatibility, policy, labor, and demand using integer scenario economics.
+- Persisted proposals, atomic human approval and exclusive reservations,
+  cancellation, explicit completion confirmation, completed-kit lineage, and audit.
+- FastAPI routes connecting intake through completion, with validated contracts,
+  conflict responses, and idempotent execution commands.
+- A synthetic three-return example producing two kits, negative API scenarios,
+  exhaustive-search planner checks, real SQLite race/rollback tests, and a small
+  greedy comparison. These are software tests, not customer or model benchmarks.
 
-## Run in the existing Windows environment
+## Run and test locally
 
-Run these commands from `A:\hackathon\ReKit` in PowerShell. Use the existing
-Python 3.12 `.venv`; activation is optional. Do not recreate this environment or
-reinstall its working PyTorch/CUDA packages.
+From `A:\hackathon\ReKit` in PowerShell, use the existing Python 3.12 `.venv`.
+Do not recreate it or reinstall its working PyTorch/CUDA packages.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e '.[dev]'
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m uvicorn rekit.main:app --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m pytest -q -W error
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe evaluation/run_synthetic.py
 ```
 
-In another terminal:
+The example uses a temporary SQLite database and real HTTP application logic in
+process. It needs no GPU, credentials, external service, or model download. It
+prints JSON containing the synthetic workflow and controlled optimizer/greedy
+comparisons. Expected outputs and assumptions are in [evaluation](evaluation/README.md).
+
+To run the persistent local API with the synthetic catalog and policy:
 
 ```powershell
-Invoke-RestMethod -Uri http://127.0.0.1:8000/health
+$env:REKIT_DATABASE_PATH = '.\var\synthetic-rekit.sqlite3'
+$env:REKIT_CATALOG_PATH = '.\tests\fixtures\synthetic_catalog.json'
+$env:REKIT_DISPOSITION_POLICY_PATH = '.\tests\fixtures\synthetic_disposition_policy.json'
+.\.venv\Scripts\python.exe -m uvicorn rekit.main:create_configured_app --factory --host 127.0.0.1 --port 8000
 ```
 
-The development API documentation is at `http://127.0.0.1:8000/docs`. Stop the
-server with Ctrl+C. No secrets, GPU, external service, or `.env` file are required
-for the health endpoint and tests. See [API startup and routes](docs/api-workflow.md)
-to run the configured SQLite workflow.
+Open `http://127.0.0.1:8000/docs` for request/response schemas. See
+[API workflow](docs/api-workflow.md) for the route sequence. Stop with Ctrl+C.
+The policy and catalog files are trusted server inputs, not client overrides.
 
-The test uses [HTTPX's ASGI transport](https://www.python-httpx.org/advanced/transports/#asgi-transport)
-with Python's standard event loop, so no async pytest plugin is needed. It
-exercises HTTP routing and serialization in process. The app currently has no
-startup/shutdown resources; add explicit lifespan testing when those exist.
+The default `rekit.main:app` opens no database: `/health` returns HTTP 200 with
+`{"status":"ok"}`, and workflow routes return 503. Health reports process
+liveness only. Use the configured factory above for the working recovery API.
+No `.env` file is loaded automatically.
 
 ## Repository boundaries
 
 | Path | Responsibility |
 | --- | --- |
-| `backend/src/rekit/main.py` | FastAPI composition root |
-| `backend/src/rekit/api/` | HTTP request and response contracts |
-| `backend/src/rekit/inference/adapters/` | Planned perception providers; AMD ROCm/vLLM is the primary inference path |
-| `backend/src/rekit/evidence/` | Physical-component identity links, captures, observations, and provenance |
-| `backend/src/rekit/catalog/` | Approved BOMs, revisions, compatibility, and visible-condition policy |
-| `backend/src/rekit/recovery/` | CPU CP-SAT planning, economics, and alternatives |
-| `backend/src/rekit/workflows/` | Human review, approvals, orchestration, rebuilds, and verification |
-| `backend/src/rekit/inventory/` | Authoritative physical inventory, atomic reservations, and audit |
-| `backend/src/rekit/integrations/evolus/` | Optional integration through validated workflow commands |
-| `frontend/` | Reserved React + TypeScript + Vite boundary |
-| `tests/backend/` | Backend automated tests |
-| `evaluation/` | Evaluation and benchmarking plan |
-| `deploy/amd/` | AMD Developer Cloud qualification and deployment plan |
-| `docs/` | Architecture, roadmap, and foundation validation record |
+| `backend/src/rekit/main.py`, `api/` | Composition, local configuration, HTTP contracts and errors |
+| `backend/src/rekit/catalog/` | Approved BOM, revision, compatibility, and condition policy |
+| `backend/src/rekit/evidence/` | Intake, stable physical identities, observations, corrections, SQLite provenance |
+| `backend/src/rekit/recovery/` | CPU CP-SAT, integer economics, actual solver status, deterministic explanations |
+| `backend/src/rekit/inventory/` | Proposals, approvals, transactions, reservations, completion, audit |
+| `backend/src/rekit/workflows/` | Reserved boundary for richer review, rebuild instructions, and rework orchestration |
+| `backend/src/rekit/inference/adapters/` | Planned AMD ROCm/vLLM and local development inference adapters |
+| `backend/src/rekit/integrations/evolus/` | Optional future integration through approved application commands |
+| `frontend/` | Planned React, TypeScript, and Vite interface; no product screens |
+| `tests/backend/`, `tests/fixtures/` | Automated contracts, integration tests, labeled synthetic inputs |
+| `evaluation/` | Reproducible synthetic CPU evaluation and future perception/AMD measurement plan |
+| `deploy/amd/` | AMD qualification and deployment boundary |
+| `docs/` | Architecture, contracts, workflow limits, and roadmap |
 
-## Architectural commitments
+## Limits and unimplemented work
 
-- AMD Developer Cloud, ROCm, vLLM, and a compatible open vision-language model
-  form the production hackathon inference path. Model, runtime, and GPU choices
-  require qualification; none is selected or downloaded in this foundation.
-- Local PyTorch/CUDA development stays separate from the AMD inference runtime.
-  The API package has no PyTorch, vLLM, ROCm, or OR-Tools dependency.
-- Models produce evidence-linked observations and hypotheses. Deterministic
-  policies control compatibility; transactional services control inventory.
-- One physical component has one persistent identity and at most one active
-  allocation. Additional photos and detections never create additional stock.
-- Human approval applies to a versioned proposal; reservation revalidates current
-  policy and availability atomically, with an audit record.
-- Model confidence statements are not calibrated probabilities. Visual evidence
-  describes visible condition and cannot establish hidden function or safety.
+This is not production-ready. Operator IDs are caller assertions; authentication
+and role enforcement are absent. Bind to loopback and use trusted local callers.
+Evidence and final confirmation contain references, not uploaded, hashed, or
+independently inspected assets. Human-visible assembly confirmation does not prove
+hidden functionality or safety. Model confidence statements are not calibrated
+probabilities.
 
-## Dependencies and configuration
+Planning is bounded to 100 supplied components and 10,000 exhaustive candidate
+actions. Oversized inputs fail explicitly. Labor and demand limits apply per
+scenario, not across a shared schedule or order ledger. Holds have zero value;
+retained donors are noncash assets; all economic outputs remain scenario estimates.
+A feasible solver result is never labeled optimal unless CP-SAT reports `OPTIMAL`.
 
-`pyproject.toml` is the Python dependency source: FastAPI, Pydantic, and base
-Uvicorn at runtime; pytest and HTTPX for development tests. Direct versions and
-the build backend are pinned. Transitive dependencies are resolved by pip and
-are not a complete deployment lock; create platform-specific locks during AMD
-qualification. Do not use a freeze of the CUDA development environment as an AMD
-requirements file.
+Catalog and disposition policy are pinned to each database. There is no catalog
+migration, reservation expiry, supervised partial-plan recovery, backup/restore
+qualification, authenticated multi-user deployment, or external warehouse/payment
+integration. A plan cannot be cancelled after partial completion. If new evidence
+blocks its remaining work, a future supervised recovery operation is needed.
 
-Node.js and npm were detected, but no frontend dependencies or generated scaffold
-are installed. Frontend test tooling will be chosen with the first UI slice.
+Camera capture, image storage, detection/segmentation, OCR, visual matching,
+vision-language inference, active recapture guidance, richer rebuild instructions,
+frontend screens, and Evolus are not implemented. No AMD benchmark or visual-model
+accuracy result is claimed. AMD cloud qualification remains a required delivery
+gate once access and resource use are authorized.
 
-[`.env.example`](.env.example) contains blank secret values and a deliberately
-invalid inference hostname. Actual keys belong in ignored local configuration or
-deployment secret storage. Never put them in `VITE_*` variables or client code.
-`.gitignore` excludes local environments, secrets, databases and journals,
-customer evidence, model weights, and generated output. Review files before
-staging; ignore rules do not detect secrets embedded in ordinary source files.
+## Dependencies and secrets
 
-## Design and next steps
+`pyproject.toml` pins FastAPI, Pydantic, Uvicorn, and OR-Tools at runtime, plus pytest
+and HTTPX for tests. SQLite comes from Python. No PyTorch, ROCm, or vLLM package is
+required by the backend; keep future AMD serving in a separate environment. The
+existing local PyTorch 2.9.0+cu128 environment is preserved. Transitive packages are
+not fully locked across platforms; AMD deployment needs its own qualified pins.
 
-- [Architecture and invariants](docs/architecture.md)
-- [Implementation roadmap and acceptance gates](docs/roadmap.md)
-- [AMD deployment boundary](deploy/amd/README.md)
-- [Evaluation and benchmarking](evaluation/README.md)
-- [Frontend boundary](frontend/README.md)
-- [Foundation inspection and validation record](docs/foundation-report.md)
+Node.js and npm are available, but no frontend packages or global software were
+installed. [`.env.example`](.env.example) has blank secrets and an invalid example
+inference host. Real keys belong in ignored local configuration or secret storage,
+never frontend variables or Git. `.gitignore` excludes environments, operational
+databases, customer evidence, weights, caches, and generated output; review staged
+source files for embedded secrets as well.
 
-Overnight Mission 01 authorizes the local, operator-confirmed backend through
-evidence persistence, CPU recovery planning, transactional execution, and API
-integration. AMD cloud qualification remains pending and is required before
-claiming real inference or a complete AMD demonstration. No cloud use is part of
-this mission.
+## Design and next priorities
+
+Read [architecture](docs/architecture.md), [domain contracts](docs/domain-contracts.md),
+[evidence persistence](docs/evidence-provenance.md), [recovery planning](docs/recovery-planning.md),
+[inventory execution](docs/inventory-workflow.md), and the [roadmap](docs/roadmap.md).
+The [foundation report](docs/foundation-report.md) is a historical inspection record.
+
+The smallest next task is authenticated operator identity and role checks for
+verification, approval, and completion. Evidence-asset provenance and AMD inference
+qualification follow; none of that additional work is part of this mission.
