@@ -27,8 +27,8 @@ the complete configured catalog and policy. Changing their files does not migrat
 an existing database.
 
 Use `http://127.0.0.1:8000/docs` for the exact Pydantic request and response schemas.
-No `.env` file is loaded automatically. `create_app(inventory=...)` supports
-injected stores for tests. The default `rekit.main:app` opens no database and
+No `.env` file is loaded automatically. `create_app(inventory=..., auth=..., assets=...)`
+supports explicitly injected stores and credentials for tests. The default `rekit.main:app` opens no database and
 returns 503 from workflow routes until a configured factory is used. Its
 `GET /health` response remains HTTP 200 with `{"status":"ok"}`; this is liveness,
 not database or inference readiness.
@@ -37,9 +37,16 @@ not database or inference readiness.
 
 | Route | Operation |
 | --- | --- |
+| `GET /auth/me` | Read the authenticated actor and explicit roles. |
+| `GET /catalog` | Read the server's approved catalog and compatibility rules. |
+| `GET /batches`, `GET /returns` | Read registered intake records. |
+| `GET /plans?limit=50` | Read up to 100 compact plan summaries, newest first. |
 | `POST /batches` | Register a return batch. |
 | `POST /returns` | Register a return under an existing batch and approved family. |
 | `POST /components` | Register a unique physical component under a return. |
+| `POST /components/{id}/images?return_id=...` | Upload one bounded raw image, creating a managed observation. |
+| `GET /components/{id}/images`, `GET /assets/{id}` | Read image metadata and availability. |
+| `GET /assets/{id}/content` | Retrieve authenticated, integrity-checked image bytes. |
 | `POST /components/{id}/evidence` | Record an observation, identity proposal, or uncertainty flag. |
 | `POST /components/{id}/verification` | Record a version-checked human verification or correction. |
 | `GET /components/{id}/history` | Retrieve the complete evidence history and current state. |
@@ -83,7 +90,8 @@ version for the next command. An exact operation retry remains idempotent.
 - 503: the workflow has no configured store.
 
 The local API includes [managed image uploads and authorized retrieval](image-evidence.md).
-It has no frontend, rate limiting, or external service integration yet.
+The [operator workbench](../frontend/README.md) uses these same routes. There is
+no rate limiting or external service integration yet.
 Local bearer credentials identify configured actors; they do not
 prove a human is physically present or that submitted evidence is true. Unknown or
 conflicting evidence still requires review and cannot enter a rebuild. Approved

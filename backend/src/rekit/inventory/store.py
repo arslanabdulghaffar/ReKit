@@ -4,15 +4,16 @@ from datetime import UTC, datetime
 import json
 import sqlite3
 from uuid import uuid4
+from typing import Annotated
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter
 
 from rekit.catalog.models import Catalog, Identifier, VisibleCondition
 from rekit.evidence.models import VerificationState
 from rekit.evidence.store import ConflictError, EvidenceStore, NotFoundError, _canonical
 from rekit.inventory.execution import (
     ApprovalCommand, AuditRecord, Availability, CancellationCommand, CompletedKit,
-    CompletionCommand, InventoryEntry, InventorySnapshot, PlanState, StoredPlan,
+    CompletionCommand, InventoryEntry, InventorySnapshot, PlanState, PlanSummary, StoredPlan,
 )
 from rekit.inventory.models import InventoryEligibility, InventoryItem
 from rekit.recovery.models import (
@@ -189,6 +190,29 @@ class InventoryStore:
         with self.evidence._read() as connection:
             return self._stored(connection, plan_id)
 
+    def list_plans(self, limit: int = 50) -> tuple[PlanSummary, ...]:
+        limit = TypeAdapter(Annotated[int, Field(strict=True, ge=1, le=100)]).validate_python(limit)
+        with self.evidence._read() as connection:
+            summaries = []
+            for row in connection.execute(
+                "SELECT p.proposal_json, s.version, s.state, a.recorded_at "
+                "FROM recovery_plans p JOIN recovery_plan_states s ON s.plan_id = p.plan_id "
+                "JOIN inventory_audit a ON a.plan_id = p.plan_id AND a.kind = 'proposed' "
+                "ORDER BY a.sequence DESC LIMIT ?", (limit,),
+            ):
+                plan = RecoveryPlan.model_validate_json(row["proposal_json"])
+                scenario = plan.problem.scenario
+                summaries.append(PlanSummary(
+                    plan_id=plan.plan_id, scenario_id=scenario.scenario_id,
+                    description=scenario.description, currency=scenario.currency,
+                    version=row["version"], state=row["state"], status=plan.status,
+                    modeled_value_cents=plan.modeled_value_cents,
+                    cash_recovery_cents=plan.cash_recovery_cents,
+                    retained_value_cents=plan.retained_value_cents,
+                    created_at=row["recorded_at"],
+                ))
+            return tuple(summaries)
+
     @staticmethod
     def _validate_plan(plan: RecoveryPlan) -> None:
         if problem_fingerprint(plan.problem) != plan.input_hash:
@@ -222,6 +246,14 @@ class InventoryStore:
             "INSERT INTO recovery_operations(operation_id, kind, plan_id, action_id, payload) VALUES (?, ?, ?, ?, ?)",
             (operation_id, kind, plan_id, action_id, _canonical(command)),
         )
+
+    def is_operation_retry(
+        self, kind: str, plan_id: str, action_id: str | None,
+        command: ApprovalCommand | CompletionCommand,
+    ) -> bool:
+        """Read exact actor-bound history; write commands recheck within their transaction."""
+        with self.evidence._read() as connection:
+            return self._operation(connection, command.operation_id, kind, plan_id, action_id, command)
 
     @staticmethod
     def _append_audit(

@@ -157,7 +157,8 @@ def record_evidence(component_id: Identifier, request: EvidenceRequest, http: Re
             raise HTTPException(status_code=403, detail="Service actors cannot submit operator-source assertions.")
         payload = type(payload).model_validate(payload.model_dump(mode="json") | {"source_reference": actor.actor_id})
     if isinstance(request, ObservationRequest):
-        _assert_asset_reference(http, component_id, payload.evidence_reference)
+        if not inventory.evidence.is_assertion_retry(payload):
+            _assert_asset_reference(http, component_id, payload.evidence_reference)
         return inventory.evidence.record_observation(payload)
     if isinstance(request, ProposalRequest):
         return inventory.evidence.record_proposal(payload)
@@ -169,7 +170,8 @@ def verify_component(component_id: Identifier, request: VerificationRequest, htt
     """Record an explicit operator verification or a versioned identity correction."""
     _same_component(component_id, request.verification.physical_component_id)
     verification = OperatorVerification.model_validate(request.verification.model_dump(mode="json") | {"operator_id": actor.actor_id})
-    _assert_verification_assets(http, inventory, component_id, verification.evidence_observation_ids)
+    if not inventory.evidence.is_assertion_retry(verification):
+        _assert_verification_assets(http, inventory, component_id, verification.evidence_observation_ids)
     return inventory.evidence.verify(verification, request.expected_version)
 
 
@@ -211,6 +213,8 @@ def get_plan(plan_id: Identifier, actor: Viewer, inventory: InventoryDependency)
 def approve_plan(plan_id: Identifier, command: ApprovalInput, http: Request, actor: Approver, inventory: InventoryDependency) -> StoredPlan:
     """Human approval and exclusive reservation commit together in one transaction."""
     bound = ApprovalCommand.model_validate(command.model_dump(mode="json") | {"operator_id": actor.actor_id})
+    if inventory.is_operation_retry("approved", plan_id, None, bound):
+        return inventory.approve(plan_id, bound)
     for action in inventory.get_plan(plan_id).plan.selected_actions:
         if action.kind in (RecoveryActionKind.REBUILD, RecoveryActionKind.SALVAGE, RecoveryActionKind.LIQUIDATE):
             for component_id in action.component_ids:
@@ -231,6 +235,8 @@ def complete_action(
 ) -> StoredPlan:
     """Consume reserved identities only after explicit operator completion evidence."""
     bound = CompletionCommand.model_validate(command.model_dump(mode="json") | {"operator_id": actor.actor_id})
+    if inventory.is_operation_retry("action_completed", plan_id, action_id, bound):
+        return inventory.complete_action(plan_id, action_id, bound)
     stored = inventory.get_plan(plan_id)
     action = next((item for item in stored.plan.selected_actions if item.action_id == action_id), None)
     if action is not None:

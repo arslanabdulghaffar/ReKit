@@ -8,7 +8,7 @@ from pydantic import AwareDatetime, Field, model_validator
 from rekit.catalog.models import CatalogModel, Identifier
 from rekit.evidence.models import Text, Version
 from rekit.inventory.models import InventoryItem
-from rekit.recovery.models import RecoveryActionKind, RecoveryPlan
+from rekit.recovery.models import RecoveryActionKind, RecoveryPlan, SignedValue, NonnegativeValue, SolveStatus
 
 
 class PlanState(StrEnum):
@@ -84,6 +84,22 @@ class CompletedKit(CatalogModel):
     operator_id: Identifier
     completed_at: AwareDatetime
     evidence_references: tuple[Text, ...] = Field(min_length=1)
+
+
+class PlanSummary(CatalogModel):
+    """A bounded workbench listing; full immutable proposals are read on demand."""
+
+    plan_id: Identifier
+    scenario_id: Identifier
+    description: Text
+    currency: str
+    version: Version
+    state: PlanState
+    status: SolveStatus
+    modeled_value_cents: SignedValue | None
+    cash_recovery_cents: SignedValue | None
+    retained_value_cents: NonnegativeValue | None
+    created_at: AwareDatetime
 
 
 class InventoryEntry(CatalogModel):

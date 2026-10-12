@@ -81,6 +81,11 @@ and completion check the managed references used by current verification.
 Completion images must belong to a component in that action. These checks fail
 closed when storage is absent or required managed evidence is missing/corrupt.
 An unrelated unused historical photo does not invalidate a later verification.
+An exact retry of an already-recorded, actor-bound assertion or execution command
+returns the current state without making another decision, even if an asset has
+since become unavailable. The transactional command rechecks the immutable
+operation record. Changed actors or payloads still conflict; new decisions still
+require valid managed evidence. Re-uploading bytes never repairs a missing asset.
 
 Legacy text references remain explicitly unmanaged: they are not fetched, decoded,
 or presented as authenticated assets. Internal Python stores are trusted application

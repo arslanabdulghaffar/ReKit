@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from starlette.responses import Response
 
 from rekit.api.health import router as health_router
+from rekit.api.read import router as read_router
 from rekit.api.assets import router as assets_router
 from rekit.api.workflow import router as workflow_router
 from rekit.auth import AuthConfig, AuthDirectory
@@ -88,6 +89,7 @@ def create_app(
 
     app.include_router(health_router)
     app.include_router(workflow_router)
+    app.include_router(read_router)
     app.include_router(assets_router)
     return app
 

@@ -207,6 +207,13 @@ class EvidenceStore:
                 for row in connection.execute("SELECT payload FROM returns ORDER BY return_id")
             )
 
+    def list_batches(self) -> tuple[ReturnBatch, ...]:
+        with self._read() as connection:
+            return tuple(
+                ReturnBatch.model_validate_json(row["payload"])
+                for row in connection.execute("SELECT payload FROM return_batches ORDER BY batch_id")
+            )
+
     @staticmethod
     def _events(connection: sqlite3.Connection, component_id: str) -> tuple[EvidenceEvent, ...]:
         return tuple(
@@ -288,6 +295,18 @@ class EvidenceStore:
             "INSERT INTO evidence_events(event_id, physical_component_id, kind, payload, recorded_at) VALUES (?, ?, ?, ?, ?)",
             (event_id, payload.physical_component_id, kind, _canonical(payload), datetime.now(UTC).isoformat()),
         )
+
+    def is_assertion_retry(self, payload: Observation | OperatorVerification) -> bool:
+        """Recognize an exact immutable assertion before checking external assets.
+
+        The subsequent write command still validates and rechecks the same event.
+        """
+        if isinstance(payload, Observation):
+            kind, event_id = "observation", payload.observation_id
+        else:
+            kind, event_id = "verification", payload.verification_id
+        with self._read() as connection:
+            return self._duplicate_event(connection, event_id, kind, payload)
 
     @staticmethod
     def _observation(connection: sqlite3.Connection, observation_id: str, component_id: str) -> Observation:

@@ -5,7 +5,8 @@ product kits from compatible components across incomplete returns. The target
 system combines guided capture, AMD multimodal inference, traceable evidence,
 approved BOMs, economic planning, human review, and transactional execution.
 
-The current implementation is a local, operator-confirmed Python backend. AMD
+The current implementation is a local, operator-confirmed Python backend and
+React operator workbench. AMD
 inference is a required future integration; it has not been deployed or measured.
 
 ## What works
@@ -24,6 +25,8 @@ inference is a required future integration; it has not been deployed or measured
   conflict responses, and idempotent execution commands.
 - Authenticated operators and explicit roles, plus bounded JPEG/PNG/WebP intake,
   immutable asset records, content hashes, private retrieval, and multiple views.
+- A connected workbench for intake, human evidence review, explicit scenario
+  economics, real planning, approval, execution, and audit inspection.
 - A synthetic three-return example producing two kits, negative API scenarios,
   exhaustive-search planner checks, real SQLite race/rollback tests, and a small
   greedy comparison. These are software tests, not customer or model benchmarks.
@@ -67,6 +70,20 @@ liveness only. Use the configured factory above for the working recovery API.
 No `.env` file is loaded automatically. Workflow requests need an operator bearer
 token; the provisioning command refuses to overwrite existing credentials.
 
+In another PowerShell terminal, start the operator interface:
+
+```powershell
+Set-Location A:\hackathon\ReKit\frontend
+npm.cmd ci
+npm.cmd run dev
+```
+
+Open `http://127.0.0.1:5173` and enter the private token printed at provisioning.
+It stays in memory and is cleared on sign-out or refresh. The local Vite proxy
+forwards `/api` to the loopback backend; no credential belongs in a `VITE_*`
+variable. See [frontend instructions](frontend/README.md) for the workflow and
+frontend checks. Both servers remain local; a successful build is not a deployment.
+
 ## Repository boundaries
 
 | Path | Responsibility |
@@ -79,7 +96,7 @@ token; the provisioning command refuses to overwrite existing credentials.
 | `backend/src/rekit/workflows/` | Reserved boundary for richer review, rebuild instructions, and rework orchestration |
 | `backend/src/rekit/inference/adapters/` | Planned AMD ROCm/vLLM and local development inference adapters |
 | `backend/src/rekit/integrations/evolus/` | Optional future integration through approved application commands |
-| `frontend/` | Planned React, TypeScript, and Vite interface; no product screens |
+| `frontend/` | React, TypeScript, and Vite operator workbench and focused UI tests |
 | `tests/backend/`, `tests/fixtures/` | Automated contracts, integration tests, labeled synthetic inputs |
 | `evaluation/` | Reproducible synthetic CPU evaluation and future perception/AMD measurement plan |
 | `deploy/amd/` | AMD qualification and deployment boundary |
@@ -111,7 +128,7 @@ blocks its remaining work, a future supervised recovery operation is needed.
 
 Live camera capture, detection/segmentation, OCR, visual matching,
 vision-language inference, active recapture guidance, richer rebuild instructions,
-frontend screens, and Evolus are not implemented. No AMD benchmark or visual-model
+and Evolus are not implemented. No AMD benchmark or visual-model
 accuracy result is claimed. AMD cloud qualification remains a required delivery
 gate once access and resource use are authorized.
 
@@ -123,8 +140,9 @@ required by the backend; keep future AMD serving in a separate environment. The
 existing local PyTorch 2.9.0+cu128 environment is preserved. Transitive packages are
 not fully locked across platforms; AMD deployment needs its own qualified pins.
 
-Node.js and npm are available, but no frontend packages or global software were
-installed. [`.env.example`](.env.example) has blank secrets and an invalid example
+Frontend runtime and test dependencies are pinned in `frontend/package.json`
+and its lockfile; use Node.js 26. No global software was installed.
+[`.env.example`](.env.example) has blank secrets and an invalid example
 inference host. Real keys belong in ignored local configuration or secret storage,
 never frontend variables or Git. `.gitignore` excludes environments, operational
 databases, customer evidence, weights, caches, and generated output; review staged
