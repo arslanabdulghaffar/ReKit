@@ -1,5 +1,6 @@
 """A single bounded HTTPS call, isolated so DNS/TLS/slow I/O can be stopped."""
 
+from contextlib import suppress
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -130,8 +131,16 @@ def post_https(url: str, token: str, payload: bytes, *, timeout: float,
             timer.cancel()
             if timer_started:
                 timer.join()
-        if process.poll() is None:
-            process.kill()
-            process.communicate()
-        elif not timer_started:
-            process.communicate()  # Close pipes even if startup failed after the child exited.
+        try:
+            if process.poll() is None:
+                process.kill()
+                process.communicate()
+            elif not timer_started:
+                process.communicate()
+        finally:
+            # POSIX communicate() can leave stdin open when a killed worker
+            # exits before consuming a partial write. Own every pipe explicitly.
+            for pipe in (process.stdin, process.stdout, process.stderr):
+                if pipe is not None:
+                    with suppress(OSError):
+                        pipe.close()

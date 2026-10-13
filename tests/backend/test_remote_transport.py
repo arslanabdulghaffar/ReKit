@@ -216,6 +216,8 @@ def test_parent_passes_token_and_payload_only_in_stdin(monkeypatch):
 
         def __init__(self, command, **kwargs):
             captured.update(command=command, options=kwargs)
+            self.stdin, self.stdout, self.stderr = BytesIO(), BytesIO(), None
+            captured["pipes"] = (self.stdin, self.stdout)
 
         def communicate(self, data=None, timeout=None):
             captured.update(data=data, timeout=timeout)
@@ -238,6 +240,7 @@ def test_parent_passes_token_and_payload_only_in_stdin(monkeypatch):
     header, _, body = captured["data"].partition(b"\n")
     assert json.loads(header)["token"] == TOKEN and body == PAYLOAD
     assert 0 < captured["timeout"] <= 1.0
+    assert all(pipe.closed for pipe in captured["pipes"])
 
 
 @pytest.mark.parametrize("raw,code", [
@@ -301,7 +304,7 @@ def test_pipe_oserror_after_deadline_retains_timeout_classification(monkeypatch,
         calls = 0
 
         def __init__(self, *args, **kwargs):
-            pass
+            self.stdin, self.stdout, self.stderr = BytesIO(), BytesIO(), None
 
         def communicate(self, *args, **kwargs):
             self.calls += 1
