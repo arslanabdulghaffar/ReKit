@@ -1,1 +1,1 @@
-"""Planned layered perception contracts; observations never authorize decisions."""
+"""Visual inference produces unverified evidence, never decision authority."""

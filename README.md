@@ -30,6 +30,11 @@ inference is a required future integration; it has not been deployed or measured
 - A synthetic three-return example producing two kits, negative API scenarios,
   exhaustive-search planner checks, real SQLite race/rollback tests, and a small
   greedy comparison. These are software tests, not customer or model benchmarks.
+- An optional, qualified local Qwen3-VL-2B GPU provider with bounded image inputs,
+  serialized requests, cached weights, and measured real image-to-text execution.
+  [Local qualification](docs/local-inference.md) records its pinned model, license,
+  download budget, commands, actual measurements, and limits. At this stage it is
+  a standalone inference slice; evidence/API/UI integration follows separately.
 
 ## Run and test locally
 
@@ -108,7 +113,7 @@ reported separately.
 | `backend/src/rekit/recovery/` | CPU CP-SAT, integer economics, actual solver status, deterministic explanations |
 | `backend/src/rekit/inventory/` | Proposals, approvals, transactions, reservations, completion, audit |
 | `backend/src/rekit/workflows/` | Reserved boundary for richer review, rebuild instructions, and rework orchestration |
-| `backend/src/rekit/inference/adapters/` | Planned AMD ROCm/vLLM and local development inference adapters |
+| `backend/src/rekit/inference/adapters/` | Optional local Transformers GPU provider; future AMD ROCm/vLLM provider |
 | `backend/src/rekit/integrations/evolus/` | Optional future integration through approved application commands |
 | `frontend/` | React, TypeScript, and Vite operator workbench and focused UI tests |
 | `tests/backend/`, `tests/fixtures/` | Automated contracts, integration tests, labeled synthetic inputs |
@@ -140,9 +145,10 @@ qualification, authenticated multi-user deployment, or external warehouse/paymen
 integration. A plan cannot be cancelled after partial completion. If new evidence
 blocks its remaining work, a future supervised recovery operation is needed.
 
-Live camera capture, detection/segmentation, OCR, visual matching,
-vision-language inference, active recapture guidance, richer rebuild instructions,
-and Evolus are not implemented. No AMD benchmark or visual-model
+Live camera capture, detection/segmentation, dedicated OCR, visual matching,
+integrated AI review, active recapture guidance, richer rebuild instructions,
+and Evolus are not implemented. Local VLM execution is qualified separately;
+no AMD benchmark or visual-model
 accuracy result is claimed. AMD cloud qualification remains a required delivery
 gate once access and resource use are authorized.
 
@@ -153,6 +159,8 @@ and HTTPX for tests. SQLite comes from Python. No PyTorch, ROCm, or vLLM package
 required by the backend; keep future AMD serving in a separate environment. The
 existing local PyTorch 2.9.0+cu128 environment is preserved. Transitive packages are
 not fully locked across platforms; AMD deployment needs its own qualified pins.
+Optional local inference dependencies are pinned in `requirements-inference.txt`;
+CPU-only CI and the default API do not install or import the model runtime.
 
 Frontend runtime and test dependencies are pinned in `frontend/package.json`
 and its lockfile; use Node.js 26. No global software was installed.

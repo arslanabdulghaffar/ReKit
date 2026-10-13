@@ -1,0 +1,12 @@
+# Optional local inference only. Install after reviewing pip's dry-run plan.
+# Preserve the existing torch/torchvision/CUDA environment; do not use [torch] extras.
+transformers==4.57.6
+huggingface-hub==0.36.2
+tokenizers==0.22.2
+safetensors==0.6.2
+PyYAML==6.0.3
+regex==2026.9.29
+tqdm==4.70.1
+requests==2.34.2
+charset-normalizer==3.5.2
+urllib3==2.8.0

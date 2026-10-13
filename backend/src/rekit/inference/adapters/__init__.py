@@ -1,1 +1,1 @@
-"""Planned AMD ROCm/vLLM primary adapter and isolated local PyTorch adapter."""
+"""Isolated local inference and the future AMD ROCm/vLLM provider boundary."""
