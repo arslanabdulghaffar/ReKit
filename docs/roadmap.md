@@ -1,6 +1,6 @@
 # ReKit implementation roadmap
 
-## Completed local backend scope
+## Completed local workflow
 
 Overnight Mission 01 developed and validated the existing foundation, domain and
 compatibility contracts, SQLite evidence history, CPU CP-SAT recovery planning,
@@ -8,35 +8,42 @@ transactional inventory, operator-confirmed APIs, and synthetic integration and
 economic evaluation. Each mission task has its own reviewed commit and verified
 push. The original foundation-only stop gate was superseded by that mission.
 
-These increments preserve the modular backend architecture. They do not complete
-the capture/perception workflow or establish AMD inference readiness. The mission
-allowed local CPU development while AMD credits were pending; AMD remains a
-required integration gate before the complete hackathon demonstration.
+Mission 02 Tasks 1-3 add named human/service actors and explicit roles, bounded
+JPEG/PNG/WebP ingestion with immutable provenance, integrity-checked private
+image retrieval, and the connected React/TypeScript/Vite operator workspace.
+The UI supports intake, multiple views, human verification and correction,
+explicit economic assumptions, actual CPU planning, approval/reservation,
+completion, inventory, and audit inspection. It does not preload successful
+planner output or run a vision model.
 
-## 1. Authenticated operator authority: smallest next task
+These increments preserve the backend authority boundaries. AMD cloud credits
+remain pending. Local tests, synthetic images, CPU optimization, and browser
+acceptance do not establish AI accuracy or AMD inference readiness. Record local
+and GitHub Actions results separately; configuring CI does not mean it ran or
+passed. The following items are future work, not additional Mission 02 scope.
 
-Bind verification, correction, approval, cancellation, and completion to an
-authenticated operator identity and explicit roles. Preserve the existing
-idempotency, version checks, and audit records. Do not accept a request body as
-proof of human identity or authorize an inference adapter to approve itself.
+## 1. Traceable local perception contracts
 
-Acceptance: unauthorized requests cannot mutate evidence approvals or inventory;
-authorized operators can complete the existing synthetic workflow; audit actors
-come from the authenticated context. Keep this separate from product UI work.
+Introduce the smallest real perception slice behind the existing inference
+boundary, using managed assets and preserving the working local PyTorch/CUDA
+environment. Define an inference-run manifest linking exact image hashes,
+physical identity, source observations, evidence version, model/runtime revision,
+preprocessing, prompt/schema version, settings, and outcome. Add explicit
+contracts for localization/crop lineage, model-condition evidence, and useful
+additional-view requests as the chosen slice needs them.
 
-## 2. Evidence assets and accountable capture
+Existing model-source observations, identity proposals, and uncertainty flags
+remain unverified evidence. Do not put model condition output into human
+verification, count detections as new physical stock, or call model scores
+calibrated probabilities. Malformed output, insufficient evidence, and late
+results need visible failure/review paths.
 
-Add bounded evidence ingestion with content hashes, immutable asset references,
-capture metadata, and derived crop lineage. Preserve stable physical identities
-across multiple views and explicitly review suspected duplicate registration.
-Introduce deletion/retention rules and test backup/restore before real evidence is
-relied on. Files and customer data stay out of Git.
+Acceptance: a real local image request produces traceable hypotheses for human
+review, including an ambiguous case and a safe failure. Local NVIDIA success
+supports development but does not satisfy the AMD delivery gate. See the
+[exact integration points](../deploy/amd/README.md#exact-integration-points).
 
-Acceptance: observations resolve to preserved assets; repeated bytes do not imply
-new physical stock; missing or invalid assets require review. Hashes establish
-byte identity, not physical-object uniqueness or hidden safety properties.
-
-## 3. AMD inference qualification: required delivery gate
+## 2. AMD inference qualification: required delivery gate
 
 When cloud access and resource use are authorized, qualify a specific AMD GPU,
 Linux/ROCm/vLLM runtime, and compatible open vision-language model. Verify access,
@@ -48,35 +55,39 @@ Record timeouts, malformed outputs, refusal/uncertainty, runtime/model provenanc
 and representative measured results. No model may set compatibility, calculate
 financial results, reserve inventory, or grant human approval.
 
-Acceptance: real image requests succeed on the selected AMD deployment and enter
-the evidence review workflow with a reproducible manifest and measured smoke
-benchmark. A mock, CPU planner, or NVIDIA-only result cannot pass this gate.
+Run this qualification as soon as access and resource use are authorized; do not
+leave it until the end of the hackathon. Acceptance: real image requests succeed
+on the selected AMD deployment and enter the evidence review workflow with a
+reproducible manifest and measured smoke benchmark. A mock, CPU planner, or
+NVIDIA-only result cannot pass this gate.
 See [AMD deployment](../deploy/amd/README.md).
 
-## 4. Layered perception and the first operator interface
+## 3. Layered perception and evidence requests
 
-Add localization, OCR, visual matching, and VLM interpretation through qualified
-adapters. Request useful close-ups for unresolved identities. Build the first
-React/TypeScript/Vite capture and review slice against stable APIs, selecting
-frontend test tools when actual interactions exist.
+Extend qualified adapters with localization, OCR, visual matching, and VLM
+interpretation where each layer improves measured outcomes. Show evidence-linked
+hypotheses and request useful close-ups through the existing operator workspace.
+Camera control and structured additional-view requests are not implemented yet.
 
 Acceptance: multiple views preserve physical identity, ambiguity is actionable,
 corrections retain provenance, and visual evidence is never presented as proof of
 hidden function or safety. Raw model confidence remains an uncalibrated score.
 
-## 5. Execution and operational completeness
+## 4. Execution, evidence custody, and operational completeness
 
 Add approved BOM-driven rebuild instructions, required external functional/safety
 checks, supervised partial-plan recovery, and explicit post-completion rework.
 Define catalog migrations, reservation expiry, shared labor/demand accounting,
 authenticated deployment, request limits, logging, and backup/restore procedures
-as concrete use cases require them.
+as concrete use cases require them. Add evidence retention/deletion rules,
+derived-artifact lineage, and tested database-plus-image backup/restore. Hashes
+establish byte identity, not physical-object uniqueness or hidden safety.
 
 Acceptance: failure and interrupted-work paths preserve component custody and
 lineage without undoing consumed inventory or silently inheriting stale approval.
 Real merchant or payment integrations require separate scope and authorization.
 
-## 6. Representative evaluation and integrated AMD demonstration
+## 5. Representative evaluation and integrated AMD demonstration
 
 Collect reviewed evidence with splits by physical item and return. Measure
 perception errors, uncertainty handling, human corrections, and workflow outcomes
@@ -88,7 +99,7 @@ Acceptance: the complete workflow runs with real AMD inference, deterministic
 catalog/financial decisions, human approval, atomic execution, and reproducible
 quality/performance evidence. Do not infer business uplift from synthetic cases.
 
-## 7. Optional Evolus integration
+## 6. Optional Evolus integration
 
 After the core workflow works, connect Evolus through authenticated application
 commands for bounded orchestration. It cannot bypass operator roles, policy,
@@ -100,5 +111,5 @@ remain usable without Evolus, and this work cannot delay the required AMD demo.
 Keep one modular backend unless measured needs justify separate infrastructure.
 Add dependencies only for real use cases; preserve the working local environment.
 Every future increment needs focused tests and a reviewable scope. This roadmap
-is a plan, not authorization to download models, spend cloud credits, or continue
-beyond the completed overnight mission.
+is a plan, not authorization to download models, spend cloud credits, or start
+Mission 03. AMD inference remains required for the complete hackathon system.

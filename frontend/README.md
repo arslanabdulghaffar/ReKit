@@ -206,6 +206,20 @@ These commands require no GPU, model downloads, or AMD cloud service. Do not
 commit `node_modules/`, `dist/`, credentials, databases, image evidence, browser
 profiles, or generated test artifacts.
 
+For the complete browser/backend check, stop your own local ReKit servers and
+run this from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_browser_acceptance.py
+```
+
+The runner uses the locally installed Playwright package and an installed Chrome
+or Edge browser. It starts isolated loopback services and temporary synthetic
+data; it does not use your operator credentials or operational database. See
+[the acceptance guide](../evaluation/README.md#real-browser-acceptance) for exact
+coverage and artifact handling. Vitest tests remain scoped to `src/`; browser
+tests live in `e2e/` and require this runner's temporary fixture.
+
 ## Source layout
 
 - `src/App.tsx`: memory-only session, navigation, and server snapshots.

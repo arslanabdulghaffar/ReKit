@@ -55,6 +55,9 @@ node_modules/
 .vite/
 coverage/
 *.tsbuildinfo
+playwright-report/
+test-results/
+.playwright/
 
 # Local editor and operating-system state
 .vscode/

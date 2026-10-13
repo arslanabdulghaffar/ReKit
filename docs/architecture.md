@@ -14,26 +14,31 @@ FastAPI exposes `GET /health` and the [operator-confirmed workflow API](api-work
 | `backend/src/rekit/api/` | HTTP routing and request/response translation, wired by `backend/src/rekit/main.py`. Routes delegate to evidence and inventory operations; the default app leaves workflows unconfigured. |
 | `backend/src/rekit/inference/` | Planned perception contracts and orchestration for localization, OCR, visual matching, and vision-language interpretation. |
 | `backend/src/rekit/inference/adapters/` | Planned provider-specific implementations. Production targets AMD Developer Cloud with ROCm, vLLM, and a qualified open vision-language model; local PyTorch/CUDA will support development. No inference adapter or mock service is implemented. |
-| `backend/src/rekit/evidence/` | Physical-component identity, return/capture relationships, immutable source evidence, observations, provenance, and requests for additional evidence. |
+| `backend/src/rekit/evidence/` | Physical-component identity, registered returns, managed image assets, append-only observations, proposals, uncertainty, and human verification. Structured requests for additional views and derived crop lineage remain planned. |
 | `backend/src/rekit/catalog/` | Approved products, BOM revisions, allowed substitutions, compatibility constraints, and visible-condition policies. |
 | `backend/src/rekit/recovery/` | Deterministic feasibility, CPU OR-Tools CP-SAT allocation, economic assumptions, and comparisons of feasible alternatives. |
 | `backend/src/rekit/workflows/` | Planned richer review/rebuild/rework orchestration; current approval and completion operations live with transactional inventory. |
 | `backend/src/rekit/inventory/` | Transactional persistence, availability, reservation, consumption, release, and audit records. SQLite is the current storage engine. |
 | `backend/src/rekit/integrations/evolus/` | Optional Evolus integration through application contracts; absent by default. |
-| `tests/backend/` | Health, domain, compatibility, evidence persistence, recovery correctness, transactional inventory, and complete API workflow tests. |
-| `evaluation/` | Executable synthetic CPU recovery and greedy comparisons; planned perception datasets, performance measurements, and AMD qualification records. |
+| `tests/backend/` | Health, domain, authentication, image handling, compatibility, evidence persistence, recovery correctness, transactional inventory, and API workflow tests. |
+| `frontend/src/` | The operator interface and Vitest/Testing Library component tests with mocked HTTP boundaries. |
+| `frontend/e2e/recovery.spec.ts` | Playwright acceptance through the actual UI and loopback backend, with independent HTTP assertions for images, negative cases, two-kit planning, reservations, completion, and audit. Execution results are reported separately. |
+| `evaluation/run_synthetic.py` | Synthetic in-process HTTP workflow and controlled CPU CP-SAT/greedy comparisons. |
+| `evaluation/run_browser_acceptance.py` | Isolated synthetic fixture and service lifecycle for real-browser acceptance against loopback HTTP, SQLite, and actual CP-SAT. It generates no model output and downloads no browser. |
+| `evaluation/` | Evaluation fixtures and instructions; representative perception datasets and AMD performance qualification remain future work. |
 | `deploy/amd/` | Planned reproducible AMD deployment instructions and runtime/model compatibility records. |
 | `docs/` | Architecture decisions, implementation sequence, and acceptance gates. |
+| `.github/workflows/ci.yml` | CPU-only Python and frontend checks using pinned official Actions. A local pass does not establish the remote CI result. |
 
 Keep one modular backend until measured operational needs justify separate services. Directory boundaries do not require separate processes, databases, queues, or package distributions.
 
 ## Dependency direction and authority
 
-The API translates transport inputs and delegates future use cases to workflows. Workflows coordinate evidence, catalog, recovery, and inventory through explicit contracts. The frontend and optional Evolus integration use application APIs; neither receives direct database or model-runtime authority.
+The API translates transport inputs and currently delegates to evidence, asset, catalog, recovery, and inventory services. Future workflow orchestration will coordinate those same boundaries through explicit contracts. The frontend and optional Evolus integration use application APIs; neither receives direct database or model-runtime authority.
 
 Evidence and catalog domain rules stay independent of FastAPI, a specific inference SDK, and database details. Inference adapters return observations through perception contracts. Recovery consumes explicit component snapshots and approved catalog/policy versions; it does not infer compatibility by calling a language model. Inventory owns the final transactional checks and state transitions. Concrete runtime and persistence implementations are wired at the application boundary rather than imported into domain rules.
 
-Do not add a generic framework, event bus, shared `utils` layer, or speculative abstract base classes during the foundation task. Introduce typed contracts and narrow interfaces as the first real domain use cases require them. Keep model runtime packages separate from the lightweight API dependency set.
+Introduce typed contracts and narrow interfaces when a concrete use case requires them. A generic framework, event bus, or speculative abstraction is not needed for the current local workflow. Keep model runtime packages separate from the API dependency set.
 
 ## End-to-end workflow
 
@@ -48,7 +53,7 @@ Do not add a generic framework, event bus, shared `utils` layer, or speculative 
 9. **Reserve and rebuild.** Revalidate the approved plan against current evidence, policies, and inventory, then atomically reserve all required components and record the audit event. Generate instructions from the approved BOM and actual reservations.
 10. **Verify and close.** Verify the assembled kit using required evidence and policy checks, record human confirmation where required, then atomically record consumption/output inventory and audit history. Failed or interrupted work follows an explicit hold/release/rework path.
 
-These steps describe the complete target workflow. The current API exercises the operator-confirmed evidence-to-completion path; capture/perception and richer rebuild instructions remain planned. The health endpoint certifies none of these capabilities.
+These steps describe the complete target workflow. The current API and UI implement image-file intake and the operator-confirmed evidence-to-completion path. Camera control, derived crops, automated perception, structured additional-view requests, richer rebuild instructions, external functional tests, and supervised partial-plan recovery remain planned. The health endpoint certifies none of these capabilities.
 
 ## Evidence, identity, and provenance invariants
 
@@ -64,11 +69,17 @@ These steps describe the complete target workflow. The current API exercises the
 
 Layered perception produces evidence-backed hypotheses. Localization proposes regions; OCR provides observed text; visual matching supplies candidates; the vision-language model interprets visible evidence and can propose the next useful capture. Each layer must retain its evidence references and distinguish raw output from validated interpretation.
 
-The production inference boundary targets AMD Developer Cloud with ROCm and vLLM. Qualify the actual available AMD GPU, runtime versions, chosen open model revision, multimodal request behavior, licensing/access conditions, memory budget, and measured latency before claiming compatibility. No particular GPU/runtime/model combination is selected or certified by this foundation.
+The production inference boundary targets AMD Developer Cloud with ROCm and vLLM. AMD cloud credits remain pending; no adapter, serving process, or selected GPU/runtime/model combination is implemented or qualified. Qualify the actual available AMD GPU, runtime versions, open model revision, multimodal request behavior, licensing/access conditions, memory budget, and measured latency before claiming compatibility.
+
+The concrete integration starts at `ImageAssetStore.read(asset_id)`, which returns registered metadata and integrity-checked bytes. A future adapter binds those inputs to the component, return, asset hashes, source observations, and evidence version. It must not fetch arbitrary user URLs, consume operator bearer credentials, create physical stock from detections, or run while holding an inventory write transaction.
+
+Existing `Observation`, `IdentityProposal`, and `UncertaintyFlag` contracts can record bounded model-source markings, hypotheses, and uncertainty through append-only evidence methods. They do not yet provide a full inference-run manifest, localization/crop lineage, structured model-condition evidence, or additional-view request contract. In particular, today's visible condition in `OperatorVerification` is a human assertion; it is not a field a VLM can populate with authority. One proposal links to one observation, so future multi-view runs need explicit input lineage rather than invented fields in current schemas.
+
+The next adapter must record immutable model/runtime identity, preprocessing and prompt/schema versions, input hashes, generation settings, outcome, and failure details before its results can be audited. Human review still chooses catalog identity and visible condition against the current evidence version. New model evidence after verification returns the component to review and cannot inherit approval. See the [exact AMD integration points](../deploy/amd/README.md#exact-integration-points) for the current entry points and required future contracts.
 
 Local development may use the existing two RTX 4080 SUPER GPUs and working PyTorch 2.9.0/CUDA 12.8 environment. That path supports development and comparison; it cannot satisfy the AMD production integration gate. Model-serving dependencies belong in their own deployment environment, and must not replace or reinstall the working local CUDA/PyTorch stack merely to run the API.
 
-AMD qualification is required early and again for the integrated hackathon demonstration. Mocks keep domain work testable while qualification proceeds, but a mock/local-only demonstration does not complete the production objective. Credentials and private evidence stay out of source control; endpoint configuration and deployment records must contain no secret values.
+AMD qualification is required early and again for the integrated hackathon demonstration. Synthetic CPU and domain fixtures keep the deterministic workflow testable while access is pending; they are not model inference and cannot complete the AMD objective. Credentials and private evidence stay out of source control; endpoint configuration and deployment records must contain no secret values.
 
 ## Deterministic catalog and decision policy
 
@@ -104,10 +115,12 @@ Database concurrency tests must demonstrate that competing reservations cannot a
 
 ## Evaluation and operational boundaries
 
-Current evaluation covers synthetic CPU planning, API integration, and SQLite consistency. Future perception evaluation will track localization, OCR, candidate matching, identity association, evidence-request usefulness, visible-condition limitations, and human correction rates on appropriately labeled evidence. Separately test compatibility rules, solver feasibility/economics, reservation concurrency, and completed-kit lineage. Avoid evaluation leakage across views of the same physical item or return. Record dataset, policy, model, and runtime versions with results.
+Current automated checks cover synthetic CPU planning, API integration, SQLite consistency, authentication, image integrity, and frontend interactions. Mocked HTTP component tests and real-browser checks against the local backend are different evidence; record which actually ran and their results. Neither measures perception accuracy or AMD performance. Future perception evaluation will track localization, OCR, candidate matching, identity association, evidence-request usefulness, visible-condition limitations, and human correction rates on appropriately labeled evidence. Separately test compatibility rules, solver feasibility/economics, reservation concurrency, and completed-kit lineage. Avoid evaluation leakage across views of the same physical item or return. Record dataset, policy, model, and runtime versions with results.
+
+`evaluation/run_browser_acceptance.py` manages temporary synthetic state, credentials, generated test images, and local services for `frontend/e2e/recovery.spec.ts`. The spec uses the real browser UI and independent authenticated HTTP assertions, without mocked routes or hardcoded planner responses. Generated imagery and human-role test automation are explicit test fixtures, not an AI prediction or proof of physical assembly. CPU GitHub Actions jobs run backend and frontend component/type/build/dependency checks; they do not imply that a browser or AMD benchmark ran. See [evaluation instructions](../evaluation/README.md) for the distinct runners and artifact handling.
 
 AMD benchmarks must report the actual hardware/runtime/model, request shapes, image sizes, concurrency, latency, memory use, and failure rate under the tested workload. An inference benchmark is separate from an end-to-end decision quality result. The implementation roadmap defines when these measurements become required.
 
-Future operational work includes request/correlation IDs, structured logs without secrets or raw private evidence, access control, evidence retention and deletion policy, backup/restore validation, and bounded failure/retry handling. Keep health semantics narrow: `GET /health` reports that the API process can respond. Future inference readiness and database readiness checks require distinct contracts and must not be implied by today's health result.
+Future operational work includes request/correlation IDs, structured logs without secrets or raw private evidence, deployment access controls beyond local bearer roles, evidence retention and deletion policy, backup/restore validation, and bounded inference failure/retry handling. Keep health semantics narrow: `GET /health` reports that the API process can respond. Future inference readiness and database readiness checks require distinct contracts and must not be implied by today's health result.
 
 Evolus is optional. It may coordinate approved application operations through authenticated, validated APIs, but cannot become a second source of inventory state or bypass human approval, deterministic policy, evidence provenance, or reservation transactions. The complete core workflow must remain operable without it.

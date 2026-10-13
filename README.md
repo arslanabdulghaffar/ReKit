@@ -84,6 +84,20 @@ forwards `/api` to the loopback backend; no credential belongs in a `VITE_*`
 variable. See [frontend instructions](frontend/README.md) for the workflow and
 frontend checks. Both servers remain local; a successful build is not a deployment.
 
+For the isolated real-browser acceptance scenario, close your own local ReKit
+servers and run the command below from the repository root. It uses an installed
+Chrome or Edge browser, generates labeled synthetic images, and starts temporary
+loopback services. It does not reuse operational inventory or download a browser.
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_browser_acceptance.py
+```
+
+See [browser acceptance](evaluation/README.md#real-browser-acceptance) for the
+checks, prerequisites, generated artifacts, and limits. The CPU-only GitHub
+Actions workflow runs backend and frontend checks; local browser results are
+reported separately.
+
 ## Repository boundaries
 
 | Path | Responsibility |

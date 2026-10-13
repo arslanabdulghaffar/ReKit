@@ -51,6 +51,58 @@ CP-SAT but uses a different allocation strategy. Independent exhaustive subset
 oracles in tests verify tiny-case optima. This is a correctness check, not an
 independent implementation of every catalog rule or a production-scale benchmark.
 
+## Real-browser acceptance
+
+The separate browser runner exercises the React workbench and FastAPI together
+over loopback HTTP, using the actual SQLite stores and CPU CP-SAT solver:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_browser_acceptance.py
+```
+
+First install the pinned frontend packages with `npm ci` in `frontend`, and use
+the existing Python environment. Chrome or Edge must already be installed. The
+runner does not download a browser, model, dataset, or container. Stop your own
+ReKit development servers first: the runner refuses occupied IPv4 loopback ports
+8000 and 5173 and does not attach to or terminate unrelated services.
+
+Each run creates an empty database, server-approved synthetic catalog/policy,
+random test credentials, and two distinct PNG views for each of the four fixture
+components. Every generated image is labeled as synthetic test evidence, not a
+product photograph. Registration, upload, human-review controls, scenario entry,
+planning, approval, and completion are exercised through the browser; independent
+authenticated HTTP reads check the resulting records. No browser route is mocked
+and no successful planner output is supplied by the test.
+
+The acceptance spec covers native file validation, multiple views of one identity,
+duplicate reuse, invalid image feedback, authorization, unresolved/incompatible
+stock, identity correction, compatible two-kit planning, reservation, explicit
+completion, lineage, and audit. Test assertions use the invented fixture's
+17,500-cent modeled outcome; they do not force the solver to return it. Software
+automation of a human-role review form does not establish an actual physical
+assembly, real product identity, functionality, or safety.
+
+The private fixture manifest, database, and image state exist only for the run.
+The runner stops its child services and removes that state on exit. Sanitized
+results, screenshots taken after sign-in, and service logs remain in a unique
+ignored directory under `var/mission02-acceptance/`. Traces, videos, and automatic
+failure screenshots are disabled so a sign-in failure cannot capture a token.
+Do not commit generated artifacts or copy private fixture manifests into reports.
+
+`browser.log` is redacted UTF-8, and `runner-result.json` records the browser exit
+status plus actual credential/state cleanup and reporting failures. Both are
+written independently of best-effort console output; legacy Windows encodings
+display unsupported characters as escapes. A failed run retains any safe
+milestone screenshots already taken. Reporting or cleanup failures make the
+runner fail even when the browser test passed.
+
+The spec is `frontend/e2e/recovery.spec.ts`; the fixture lifecycle is
+`evaluation/run_browser_acceptance.py`. Vitest runs only component/unit tests
+under `frontend/src`. The GitHub Actions workflow runs backend tests and frontend
+unit, type, build, and dependency checks on CPU; it does not claim a remote browser
+run. Local browser results and actual GitHub job status are reported separately
+in the [Mission 02 report](../docs/reports/development-mission-02.md).
+
 ## Executable coverage
 
 | Required behavior | Tests |
