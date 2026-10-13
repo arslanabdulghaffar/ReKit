@@ -104,6 +104,25 @@ loopback services. It does not reuse operational inventory or download a browser
 .\.venv\Scripts\python.exe evaluation/run_browser_acceptance.py
 ```
 
+To exercise actual local GPU inspection inside the same isolated recovery flow,
+use the already qualified checkpoint and explicitly opt in:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_browser_acceptance.py --real-inference --device 1
+```
+
+This adds two real inspections, including an ambiguous illustration, before
+explicit human review and normal recovery execution. It downloads nothing.
+The default browser command remains a manual recovery regression without AI.
+
+The pinned local provider uses schema-constrained generation followed by strict
+domain validation. Two complete real-AI browser runs passed during Mission 03,
+including explicit rejection of an unsupported revision claim and separate human
+verification. These synthetic cases qualify execution and evidence handling;
+they do not measure recognition accuracy. See the
+[Mission 03 report](docs/reports/development-mission-03.md) for actual outcomes,
+preserved failures, settings, and limitations.
+
 See [browser acceptance](evaluation/README.md#real-browser-acceptance) for the
 checks, prerequisites, generated artifacts, and limits. The CPU-only GitHub
 Actions workflow runs backend and frontend checks; local browser results are
@@ -185,6 +204,11 @@ Read [architecture](docs/architecture.md), [domain contracts](docs/domain-contra
 [inventory execution](docs/inventory-workflow.md), and the [roadmap](docs/roadmap.md).
 The [foundation report](docs/foundation-report.md) is a historical inspection record.
 
-Mission 02 adds authenticated authority, secure image evidence, a connected operator
-workbench, and integration validation. AMD inference remains a separate future task
-after local vision work and explicit qualification authorization.
+Mission 03 adds real local GPU inspection, immutable inference provenance, and
+AI-assisted human review. The [mission report](docs/reports/development-mission-03.md)
+separates actual execution measurements, software checks, and observed model errors.
+Task 5 resolved the earlier output-contract blocker with constrained decoding.
+Current-version API, repeated real-AI browser acceptance, and the original
+recovery regression passed; the report preserves the earlier failed attempts.
+Representative photo evaluation and AMD qualification remain required before a
+credible end-to-end AMD demonstration.

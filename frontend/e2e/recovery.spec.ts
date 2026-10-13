@@ -1,9 +1,10 @@
 import { readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import type { APIRequestContext, Locator, Page, Response } from '@playwright/test'
 import type {
-  AuditRecord, EconomicScenario, EvidenceHistory, ImageAsset, InventorySnapshot,
+  AuditRecord, EconomicScenario, EvidenceHistory, ImageAsset, InferenceRun, InventorySnapshot,
   PhysicalComponent, ReturnBatch, ReturnRecord, StoredPlan, Verification,
 } from '../src/types'
 
@@ -16,6 +17,11 @@ interface BrowserFixture {
   operator_id: string
   viewer_id: string
   artifacts_dir: string
+  real_inference?: boolean
+  ambiguous_image?: string
+  model_dir?: string
+  model_revision?: string
+  device?: number
   images: Record<string, string[]>
   fixture: {
     synthetic: true
@@ -32,6 +38,10 @@ if (manifest.synthetic !== true || manifest.fixture.synthetic !== true || manife
   throw new Error('Acceptance requires an isolated local synthetic backend.')
 }
 const fixture = manifest.fixture
+const realInference = manifest.real_inference === true
+if (realInference && (!manifest.ambiguous_image || !manifest.model_dir || !/^[a-f0-9]{40}$/.test(manifest.model_revision ?? '') || !Number.isInteger(manifest.device))) {
+  throw new Error('Real browser inference requires an explicit model, GPU device, and synthetic ambiguous image.')
+}
 const headers = { Authorization: `Bearer ${manifest.operator_token}` }
 const redact = (value: string) => value.replaceAll(manifest.operator_token, '[redacted]').replaceAll(manifest.viewer_token, '[redacted]')
 const path = (value: string) => encodeURIComponent(value)
@@ -75,32 +85,152 @@ async function selectReview(page: Page, componentId: string, version: number): P
   await expect(page.getByLabel('Review reason', { exact: true })).toBeVisible()
 }
 
-async function verify(page: Page, request: APIRequestContext, componentId: string, type: string, revision: string): Promise<void> {
+async function verify(page: Page, request: APIRequestContext, componentId: string, type: string, revision: string, reviewedRunIds: string[] = []): Promise<EvidenceHistory> {
   const before = await get<EvidenceHistory>(request, `/components/${path(componentId)}/history`)
   await selectReview(page, componentId, before.current.version)
   await page.getByRole('combobox', { name: 'Component type', exact: true }).selectOption(type)
   await page.getByRole('combobox', { name: 'Revision', exact: true }).selectOption(revision)
   await page.getByRole('combobox', { name: 'Visible condition', exact: true }).selectOption('acceptable')
   const observations = before.events.filter(event => event.kind === 'observation').map(event => event.event_id)
-  expect(observations).toHaveLength(2)
-  for (const id of observations) await page.locator(`input[name="observation_id"][value="${id}"]`).check()
-  await page.getByLabel('Review reason', { exact: true }).fill(`Synthetic manual visible-identity review: ${type} revision ${revision}; no functional or safety claim.`)
+  const inspected = realInference && componentId === fixture.components[0].component.physical_component_id
+  if (inspected) expect(observations.length).toBeGreaterThanOrEqual(2)
+  else expect(observations).toHaveLength(2)
+  // Manual identity confirmation cites the two original synthetic product views,
+  // never an AI assertion or the deliberately unrelated ambiguous illustration.
+  for (const id of observations.slice(0, 2)) await page.locator(`input[name="observation_id"][value="${id}"]`).check()
+  const reason = `Synthetic manual visible-identity review: ${type} revision ${revision}; no functional or safety claim.`
+    + (reviewedRunIds.length ? ` Reviewed unverified AI runs ${reviewedRunIds.join(', ')} and confirmed identity from the original image evidence.` : '')
+  await page.getByLabel('Review reason', { exact: true }).fill(reason)
   const response = await postFromUI(page, page.getByRole('button', { name: before.current.verification ? 'Record correction' : 'Verify component', exact: true }), `/components/${path(componentId)}/verification`, 200)
   const command = response.request().postDataJSON()
   expect(command.expected_version).toBe(before.current.version)
   expect(command.verification.supersedes_verification_id).toBe(before.current.verification?.verification_id ?? null)
   expect(command.verification).not.toHaveProperty('operator_id')
+  expect(command.verification.reason).toBe(reason)
   await expect(page.getByText('Human verification recorded with its evidence links and actor identity.', { exact: true })).toBeVisible()
   const after = await get<EvidenceHistory>(request, `/components/${path(componentId)}/history`)
   expect(after.current.state).toBe('verified')
   expect(after.current.verification?.operator_id).toBe(manifest.operator_id)
   expect(after.current.verification?.identity).toEqual({ component_type_id: type, revision })
+  expect(after.current.verification?.reason).toBe(reason)
+  for (const runId of reviewedRunIds) expect(after.current.verification?.reason).toContain(runId)
   expect(after.events).toHaveLength(before.events.length + 1)
   const check = page.waitForResponse(response => response.url().includes(`/api/components/${path(componentId)}/compatibility?`))
   await page.getByRole('button', { name: 'Check compatibility', exact: true }).click()
   const decision = await (await check).json()
   expect(decision.compatible).toBe(revision === 'A')
   await expect(page.getByText(revision === 'A' ? /Compatible under the approved policy/ : /Compatibility not established/)).toBeVisible()
+  return after
+}
+
+interface InferenceAcceptance {
+  runs: InferenceRun[]
+  ambiguous_result: 'not_run' | 'unknown' | 'hypotheses_rejected'
+  rejection_event_id?: string
+  human_review?: { physical_component_id: string; run_ids: string[]; verification: Verification; evidence_version: number }
+}
+
+function persistInference(record: InferenceAcceptance): void {
+  writeFileSync(join(manifest.artifacts_dir, 'inference-results.json'), redact(JSON.stringify({
+    synthetic: true, real_inference: true, ...record,
+    limitations: ['Synthetic illustrations are not product-recognition accuracy evidence.',
+      'Model output remains unverified until a separate human review.',
+      'Local NVIDIA execution does not qualify AMD ROCm or vLLM.'],
+  }, null, 2)), 'utf8')
+}
+
+async function assertHeld(request: APIRequestContext, componentId: string): Promise<EvidenceHistory> {
+  const current = await get<EvidenceHistory>(request, `/components/${path(componentId)}/history`)
+  expect(current.current.verification).toBeNull()
+  expect(current.current.state).not.toBe('verified')
+  expect(current.events.filter(event => event.kind === 'verification')).toHaveLength(0)
+  const inventory = await get<InventorySnapshot>(request, '/inventory')
+  expect(inventory.items).toHaveLength(4)
+  expect(inventory.completed_kits).toHaveLength(0)
+  const entry = inventory.items.find(item => item.item.component.physical_component_id === componentId)
+  expect(entry?.availability).toBe('held')
+  expect(entry?.item.eligibility).toBe('held')
+  expect((await get<{ compatible: boolean }>(request, `/components/${path(componentId)}/compatibility?configuration_id=standard-kit`)).compatible).toBe(false)
+  return current
+}
+
+async function inspectFromUI(page: Page, request: APIRequestContext, componentId: string, inputs: ImageAsset[], record: InferenceAcceptance): Promise<InferenceRun> {
+  const before = await get<EvidenceHistory>(request, `/components/${path(componentId)}/history`)
+  await selectReview(page, componentId, before.current.version)
+  for (const selected of await page.getByRole('checkbox', { name: /^Analyze image / }).all()) await selected.uncheck()
+  for (const asset of inputs) await page.getByRole('checkbox', { name: `Analyze image ${asset.asset_id}`, exact: true }).check()
+  const response = await postFromUI(page, page.getByRole('button', { name: 'Analyze images', exact: true }), `/components/${path(componentId)}/inference`, 202)
+  const command = response.request().postDataJSON()
+  expect(Object.keys(command).sort()).toEqual(['asset_ids', 'expected_version', 'request_id'])
+  expect(command.asset_ids).toEqual(inputs.map(asset => asset.asset_id))
+  expect(command.expected_version).toBe(before.current.version)
+  let run = await response.json() as InferenceRun
+  const index = record.runs.length
+  record.runs.push(run)
+  persistInference(record)
+  await expect.poll(async () => {
+    run = await get<InferenceRun>(request, `/inference/${path(run.start.run_id)}`)
+    record.runs[index] = run
+    persistInference(record)
+    return run.outcome !== null
+  }, { timeout: 175_000, intervals: [500, 1000] }).toBe(true)
+  expect(run.outcome?.status).toBe('succeeded')
+  expect(run.outcome?.stale).toBe(false)
+  expect(run.outcome!.applied_event_ids.length).toBeGreaterThan(0)
+  expect(run.start.physical_component_id).toBe(componentId)
+  expect(run.start.actor_id).toBe(manifest.operator_id)
+  expect(run.start.evidence_version).toBe(before.current.version)
+  expect(run.start.inputs).toEqual(inputs.map(asset => ({ asset_id: asset.asset_id, sha256: asset.sha256, observation_id: asset.observation_id })))
+  expect(run.start.configuration.provider).toBe('local-transformers')
+  expect(run.start.configuration.model_repository).toBe('Qwen/Qwen3-VL-2B-Instruct')
+  expect(run.start.configuration.model_revision).toBe(manifest.model_revision)
+  expect(run.start.configuration.processor_revision).toBe(run.start.configuration.model_revision)
+  expect(run.start.configuration.device).toBe(`cuda:${manifest.device}`)
+  expect(run.start.configuration.prompt_version).toBeTruthy()
+  expect(run.start.configuration.preprocessing.prompt_sha256).toMatch(/^[a-f0-9]{64}$/)
+  expect(run.start.configuration.runtime.torch).toBeTruthy()
+  const generation = run.start.configuration.generation
+  expect(generation.decoding).toBe('lm-format-enforcer')
+  expect(generation.schema_version).toEqual(expect.any(String))
+  expect(String(generation.schema_version).trim().length).toBeGreaterThan(0)
+  expect(generation[`schema_sha256_${inputs.length}`]).toMatch(/^[a-f0-9]{64}$/)
+  expect(run.outcome!.metrics.decoding).toBe(generation.decoding)
+  expect(run.outcome!.metrics.schema_version).toBe(generation.schema_version)
+  expect(run.outcome!.metrics.schema_sha256).toBe(generation[`schema_sha256_${inputs.length}`])
+  expect(['joint', 'per-image']).toContain(generation.image_mode)
+  expect(run.outcome!.metrics.vision_forward_calls).toBe(generation.image_mode === 'joint' ? 1 : inputs.length)
+  for (const metric of ['vision_forward_calls', 'peak_allocated_bytes', 'peak_reserved_bytes', 'input_tokens', 'output_tokens', 'inference_seconds']) {
+    expect(run.outcome!.metrics[metric]).toEqual(expect.any(Number))
+    expect(run.outcome!.metrics[metric]).toBeGreaterThan(0)
+  }
+  expect(run.outcome!.metrics.model_loaded_this_request).toBe(index === 0)
+  expect(run.outcome!.raw_output?.length).toBeGreaterThan(0)
+  const output = run.outcome!.output!
+  expect(output).not.toBeNull()
+  for (const entries of [output.observations, output.candidates, output.additional_views]) {
+    expect(Array.isArray(entries)).toBe(true)
+    for (const entry of entries) {
+      expect(entry.image_indices.length).toBeGreaterThan(0)
+      expect(entry.image_indices.every(value => Number.isInteger(value) && value >= 1 && value <= inputs.length)).toBe(true)
+    }
+  }
+  expect(Array.isArray(output.uncertainties)).toBe(true)
+  if (!output.candidates.length) expect(output.uncertainties.length).toBeGreaterThan(0)
+  for (const observation of output.observations) {
+    const namedViews = [...new Set(Array.from(observation.text.matchAll(/\bVIEW\s+([12])\b/gi), match => Number(match[1])))]
+    if (namedViews.length === 1) {
+      // Each fixture view has a distinct visible label. An explicit single-view
+      // observation must cite that view alone, irrespective of upload UUID order.
+      const expectedHash = createHash('sha256').update(readFileSync(manifest.images[componentId][namedViews[0] - 1])).digest('hex')
+      expect(observation.image_indices.map(index => run.start.inputs[index - 1].sha256)).toEqual([expectedHash])
+    }
+  }
+  await expect(page.locator('.inference-result').getByText('succeeded', { exact: true })).toBeVisible({ timeout: 10_000 })
+  await expect(page.locator('.inference-result').getByText(run.start.run_id, { exact: true })).toBeVisible()
+  await expect(page.getByText('AI output is unverified.', { exact: false })).toBeVisible()
+  for (const observation of output.observations) await expect(page.getByText(observation.text, { exact: true }).first()).toBeVisible()
+  await assertHeld(request, componentId)
+  return run
 }
 
 async function generatePlan(page: Page, description: string): Promise<StoredPlan> {
@@ -137,11 +267,13 @@ async function generatePlan(page: Page, description: string): Promise<StoredPlan
   return stored
 }
 
-test('real images and manual review recover two kits without bypassing incompatible inventory', async ({ page, browser, request }) => {
+test(realInference ? 'real local vision and human review recover two synthetic kits without AI authority' : 'real images and manual review recover two kits without bypassing incompatible inventory', async ({ page, browser, request }) => {
   let stage = 'authentication'
   const pageErrors: string[] = []
   page.on('pageerror', error => pageErrors.push(redact(error.message)))
   const assets: Record<string, ImageAsset[]> = {}
+  const inference: InferenceAcceptance = { runs: [], ambiguous_result: 'not_run' }
+  const screenshots = ['desktop-evidence.png', 'mobile-evidence.png', 'plan-overview.png', 'reserved-plan.png', 'final-inventory.png']
   try {
     expect(await get<InventorySnapshot>(request, '/inventory')).toEqual({ items: [], completed_kits: [] })
     await login(page, manifest.operator_token)
@@ -211,8 +343,88 @@ test('real images and manual review recover two kits without bypassing incompati
     await capture(page, 'mobile-evidence.png')
     await page.setViewportSize({ width: 1440, height: 1000 })
 
+    if (realInference) {
+      stage = 'actual two-image local vision through the browser'
+      persistInference(inference)
+      const firstId = first.physical_component_id
+      const original = [...manifest.images[firstId]].reverse().map(filename => {
+        const expectedHash = createHash('sha256').update(readFileSync(filename)).digest('hex')
+        const asset = assets[firstId].find(item => item.sha256 === expectedHash)
+        if (!asset) throw new Error('An uploaded qualification view does not match its original fixture hash.')
+        return asset
+      })
+      expect(original.map(asset => asset.sha256).sort()).toEqual(manifest.images[firstId].map(filename => createHash('sha256').update(readFileSync(filename)).digest('hex')).sort())
+      await inspectFromUI(page, request, firstId, original, inference)
+      await page.getByText('Source images & run provenance', { exact: true }).click()
+      await page.getByText('Original model text · unverified', { exact: true }).click()
+      await capture(page, 'desktop-ai-inspection.png')
+      await page.setViewportSize({ width: 390, height: 844 })
+      await capture(page, 'mobile-ai-inspection.png')
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      screenshots.push('desktop-ai-inspection.png', 'mobile-ai-inspection.png')
+
+      stage = 'ambiguous additional view preserves physical identity and human authority'
+      await page.getByLabel(/^Additional component images/).setInputFiles(manifest.ambiguous_image!)
+      await postFromUI(page, page.getByRole('button', { name: 'Upload another view', exact: true }), `/components/${path(firstId)}/images?return_id=${path(first.source_return_id)}`, 201)
+      await expect(page.getByText(`Additional views saved for ${firstId}. No new physical stock was created. Select the new view to analyze again.`, { exact: true })).toBeVisible()
+      const currentAssets = await get<ImageAsset[]>(request, `/components/${path(firstId)}/images`)
+      expect(currentAssets).toHaveLength(3)
+      // Read persisted evidence independently of Chrome's response-body cache.
+      const ambiguousHash = createHash('sha256').update(readFileSync(manifest.ambiguous_image!)).digest('hex')
+      const matches = currentAssets.filter(asset => asset.sha256 === ambiguousHash)
+      expect(matches).toHaveLength(1)
+      const ambiguous = matches[0]
+      expect(ambiguous.physical_component_id).toBe(firstId)
+      expect(ambiguous.return_id).toBe(first.source_return_id)
+      expect(ambiguous.uploaded_by).toBe(manifest.operator_id)
+      expect(currentAssets.map(asset => asset.asset_id).sort()).toEqual([...original, ambiguous].map(asset => asset.asset_id).sort())
+      // Keep an original product-view reference first for the later completion.
+      assets[firstId] = [...original, ambiguous]
+      await assertHeld(request, firstId)
+      const ambiguousRun = await inspectFromUI(page, request, firstId, [ambiguous], inference)
+      if (ambiguousRun.outcome!.output!.candidates.length) {
+        const beforeRejection = await get<EvidenceHistory>(request, `/components/${path(firstId)}/history`)
+        const reason = 'Synthetic triangle-and-circle illustration cannot support a physical product identity or revision.'
+        await page.getByLabel(/^Rejection reason/).fill(reason)
+        const rejection = await postFromUI(page, page.getByRole('button', { name: 'Reject unsupported proposal', exact: true }), `/inference/${path(ambiguousRun.start.run_id)}/reject`, 200)
+        const command = rejection.request().postDataJSON()
+        expect(Object.keys(command).sort()).toEqual(['expected_version', 'reason', 'rejection_id'])
+        expect(command.expected_version).toBe(beforeRejection.current.version)
+        expect(command.reason).toBe(reason)
+        await expect(page.getByText(/Rejection recorded\. The original model output remains in history/)).toBeVisible()
+        const afterRejection = await assertHeld(request, firstId)
+        expect(afterRejection.events).toHaveLength(beforeRejection.events.length + 1)
+        const rejected = afterRejection.events.find(event => event.event_id === command.rejection_id)
+        expect(rejected?.kind).toBe('uncertainty')
+        expect(rejected?.payload.source_reference).toBe(manifest.operator_id)
+        expect(rejected?.payload.reason).toContain(ambiguousRun.start.run_id)
+        expect(await get<InferenceRun>(request, `/inference/${path(ambiguousRun.start.run_id)}`)).toEqual(ambiguousRun)
+        inference.ambiguous_result = 'hypotheses_rejected'
+        inference.rejection_event_id = command.rejection_id
+      } else {
+        expect(ambiguousRun.outcome!.output!.uncertainties.length).toBeGreaterThan(0)
+        await expect(page.getByText(/Identity unknown\. No catalog identity was proposed/)).toBeVisible()
+        inference.ambiguous_result = 'unknown'
+      }
+      expect(await get<InferenceRun[]>(request, `/components/${path(firstId)}/inference`)).toHaveLength(2)
+      await assertHeld(request, firstId)
+      persistInference(inference)
+      await capture(page, 'ambiguous-ai-inspection.png')
+      screenshots.push('ambiguous-ai-inspection.png')
+    }
+
     stage = 'unresolved and incompatible negative scenario'
-    await verify(page, request, fixture.components[0].component.physical_component_id, 'body', 'A')
+    const firstHumanReview = await verify(page, request, fixture.components[0].component.physical_component_id, 'body', 'A',
+      realInference ? inference.runs.map(run => run.start.run_id) : [])
+    if (realInference) {
+      inference.human_review = { physical_component_id: first.physical_component_id,
+        run_ids: inference.runs.map(run => run.start.run_id), verification: firstHumanReview.current.verification!,
+        evidence_version: firstHumanReview.current.version }
+      expect([...firstHumanReview.current.verification!.evidence_observation_ids].sort()).toEqual(inference.runs[0].start.inputs.map(input => input.observation_id).sort())
+      persistInference(inference)
+      // Later explicit review is appended; both immutable model runs remain intact.
+      for (const run of inference.runs) expect(await get<InferenceRun>(request, `/inference/${path(run.start.run_id)}`)).toEqual(run)
+    }
     await verify(page, request, fixture.components[1].component.physical_component_id, 'body', 'A')
     const unresolvedId = fixture.components[2].component.physical_component_id
     const incompatibleId = fixture.components[3].component.physical_component_id
@@ -270,6 +482,8 @@ test('real images and manual review recover two kits without bypassing incompati
     const reserved = await get<InventorySnapshot>(request, '/inventory')
     expect(reserved.items).toHaveLength(4)
     expect(reserved.items.every(entry => entry.availability === 'reserved' && entry.plan_id === proposal.plan.plan_id)).toBe(true)
+    await expect(page.getByText('Approval recorded. Consuming actions reserved their physical components atomically.', { exact: true })).toBeVisible()
+    await expect(page.locator('.metrics > div').filter({ has: page.getByText('Reserved', { exact: true }) }).locator('strong')).toHaveText('4')
     expect(reserved.completed_kits).toHaveLength(0)
     await capture(page, 'reserved-plan.png')
 
@@ -331,7 +545,7 @@ test('real images and manual review recover two kits without bypassing incompati
       await expect(viewer.getByRole('button', { name: 'Generate recovery plan', exact: true })).toBeDisabled()
     } finally { await viewer.close() }
     expect(pageErrors).toEqual([])
-    writeFileSync(join(manifest.artifacts_dir, 'acceptance-result.json'), JSON.stringify({
+    const result = {
       synthetic: true, passed: true, browser_version: browser.version(), page_errors: pageErrors,
       returns: 3, physical_components: 4, managed_images: Object.values(assets).flat().length,
       native_multi_file_validation: true, duplicate_upload_status: 200, invalid_upload_status: 422,
@@ -341,10 +555,17 @@ test('real images and manual review recover two kits without bypassing incompati
       modeled_value_cents: proposal.plan.modeled_value_cents, cash_recovery_cents: proposal.plan.cash_recovery_cents,
       retained_value_cents: proposal.plan.retained_value_cents, reserved_before_completion: 4,
       completed_kits: 2, consumed_components: 4, audit_events: audit.length, completion_retry_status: 200,
-      screenshots: ['desktop-evidence.png', 'mobile-evidence.png', 'plan-overview.png', 'reserved-plan.png', 'final-inventory.png'],
-    }, null, 2), 'utf8')
+      screenshots,
+      ...(realInference ? { real_inference: true, inference_artifact: 'inference-results.json',
+        inference_run_ids: inference.runs.map(run => run.start.run_id), ambiguous_result: inference.ambiguous_result,
+        human_review: inference.human_review, model_verified_identity: false } : {}),
+    }
+    const resultJson = redact(JSON.stringify(result, null, 2))
+    writeFileSync(join(manifest.artifacts_dir, 'acceptance-result.json'), resultJson, 'utf8')
+    if (realInference) writeFileSync(join(manifest.artifacts_dir, 'browser-results.json'), resultJson, 'utf8')
   } catch (error) {
     const detail = redact(error instanceof Error ? error.message : String(error))
+    if (realInference) persistInference(inference)
     writeFileSync(join(manifest.artifacts_dir, 'acceptance-failure.json'), JSON.stringify({ synthetic: true, passed: false, stage, error: detail, page_errors: pageErrors }, null, 2), 'utf8')
     throw new Error(`${stage}: ${detail}`)
   }

@@ -307,9 +307,102 @@ def test_failures_are_explicit_provenance_without_verified_facts(workflow, failu
             assert final["outcome"]["output"] is None
             assert final["outcome"]["applied_event_ids"] == []
             assert "sensitive-debug-marker" not in json.dumps(final)
+            if failure in ("malformed", "wrong_hash", "wrong_model", "nan_metrics", "oversized_metrics"):
+                assert final["outcome"]["raw_output"] == workflow.provider.text
+            else:
+                assert final["outcome"]["raw_output"] is None
             assert workflow.evidence.history(workflow.component_id) == before
             if failure == "missing_image":
                 assert workflow.provider.calls == []
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("image_count,mismatch", [
+    (1, None), (2, None), (2, "decoding"), (2, "schema_version"),
+    (2, "schema_sha256"), (2, "missing_digest"), (2, "missing_configuration"),
+])
+def test_constrained_execution_must_match_admitted_schema_for_actual_image_count(workflow, image_count, mismatch):
+    selected_ids = [workflow.uploads[workflow.component_id].asset.asset_id]
+    selected_bytes = [workflow.raw_images[workflow.component_id]]
+    if image_count == 2:
+        component = workflow.evidence.get_component(workflow.component_id)
+        with Image.new("RGB", (32, 24), "green") as image, BytesIO() as buffer:
+            image.save(buffer, format="PNG")
+            raw = buffer.getvalue()
+        uploaded = workflow.assets.upload(component.physical_component_id, component.source_return_id,
+                                           raw, "image/png", "reviewer")
+        selected_ids.append(uploaded.asset.asset_id)
+        selected_bytes.append(raw)
+    generation = {
+        "max_new_tokens": 128, "decoding": "lm-format-enforcer", "schema_version": "controlled-schema-v1",
+        "schema_sha256_1": "1" * 64, "schema_sha256_2": "2" * 64,
+    }
+    metrics = {
+        "input_sha256": [hashlib.sha256(raw).hexdigest() for raw in selected_bytes],
+        "vision_forward_calls": 1, "decoding": "lm-format-enforcer", "schema_version": "controlled-schema-v1",
+        "schema_sha256": generation[f"schema_sha256_{image_count}"], "test_double": True,
+    }
+    if mismatch == "decoding":
+        metrics["decoding"] = "unconstrained"
+    elif mismatch == "schema_version":
+        metrics["schema_version"] = "different-schema-v2"
+    elif mismatch == "schema_sha256":
+        # Correctly formed digest, but it is for one image rather than two.
+        metrics["schema_sha256"] = generation["schema_sha256_1"]
+    elif mismatch == "missing_digest":
+        del metrics["schema_sha256"]
+    elif mismatch == "missing_configuration":
+        # Missing trusted metadata and a matching missing attestation are not proof.
+        del generation["schema_sha256_2"]
+        del metrics["schema_sha256"]
+    workflow.provider.configuration = InferenceConfiguration.model_validate({
+        **workflow.provider.configuration.model_dump(mode="json"), "generation": generation,
+    })
+    workflow.provider.result_changes = {"metrics": metrics}
+    before = workflow.evidence.history(workflow.component_id)
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver",
+                                     headers=headers(workflow)) as client:
+            admitted = checked(await client.post(f"/components/{workflow.component_id}/inference",
+                                                 json=command(workflow, asset_ids=selected_ids)), 202)
+            final = await poll(client, admitted["start"]["run_id"])
+            assert final["start"]["configuration"]["generation"] == generation
+            assert final["outcome"]["raw_output"] == workflow.provider.text
+            assert workflow.provider.calls == [tuple(selected_bytes)]
+            if mismatch:
+                assert final["outcome"]["status"] == "failed"
+                assert final["outcome"]["output"] is None
+                assert final["outcome"]["applied_event_ids"] == []
+                assert workflow.evidence.history(workflow.component_id) == before
+            else:
+                assert final["outcome"]["status"] == "succeeded"
+                assert final["outcome"]["output"] == CONTROLLED_OUTPUT
+                assert final["outcome"]["metrics"]["schema_sha256"] == generation[f"schema_sha256_{image_count}"]
+                assert final["outcome"]["applied_event_ids"]
+            assert workflow.evidence.current(workflow.component_id).verification is None
+            inventory = checked(await client.get("/inventory"))
+            assert len(inventory["items"]) == 2
+            assert all(entry["availability"] == "held" for entry in inventory["items"])
+            assert inventory["completed_kits"] == []
+    asyncio.run(scenario())
+
+
+def test_completed_response_diagnostics_are_bounded_after_provenance_failure(workflow):
+    workflow.provider.text = "Controlled raw response. " * 1600
+    workflow.provider.result_changes = {"model_revision": "b" * 40}
+    before = workflow.evidence.history(workflow.component_id)
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver",
+                                     headers=headers(workflow)) as client:
+            admitted = checked(await client.post(f"/components/{workflow.component_id}/inference", json=command(workflow)), 202)
+            final = await poll(client, admitted["start"]["run_id"])
+            assert final["outcome"]["status"] == "failed"
+            assert final["outcome"]["raw_output"] == workflow.provider.text[:32000]
+            assert len(final["outcome"]["raw_output"]) == 32000
+            assert final["outcome"]["applied_event_ids"] == []
+            assert workflow.evidence.history(workflow.component_id) == before
     asyncio.run(scenario())
 
 

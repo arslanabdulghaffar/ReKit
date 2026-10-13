@@ -1,8 +1,19 @@
 # Evaluation and benchmarking boundary
 
-The current runner exercises synthetic backend recovery and compares CPU planning
-with a simple greedy baseline. It performs no perception inference, downloads no
-data, and measures no AMD performance or operator time savings.
+ReKit separates CPU correctness, controlled inference-contract tests, actual
+local GPU execution, and real-browser integration. The synthetic recovery runner
+still performs no perception inference. GPU procedures below explicitly invoke
+the already downloaded local model; none measures AMD performance, representative
+product-recognition accuracy, or operator time savings.
+
+**Mission 03 Task 5's local integration qualification passed.** Current-version
+API acceptance, two complete real-AI browser runs, the default browser
+regression, and final CPU/frontend checks passed with schema-constrained joint
+generation. The four earlier failures and reproduced v4 baseline remain
+historical evidence below. Unsupported visual claims still occurred and required
+human rejection; these runs do not qualify recognition accuracy or AMD inference.
+See the [mission report](../docs/reports/development-mission-03.md) for final
+artifacts and the separate commit, push, and CI record.
 
 ## Reproduce the synthetic evaluation
 
@@ -51,10 +62,155 @@ CP-SAT but uses a different allocation strategy. Independent exhaustive subset
 oracles in tests verify tiny-case optima. This is a correctness check, not an
 independent implementation of every catalog rule or a production-scale benchmark.
 
+## Real local GPU qualification
+
+Use the existing verified checkpoint and optional inference packages; these
+commands do not download a model or change PyTorch/CUDA. Check available GPU
+memory before selecting the explicit device. From the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_vision_smoke.py --device 1 --repeat 2
+.\.venv\Scripts\python.exe evaluation/run_api_inference_acceptance.py --device 1
+```
+
+The smoke runner sends actual generated PNG bytes to the local Transformers
+adapter twice, checks visual-encoder execution and image hashes, and measures
+loading, warm reuse, inference time, tokens, and peak PyTorch GPU memory. It
+writes ignored `var/mission03-qualification.json` and its synthetic image. The
+API runner uses authenticated in-process ASGI HTTP, real managed assets,
+SQLite, the background service, strict parsing, and the actual GPU provider.
+It writes ignored `var/mission03-api-acceptance.json` plus the source illustration
+and removes its temporary database/image state. It is not a listening-server or
+browser test. Both accept an explicit output path for preserving distinct runs.
+
+The checkpoint is `Qwen/Qwen3-VL-2B-Instruct`, immutable revision
+`89644892e4d85e24eaac8bacfd4f463576704203`; its ten verified files total
+4,266,640,306 bytes. Model provenance, package pins, limits, license declaration,
+measured Task 1/3 results, and interpretation limits are documented in
+[local inference](../docs/local-inference.md).
+
+The Task 3 API execution passed its software checks but proposed an unsupported
+`adapter` revision `A` from a shapes illustration, using `SYNTHETIC` as a claimed
+revision marking. Its own uncertainty contradicted that candidate. Raw output
+was retained, evidence remained under review, and inventory stayed held. Treat
+this as an observed recognition error, not a correct prediction or accuracy
+benchmark. A schema cannot determine whether a quoted marking exists or proves
+the proposed revision.
+
+## Structured-output recovery qualification
+
+The recovery baseline is an actual browser/GPU run, preserved in
+`var/mission02-acceptance/run-ai-znk3_cc4/inference-results.json`. It reproduced
+the earlier v4 response from `run-ai-ngy_f2t6` exactly: 839 characters, 257 tokens,
+raw UTF-8 SHA-256
+`4db4750ba7578322a14f24f4a79e278ee5b2a8dc9091d4da43539bcbdde40f09`.
+The same forbidden root `image_indices` caused `invalid_output`, with zero model
+events and evidence version 3 unchanged. Actual load/inference/request times were
+3.830398 / 25.420950 / 34.283795 seconds; peak allocated/reserved GPU memory was
+4,683,341,312 / 4,747,952,128 bytes. This establishes a reproduced failure, not
+successful inspection. See [the recorded settings](../docs/local-inference.md#task-5-recovery-continuation).
+
+The selected Approach 1 uses a bounded decoding schema for the full output contract
+using LM Format Enforcer `0.11.3`, with the existing model and Transformers runtime.
+The primary project documents
+[Transformers token filtering](https://github.com/noamgat/lm-format-enforcer#basic-tutorial)
+and explicitly separates format enforcement from
+[semantic correctness](https://github.com/noamgat/lm-format-enforcer#diagnostics---will-i-always-get-good-results).
+ReKit still applies the strict parser/domain rules to untouched generated text.
+Both bounded direct-provider cases passed; this is a structure/execution result,
+with semantic errors retained, rather than final API/browser acceptance.
+
+Run the bounded direct-provider experiment with a fresh output path:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_structured_qualification.py --output var/mission03-recovery/approach1.json
+```
+
+This invokes actual local GPU generation for two cases on the same provider:
+one joint request with the synthetic body views in fixed **VIEW 2, VIEW 1** order,
+then one request with the ambiguous shapes illustration. It is **neither API nor
+browser acceptance**. The second request can measure warm model reuse. Inputs
+are generated locally with the existing fixture generator; no model, image, or
+dataset is downloaded. The runner refuses to overwrite an existing report and
+removes its temporary credential/image state afterward.
+
+The report preserves configuration, exact ordered source hashes, raw outputs,
+execution metrics, JSON syntax validity, domain validity, and failures. Review
+source attribution and unsupported claims separately; `structure_passed` is
+only a structural/execution result, not a recognition-accuracy claim. The selected
+configuration records prompt `rekit-inspection-v5-constrained`, decoder/schema
+provenance, and `rekit-inspection-schema-v1`. It retains the 512-token cap,
+120-second generation deadline, and strict downstream validation. Constrained
+decoding does not guarantee completion before these bounds or truthful claims.
+
+The actual `approach1.json` report contains one joint two-image request and one
+single-image request, both JSON-valid and domain-valid. Prompt text/hash is
+identical to the v4 baseline; the implementation added constrained decoding.
+The grammar bounds observation/reason/marking/uncertainty text to 160 characters,
+view text to 100, identifiers to 128, and records to two observations, one
+candidate, one or two uncertainties, and one additional view. The independent
+domain parser and revision/marking rule were not weakened.
+
+| Direct-provider case | Raw chars / output tokens | Inference seconds | Peak allocated bytes |
+| --- | ---: | ---: | ---: |
+| Joint VIEW 2, VIEW 1 | 1,018 / 304 | 36.708006 | 4,683,341,312 |
+| Ambiguous single illustration | 733 / 201 | 21.103608 | 4,565,379,072 |
+
+The first load took 3.799643 seconds; the second request reused weights. Each
+record confirms the actual input hashes and one visual-encoder forward call.
+The label-view source indices were correct, but the reason ended at its
+160-character bound and the requested view was already supplied. The ambiguous
+response invented `body/A` with marking `A`; its valid structure does not make
+that claim supported. Subsequent browser acceptance preserved the claim as
+unverified, explicitly rejected it for this known illustration, and required human
+verification for eligibility. Full ordered fingerprints, schema hashes and
+measurement limits are in [the measured result](../docs/local-inference.md#approach-1-measured-result).
+
+For each approach, retain the implementation/version, exact prompt and schema
+hashes, constraints, input order, and execution topology. Separate joint-image
+generation from any future per-image calls and deterministic aggregation; never
+present two calls as one joint inference. Record any intermediate contract and
+translation explicitly, with the original model claims intact. Record raw
+length/token count, JSON and domain errors, independently reviewed source/visual
+claims, latency boundaries, memory, events, inventory state, and artifact paths.
+Preserve failed attempts; unknown output and failed parsing are different outcomes.
+
+Current-version API acceptance, **two complete real-AI browser passes**, the
+default browser regression, and the documented backend/frontend checks passed
+separately from this direct experiment. All results retain the actual
+model/prompt/schema configuration; the mission report records screenshot review.
+
+## Final local qualification
+
+| Gate | Observed result / local artifact |
+| --- | --- |
+| Current authenticated API with actual GPU inference | Passed: `var/mission03-recovery/api-current.json` and final repeat `final-api.json` in the same directory. |
+| Two complete AI browser scenarios | Passed: `var/mission02-acceptance/run-ai-52823ogs/` and `run-ai-73rjz6dy/`, about 1.2 minutes each. |
+| Default browser regression | Passed: `var/mission02-acceptance/run-ugm19txq/`, 4.5 seconds. |
+| Additional actual-AI screenshot QA repeat | Passed: `var/mission02-acceptance/run-ai-2qrs3sdt/`, about 1.3 minutes. |
+| Backend | 631 passed in 24.20 seconds; focused inference selection 264 passed in 12.56 seconds. |
+| Frontend and synthetic evaluation | 48 passed in 27.85 seconds; TypeScript, build, dependency graph, and synthetic evaluation passed. Recorded in `var/mission03-recovery/final-cpu-validation.json`. |
+
+Each complete AI scenario made two actual requests: the labelled views jointly
+in VIEW 2, VIEW 1 order, then one ambiguous illustration. It checked original
+asset hashes, source indices, model/decoder/schema provenance, GPU execution,
+and the held state before human verification. The ambiguous response contained
+unsupported hypotheses and was explicitly rejected; it was not scored as correct
+abstention. Human verification cited original uploaded observations and linked
+the actual inference run IDs in its reason. Nine managed images still represented
+four unique components. CPU planning and human approval/completion then produced
+two kits, four consumed components, four audit events, and a synthetic 17,500-cent
+modeled value.
+
+The extra QA repeat waited for the visible reserved count before screenshots;
+it did not change the model, schema, or production UI. These are narrow synthetic
+integration results. See the [mission report](../docs/reports/development-mission-03.md)
+for retained failures, measured runs, visual review, and repository/CI status.
+
 ## Real-browser acceptance
 
-The separate browser runner exercises the React workbench and FastAPI together
-over loopback HTTP, using the actual SQLite stores and CPU CP-SAT solver:
+Default mode exercises the React workbench and FastAPI over loopback HTTP,
+using actual SQLite stores and CPU CP-SAT, with inference disabled:
 
 ```powershell
 .\.venv\Scripts\python.exe evaluation/run_browser_acceptance.py
@@ -103,6 +259,98 @@ unit, type, build, and dependency checks on CPU; it does not claim a remote brow
 run. Local browser results and actual GitHub job status are reported separately
 in the [Mission 02 report](../docs/reports/development-mission-02.md).
 
+### Explicit browser and GPU mode
+
+After the default regression, run the integrated local AI workflow explicitly:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_browser_acceptance.py --real-inference --device 1
+```
+
+The optional `--model-dir` selects a server-owned verified checkpoint directory;
+it requires `--real-inference` and never downloads weights. Default mode remains
+GPU-free. `--check` verifies disposable fixture setup only; it is not inference
+or browser acceptance. Use the same free loopback ports and installed browser
+as the default runner, with a single model-owning backend process.
+
+The real-inference scenario makes two actual model requests through the UI.
+The first uses two distinct labelled synthetic views of one registered body.
+The second uploads a deliberately ambiguous shapes illustration as an additional
+view of that same physical component and analyzes it separately. It records
+actual observations, hypotheses, uncertainty, additional-view requests, raw text,
+input hashes, prompt/model/runtime identity and measured GPU metrics. It also
+checks that the second request reuses loaded weights.
+
+Before manual review, authenticated HTTP reads must show held, unverified stock
+and no compatible kit eligibility. Unknown output remains unknown; unsupported
+hypotheses are rejected through the human review control. The test records
+which branch the actual model produced rather than supplying a canned answer.
+Explicit synthetic human verification/correction then permits deterministic
+planning, atomic four-component reservation, and two separate completion
+confirmations. The expected 17,500 cents is a scenario outcome, not measured
+profit or an AI-created valuation.
+
+Artifacts remain under ignored `var/mission02-acceptance/run-ai-*` (the directory
+name is retained from the original runner). `inference-results.json` preserves
+actual runs incrementally, including failure output. `browser-results.json` and
+`acceptance-result.json` describe a completed scenario; failures instead retain
+`acceptance-failure.json`. `runner-result.json` records process and cleanup
+outcomes separately. Post-login screenshots cover evidence, AI inspection,
+ambiguity, planning, reservation, and final inventory when those milestones are
+reached. Token-bearing fixtures and temporary database/image state are removed.
+
+Running the command is not a pass claim. The first Task 5 real-inference browser
+attempt with prompt `rekit-inspection-v1` failed on its two-image response:
+candidate and additional-view objects omitted required `image_indices`.
+The strict parser recorded `invalid_output`, appended zero model events, and
+kept the component held. The preserved artifact is
+`var/mission02-acceptance/run-ai-jiwykyk_/inference-results.json`. The default
+browser regression passed separately in `run-btavldmf`.
+
+The first bounded repair used `rekit-inspection-v2`, a complete JSON example
+and explicit required-key checks, retaining the strict schema and 384-token
+budget. Its browser attempt also failed: the model generated exactly 384 tokens,
+omitted candidate `image_indices`, and truncated an additional-view reason
+before completing the JSON. It produced `invalid_output` and zero applied
+events. The preserved artifact is
+`var/mission02-acceptance/run-ai-kxmilqsw/inference-results.json`. These are two
+distinct observed failures; safe rejection is not successful visual inference.
+
+The second bounded repair used `rekit-inspection-v3`: a shorter example put
+`image_indices` first and asked for fewer, shorter records. Its backend
+generation budget was 512 tokens, within the pre-existing adapter maximum.
+The parser/schema and 120-second generation / 150-second request deadlines are
+unchanged. Its attempt generated 188 tokens of complete JSON with source indices,
+but paired candidate `body` revision `A` with `revision_marking: null`, violating
+the required revision/marking pair. It also copied placeholder phrases such as
+`visible support`, `unresolved detail`, and `needed photograph`. The parser
+recorded `invalid_output` and zero applied events. The artifact is
+`var/mission02-acceptance/run-ai-zpfefrhu/inference-results.json`. Preserve all
+three failures and their original settings rather than counting safe rejection
+as a completed inference gate.
+
+The third and final prompt repair in the earlier attempt used
+`rekit-inspection-v4`: a valid unknown
+example plus record-key definitions replaces the populated placeholder answer,
+and a final check reiterates source indices and the revision/marking pair after
+catalog context. Supported hypotheses remain permitted; no fixture identity or
+unknown outcome is forced. The 512-token limit, strict schema and deadlines are
+unchanged. Its attempt returned 257 tokens of complete JSON but added a forbidden
+top-level `image_indices` field. The parser recorded `invalid_output`, with zero
+applied events, and the browser stopped at the first two-image inspection. Its
+artifact is `var/mission02-acceptance/run-ai-ngy_f2t6/inference-results.json`.
+The intended second ambiguous-image request and integrated recovery steps did
+not run in any of these four attempts. The v4 candidate was unqualified and work
+stopped at that repair limit. The later recovery continuation above is separately
+authorized; it preserves this blocked history and these original configurations.
+
+At that earlier stop, the local suite passed 588 backend tests, 48 frontend tests,
+TypeScript validation and production build. Ten actual local inference
+requests were executed, including successful standalone/API runs and these four
+failed browser inspections. Their purposes and outcomes must stay separate.
+Neither the CPU passes nor earlier GPU success establishes the failed integrated
+gate, representative recognition reliability, correct abstention, or AMD readiness.
+
 ## Executable coverage
 
 | Required behavior | Tests |
@@ -114,14 +362,20 @@ in the [Mission 02 report](../docs/reports/development-mission-02.md).
 | Conflicting reservations, stale approvals, cancelled plans | `test_api.py`, `test_inventory.py` |
 | Transaction rollback, idempotency, audit and lineage | `test_inventory.py`, `test_evidence_store.py` |
 | Exhaustive optimizer oracle and greedy comparison | `test_recovery.py`, `test_evaluation.py` |
+| Strict model output, source indices, run provenance, staleness and replay | `test_inference_models.py`, `test_inference_store.py` |
+| Provider metadata, lazy imports, authenticated lifecycle, rejection and failure outcomes | `test_local_vision.py`, `test_inference_provider.py`, `test_inference_api.py` |
+| UI polling, stale sessions/components, proposal prefill and explicit human decisions | `frontend/src/inference.test.tsx`, `frontend/src/App.test.tsx` |
 
 The solver timeout test uses a real zero-second limit. Additional non-optimal/error
 status branches are explicitly simulated to test reporting behavior; they are not
-represented as observed production solver outcomes. The tests do not fabricate
-visual-model outputs or replace the end-to-end planner with a hardcoded plan.
+represented as observed production solver outcomes. Controlled model/provider
+and HTTP responses in unit/component tests exercise software failure boundaries;
+they are labelled test doubles, not real inference results. The end-to-end
+planner is never replaced by a hardcoded plan.
 
-The sections below describe future evidence collection and AMD/perception
-measurement requirements, not results already obtained.
+The sections below describe future representative evidence collection and
+AMD/perception measurement requirements. Independently labelled real product
+photographs and a representative accuracy evaluation are still missing.
 
 ## Evidence and ground truth
 
@@ -166,7 +420,7 @@ confidence.
 
 ## Reproducible run record
 
-Each future run should record the repository commit, dataset/annotation version
+Each qualification run should record the repository commit, dataset/annotation version
 and split manifest, catalog and policy versions, model identifier and immutable
 revision, prompt/template version, preprocessing settings, decoding settings,
 and raw outputs with evidence references. Record exact AMD GPU model/count/VRAM,

@@ -2,6 +2,7 @@
 
 import hashlib
 import math
+import re
 import threading
 import time
 
@@ -10,7 +11,7 @@ from pydantic import TypeAdapter
 from rekit.auth import Actor
 from rekit.evidence.store import ConflictError
 from rekit.inference.models import InferenceRun, InspectionRequest, ScalarMap
-from rekit.inference.parsing import parse_output
+from rekit.inference.parsing import MAX_OUTPUT_CHARACTERS, parse_output
 from rekit.inference.provider import VisionProvider, VisionTimeout, VisionUnavailable
 from rekit.inference.store import InferenceStore
 
@@ -95,6 +96,7 @@ class InferenceService:
     def _execute(self, run: InferenceRun) -> None:
         run_id = run.start.run_id
         started = time.perf_counter()
+        diagnostic_raw = None
         try:
             images = []
             for source in run.start.inputs:
@@ -106,6 +108,9 @@ class InferenceService:
                 if self.store.get(run_id).outcome is not None or self._closed:
                     return
             result = self.provider.inspect(images)
+            raw_output = result.get("text")
+            if isinstance(raw_output, str):
+                diagnostic_raw = raw_output[:MAX_OUTPUT_CHARACTERS]
             config = run.start.configuration
             if any(result.get(key) != getattr(config, key)
                    for key in ("provider", "model_repository", "model_revision", "device")):
@@ -114,13 +119,21 @@ class InferenceService:
                     or (config.provider == "local-transformers"
                         and result.get("metrics", {}).get("vision_forward_calls", 0) < 1)):
                 raise ValueError("Inference provider did not attest to processing the admitted images")
-            raw_output = result.get("text")
+            if config.generation.get("decoding") == "lm-format-enforcer":
+                schema_version = config.generation.get("schema_version")
+                schema_digest = config.generation.get(f"schema_sha256_{len(images)}")
+                if (not isinstance(schema_version, str) or not schema_version.strip()
+                        or not isinstance(schema_digest, str) or re.fullmatch(r"[a-f0-9]{64}", schema_digest) is None
+                        or result.get("metrics", {}).get("decoding") != "lm-format-enforcer"
+                        or result.get("metrics", {}).get("schema_version") != schema_version
+                        or result.get("metrics", {}).get("schema_sha256") != schema_digest):
+                    raise ValueError("Executed decoding schema did not match the admitted configuration")
             metrics = self._metrics(result)
             metrics["request_seconds"] = time.perf_counter() - started
             try:
                 output = parse_output(raw_output, image_count=len(images))
             except (ValueError, TypeError):
-                outcome = {"status": "invalid_output", "raw_output": raw_output[:32000] if isinstance(raw_output, str) else None,
+                outcome = {"status": "invalid_output", "raw_output": diagnostic_raw,
                            "failure_reason": "Model output did not satisfy the inspection schema; no evidence was applied",
                            "metrics": metrics}
             else:
@@ -130,7 +143,8 @@ class InferenceService:
         except VisionUnavailable:
             outcome = {"status": "unavailable", "failure_reason": "The configured model or GPU is unavailable; manual inspection remains available"}
         except Exception as error:
-            outcome = {"status": "failed", "failure_reason": f"Inspection failed ({type(error).__name__}); no model evidence was applied"}
+            outcome = {"status": "failed", "raw_output": diagnostic_raw,
+                       "failure_reason": f"Inspection failed ({type(error).__name__}); no model evidence was applied"}
         finally:
             with self._guard:
                 if "outcome" in locals():

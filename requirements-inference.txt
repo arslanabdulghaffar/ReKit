@@ -10,3 +10,6 @@ tqdm==4.70.1
 requests==2.34.2
 charset-normalizer==3.5.2
 urllib3==2.8.0
+# CPU token filtering for optional local structured generation; no torch extras.
+lm-format-enforcer==0.11.3
+interegular==0.3.3

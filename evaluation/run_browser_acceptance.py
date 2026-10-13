@@ -20,7 +20,7 @@ import time
 from urllib.error import URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,10 +65,15 @@ def _checked_directory(path: Path, parent: Path) -> Path:
     return resolved
 
 
-def _prepare() -> tuple[Path, dict]:
+def _prepare(*, real_inference: bool = False, model_dir: Path | None = None,
+             device: int = 1) -> tuple[Path, dict]:
+    if type(device) is not int or device < 0:
+        raise RuntimeError("The GPU device must be a nonnegative index")
+    if model_dir is not None and not real_inference:
+        raise RuntimeError("A model directory requires explicit --real-inference opt-in")
     _checked_directory(OUTPUT, ROOT)
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    run_dir = Path(tempfile.mkdtemp(prefix="run-", dir=OUTPUT))
+    run_dir = Path(tempfile.mkdtemp(prefix="run-ai-" if real_inference else "run-", dir=OUTPUT))
     state = run_dir / "state"
     state.mkdir(mode=0o700)
     try:
@@ -90,7 +95,9 @@ def _prepare() -> tuple[Path, dict]:
                                           fill="#344939" if identity["component_type_id"] == "body" else "#8b662c")
                 drawing.text((120, 155), f"{component_id} / VIEW {view}", fill="white")
                 drawing.text((120, 190), f"INVENTED {identity['component_type_id']} / REV {identity['revision']}", fill="white")
-                drawing.text((24, 355), "Manual synthetic review only. No inference or safety claim.", fill="#171c17")
+                footer = ("Synthetic label fixture; no recognition or safety claim." if real_inference
+                          else "Manual synthetic review only. No inference or safety claim.")
+                drawing.text((24, 355), footer, fill="#171c17")
                 path = image_dir / f"component-{index + 1}-view-{view}.png"
                 image.save(path, format="PNG")
                 paths.append(str(path))
@@ -101,7 +108,23 @@ def _prepare() -> tuple[Path, dict]:
             "operator_id": "browser-reviewer", "viewer_id": "browser-viewer",
             "fixture": fixture, "images": images, "artifacts_dir": str(run_dir),
             "state_dir": str(state),
+            "real_inference": real_inference,
         }
+        if real_inference:
+            from rekit.inference.adapters.local_transformers import MODEL_REVISION
+
+            model_dir = model_dir or ROOT / "models" / "Qwen3-VL-2B-Instruct" / MODEL_REVISION
+            ambiguous_path = image_dir / "synthetic-ambiguous-view.png"
+            with Image.new("RGB", (768, 512), "white") as image:
+                drawing = ImageDraw.Draw(image)
+                drawing.text((30, 20), "SYNTHETIC", fill="black", font=ImageFont.load_default(size=44))
+                drawing.polygon(((200, 140), (70, 390), (330, 390)), fill="red")
+                drawing.ellipse((440, 155, 690, 405), fill="blue")
+                drawing.text((30, 460), "Illustration only - not a product photograph", fill="black",
+                             font=ImageFont.load_default(size=22))
+                image.save(ambiguous_path, format="PNG")
+            manifest.update(model_dir=str(model_dir.resolve()), device=device,
+                            model_revision=MODEL_REVISION, ambiguous_image=str(ambiguous_path))
         manifest_path = state / "fixture.json"
         descriptor = os.open(manifest_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8") as file:
@@ -135,7 +158,16 @@ def _application(manifest: dict):
     ))
     if inventory.inventory().items or evidence.list_batches() or evidence.list_returns():
         raise RuntimeError("Browser acceptance must start with empty inventory and intake records")
-    return create_app(inventory, auth=auth, assets=assets)
+    inference = None
+    if manifest.get("real_inference") is True:
+        from rekit.inference.provider import LocalVisionProvider
+        from rekit.inference.service import InferenceService
+        from rekit.inference.store import InferenceStore
+
+        inference = InferenceService(InferenceStore(evidence, assets), LocalVisionProvider(
+            Path(manifest["model_dir"]), device=manifest["device"], catalog=catalog,
+        ))
+    return create_app(inventory, auth=auth, assets=assets, inference=inference)
 
 
 def _port_free(port: int) -> None:
@@ -235,6 +267,7 @@ def _finish(manifest_path: Path, manifest: dict, processes: list, logs: list,
         "status": "cleanup_failed" if cleanup_errors else "reporting_failed" if reporting_errors else status,
         "browser_status": status, "browser_exit_code": browser_exit_code,
         "browser_run": len(processes) == 3, "synthetic": True,
+        "real_inference_enabled": manifest.get("real_inference", False),
         "finished_at": datetime.now(UTC).isoformat(),
         "temporary_state_removed": state_removed, "credentials_removed": credentials_removed,
         "error": _redact(error, manifest) if error else None,
@@ -252,7 +285,12 @@ def _finish(manifest_path: Path, manifest: dict, processes: list, logs: list,
         raise RuntimeError(_redact("; ".join(cleanup_errors + reporting_errors), manifest))
 
 
-def run(*, check_only: bool = False) -> int:
+def run(*, check_only: bool = False, real_inference: bool = False,
+        model_dir: Path | None = None, device: int = 1) -> int:
+    if type(device) is not int or device < 0:
+        raise RuntimeError("The GPU device must be a nonnegative index")
+    if model_dir is not None and not real_inference:
+        raise RuntimeError("A model directory requires explicit --real-inference opt-in")
     node = shutil.which("node")
     vite = FRONTEND / "node_modules" / "vite" / "bin" / "vite.js"
     playwright = FRONTEND / "node_modules" / "@playwright" / "test" / "cli.js"
@@ -261,7 +299,7 @@ def run(*, check_only: bool = False) -> int:
             raise RuntimeError("Install the pinned local frontend dependencies before browser acceptance")
         for port in (8000, 5173):
             _port_free(port)
-    manifest_path, manifest = _prepare()
+    manifest_path, manifest = _prepare(real_inference=real_inference, model_dir=model_dir, device=device)
     run_dir, state = Path(manifest["artifacts_dir"]), Path(manifest["state_dir"])
     processes, logs = [], []
     status = "error"
@@ -271,15 +309,25 @@ def run(*, check_only: bool = False) -> int:
     try:
         if check_only:
             app = _application(manifest)
-            for paths in manifest["images"].values():
-                for path in paths:
-                    with Image.open(path) as image:
+            try:
+                for paths in manifest["images"].values():
+                    for path in paths:
+                        with Image.open(path) as image:
+                            image.load()
+                            if image.format != "PNG" or image.size != (720, 440):
+                                raise RuntimeError("Generated acceptance image is invalid")
+                if real_inference:
+                    with Image.open(manifest["ambiguous_image"]) as image:
                         image.load()
-                        if image.format != "PNG" or image.size != (720, 440):
-                            raise RuntimeError("Generated acceptance image is invalid")
+                        if image.format != "PNG" or image.size != (768, 512):
+                            raise RuntimeError("Generated ambiguous image is invalid")
+            finally:
+                if app.state.inference is not None:
+                    app.state.inference.close()
             status = "setup_passed"
-            _console(json.dumps({"setup": "passed", "synthetic_images": sum(len(paths) for paths in manifest["images"].values()),
-                                 "registered_components": len(app.state.inventory.inventory().items), "browser_run": False}))
+            _console(json.dumps({"setup": "passed", "synthetic_images": sum(len(paths) for paths in manifest["images"].values()) + int(real_inference),
+                                 "registered_components": len(app.state.inventory.inventory().items), "browser_run": False,
+                                 "real_inference_enabled": real_inference, "model_executed": False}))
             return 0
         environment = os.environ.copy()
         environment["REKIT_BROWSER_FIXTURE"] = str(manifest_path)
@@ -300,13 +348,13 @@ def run(*, check_only: bool = False) -> int:
                          output=subprocess.PIPE, environment=environment)
         processes.append(browser)
         try:
-            browser_output, _ = browser.communicate(timeout=300)
+            browser_output, _ = browser.communicate(timeout=900 if real_inference else 300)
         except subprocess.TimeoutExpired as failure:
             status = "timed_out"
             browser_output = failure.output or b""
             _stop(browser)
             browser_output, _ = browser.communicate(timeout=5)
-            raise RuntimeError("Browser acceptance exceeded its 300 second limit") from None
+            raise RuntimeError(f"Browser acceptance exceeded its {900 if real_inference else 300} second limit") from None
         browser_exit_code = browser.returncode
         status = "passed" if browser.returncode == 0 else "failed"
         return browser.returncode
@@ -325,6 +373,9 @@ def run(*, check_only: bool = False) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Check disposable fixture setup without starting servers or a browser")
+    parser.add_argument("--real-inference", action="store_true", help="Explicitly run two real GPU inspections inside browser recovery acceptance")
+    parser.add_argument("--model-dir", type=Path, help="Server-controlled verified local checkpoint directory; never downloaded by this runner")
+    parser.add_argument("--device", type=int, default=1, help="Single CUDA GPU index for the optional real inference scenario")
     parser.add_argument("--serve-state", type=Path, help=argparse.SUPPRESS)
     arguments = parser.parse_args()
     if arguments.serve_state:
@@ -334,7 +385,8 @@ def main() -> int:
         uvicorn.run(_application(manifest), host=HOST, port=8000, log_level="warning", access_log=False)
         return 0
     try:
-        return run(check_only=arguments.check)
+        return run(check_only=arguments.check, real_inference=arguments.real_inference,
+                   model_dir=arguments.model_dir, device=arguments.device)
     except (RuntimeError, OSError) as error:
         _console(f"Acceptance runner failed: {error}", stream=sys.stderr)
         return 1

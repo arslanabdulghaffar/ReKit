@@ -1,131 +1,188 @@
-# AMD inference deployment boundary
+# AMD inference deployment handoff
 
-AMD Developer Cloud is the primary planned production inference target. The
-intended request path is:
+AMD Developer Cloud remains the required production inference target for the
+hackathon. ReKit now implements real local NVIDIA inference, authenticated HTTP
+requests, immutable run provenance, and operator review. No AMD allocation,
+adapter, serving runtime, or cloud inference run has been qualified. Local
+CUDA, CPU tests, and synthetic browser scenarios cannot pass the AMD gate.
+
+Mission 03 Task 5's local integration qualification passed current-version API
+acceptance, two complete real-AI browser runs, and the default browser regression.
+Four earlier browser failures and the reproduced v4 baseline remain preserved.
+The selected implementation uses constrained joint generation with independent
+strict parsing. No local result qualifies AMD deployment. The
+[mission report](../../docs/reports/development-mission-03.md) records artifacts
+and separately tracks commit, push, and CI evidence.
 
 ```text
-Backend API -> inference adapter -> AMD Developer Cloud Linux service
-                                   ROCm + vLLM + compatible open VLM
+Managed images -> InferenceService -> VisionProvider
+                                     local: Transformers + CUDA
+                                     future: AMD Linux, ROCm + vLLM
+               -> strict parsing -> unverified evidence -> human review
+               -> deterministic compatibility, planning, and inventory
 ```
 
-Missions 01 and 02 implement the local operator workflow around this boundary,
-but no inference adapter or service exists yet. AMD cloud credits remain pending.
-No cloud resources, inference server, runtime manifest, models, datasets, or
-containers have been provisioned or downloaded. The health endpoint is API
-liveness only; it does not assert inference readiness. A passing CPU test or
-synthetic browser scenario is not an AMD inference benchmark.
+## Verified local starting point
+
+The only downloaded checkpoint is `Qwen/Qwen3-VL-2B-Instruct`, revision
+`89644892e4d85e24eaac8bacfd4f463576704203`. The pinned model card declares
+Apache-2.0. Its ten verified files total **4,266,640,306 bytes**; the weight-file
+SHA-256 is `7de1838c87a5349b016c26a1c3f7d2bc400a3d485f95ef39a7059ffd734977a0`.
+Preserve the [manifest](../../configs/inference/qwen3-vl-2b.json), attribution,
+and file hashes for future qualification. This is a candidate, not a claim
+that its AMD deployment is compatible.
+
+[Initial local qualification](../../docs/local-inference.md) records two real CUDA smoke
+requests and a separate authenticated API request. Initial loading took
+4.624754 seconds; smoke inference took 34.424170 and 33.016417 seconds on one
+RTX 4080 SUPER. API inference later took 43.5648928 seconds and peaked at
+4,540,146,688 PyTorch allocated GPU bytes. These are local examples, not AMD
+memory budgets, p95 estimates, or recognition accuracy.
+
+The API run also proposed unsupported `adapter` revision `A` from a synthetic
+shapes illustration, quoting `SYNTHETIC` as its revision marking. The error and
+contradictory uncertainties remain auditable; inventory stayed held. Successful
+execution and valid structure do not establish visual truth.
+
+The selected local path adds optional LM Format Enforcer `0.11.3` and interegular
+`0.3.3` to the local Transformers path. A joint two-view request and a separate
+ambiguous-image request passed the unchanged domain parser. The latter still
+invented `body/A` with marking `A`; constrained generation improves output shape,
+not recognition truth. Preserve explicit human rejection and verification. See
+[the controlled measurements](../../docs/local-inference.md#approach-1-measured-result).
+
+## Final local qualification
+
+The current API and its final repeat passed, as did complete AI browser runs
+`run-ai-52823ogs` and `run-ai-73rjz6dy`. Each browser scenario rejected the
+unsupported ambiguous-image hypothesis, recorded human verification linked to
+actual run IDs and original images, and completed two kits from four unique
+components. The default regression `run-ugm19txq` passed in 4.5 seconds, and an
+additional AI QA repeat passed. Final local validation passed 631 backend tests,
+a 264-test focused inference selection, 48 frontend tests, TypeScript, build,
+dependency graph, and synthetic evaluation. See
+[artifact paths and timings](../../evaluation/README.md#final-local-qualification).
+These results validate the local integration contract; they provide no measured
+ROCm/vLLM compatibility, AMD latency, or recognition-accuracy guarantee.
 
 ## Exact integration points
 
-The following table separates today's application contracts from the work needed
-to introduce real model output. These are integration requirements, not a claim
-that an inference request or a run-provenance schema already exists.
-
-| Stage | Existing entry point | Required future adapter behavior |
+| Boundary | Existing contract | AMD adapter obligation |
 | --- | --- | --- |
-| Managed image input | `ImageAssetStore.read(asset_id)` in `backend/src/rekit/evidence/assets.py` returns immutable metadata and integrity-checked bytes. Private HTTP retrieval is `GET /assets/{asset_id}/content`. | Resolve only authorized, registered asset IDs. Bind input to physical component, source return, asset hash, observation ID, and evidence version. Never ask vLLM to fetch a user-supplied URL or local path. |
-| Model/runtime identity | No inference-run record is implemented. `Observation.source_reference` can identify an assertion's source but is not a complete run manifest. | Add a versioned run record containing the exact model, runtime, preprocessing, request settings, and linked inputs described below. Use its run ID for model-source assertions. |
-| Image observations | `Observation` and `EvidenceStore.record_observation()`; the API accepts an observation at `POST /components/{id}/evidence`. Existing fields include `visible_marking` and `visible_revision`. | Validate bounded OCR/marking output as a new `source="model"` observation using a real `asset:` reference and run ID. Preserve the original upload observation. Localization boxes, crop transforms, and multi-image lineage need explicit new contracts; they are not fields in today's observation. |
-| Identity hypotheses | `IdentityProposal` and `EvidenceStore.record_proposal()`; `kind="proposal"` at the same evidence route. | Propose a catalog-shaped type/revision or an unresolved result linked to an existing observation. An unknown label can remain a hypothesis; it cannot become a verified identity or approved substitution. |
-| Visible condition | The current authoritative condition is part of human `OperatorVerification`. There is no structured model-condition observation yet. | Add a separate evidence contract for visible attributes and possible damage, with image/region references and limitations. Do not write a model's condition directly into human verification or infer hidden function/safety. |
-| Uncertainty | `UncertaintyFlag` and `EvidenceStore.flag_uncertainty()`; `kind="uncertainty"` at the evidence route. An unresolved proposal also carries a reason. | Record ambiguity, insufficient evidence, or a validated inference failure as explicit uncertainty. Never treat confident wording or a raw score as a calibrated probability. |
-| Additional views | Operators can add multiple images through the existing upload UI/API. No structured additional-view request or model-driven capture workflow is implemented. | Introduce a bounded request naming the component, source evidence/run, the missing visible distinction, and a useful view such as a connector close-up. New views attach to the same physical identity. |
-| Human verification | `POST /components/{id}/verification` binds the authenticated human reviewer, expected version, supporting observation IDs, and any superseded verification. | Present hypotheses and their evidence for review. Preserve the human gate and append-only correction history. Models and service actors never call privileged approval/completion routes. |
+| Input | `InferenceStore.begin()` binds component, return, evidence version and one or two assets; `ImageAssetStore.read()` checks original bytes. | Process admitted bytes in order. Never fetch client-controlled URLs/paths or count detections as stock. |
+| Provider | `VisionProvider.configuration`, `.status`, and `.inspect(images: list[bytes]) -> dict` in `rekit.inference.provider`. | Implement this interface using a separate Linux ROCm/vLLM service; retain CPU-only API imports. |
+| Configuration | `InferenceConfiguration` records provider, repository, model/processor revisions, runtime, device, prompt version, preprocessing and generation settings. | Record the actual deployment and exact prompt hash; bind model-file hashes to a server-owned manifest. |
+| Response | Raw `text`, `provider`, `model_repository`, `model_revision`, `device`, `runtime`, and `metrics`; `metrics.input_sha256` holds ordered original-byte hashes. | Match admitted provenance and return actual model text. The local `vision_forward_calls` requirement applies only to `local-transformers`; never invent AMD encoder-hook counts. |
+| Parsing | `parse_output()` validates bounded `InspectionOutput`: observations, candidates, uncertainties, and additional-view requests with source indices. | Preserve strict parsing. Serving-side JSON constraints cannot replace validation or establish visual truth. |
+| Structured generation | The local path filters tokens using a versioned schema, records schema hashes, and preserves raw output for independent domain validation. | Qualify a supported decoder on the actual ROCm/vLLM deployment; retain equivalent output/error/provenance behavior without assuming LMFE compatibility. |
+| Persistence | `InferenceStore.finish()` saves one immutable outcome and any current unverified events atomically. | Leave finalization with ReKit. Failed/stale outcomes append no evidence; never write verification, economics, reservations, or kits. |
+| Review | Candidate selection prefills identity only; rejection adds an actor-bound hold while retaining raw output. | Preserve explicit human condition, supporting evidence, reason, and verification. Service principals cannot acquire human approval roles. |
 
-The existing upload route binds human captures to the authenticated operator and
-service uploads to an import source. An inference service instead needs a narrow
-server-owned adapter and, if it uses the HTTP API, a service credential with only
-the required viewer/intake roles. Do not send an operator bearer token to vLLM.
-No model response may change component IDs, source return membership, catalog or
-policy snapshots, economic inputs, reservation state, or audit actor identity.
+Inference occurs outside SQLite write transactions. The service checks provider
+identity and original input hashes before parsing. Finalization rechecks evidence
+version, allocation, and asset integrity. Changed evidence, reservation,
+consumption, missing bytes, or corruption prevents late output from replacing a
+current decision. Replays retain their original actor and request.
 
-Read evidence and run inference outside a SQLite write transaction. Validate the
-response before recording assertions. Inference runs can finish after new images
-or human decisions arrive: retain the input evidence version and handle stale
-output explicitly. An appended observation/proposal after verification already
-requires review; it never inherits that verification or approval. A single
-`IdentityProposal` currently anchors to one observation. Multi-view run inputs
-must be represented honestly by a new run/lineage contract, not invented fields
-in today's models.
+The run records full multi-image provenance although a legacy proposal links to
+one observation. Model descriptions of visible damage remain unverified.
+Localization/crop lineage, separate OCR and matching stages, and physical
+identity merge/split operations remain future work. See
+[inference evidence](../../docs/inference-evidence.md).
 
-## Future run manifest and output validation
+## Request and lifecycle limits
 
-Before accepting model output, preserve these details in a new versioned contract:
+The local path accepts at most two static JPEG/PNG/WebP images, each at most
+10 MiB, 16 million original pixels, and 8,192 pixels per side. It applies EXIF
+orientation, RGB conversion, and a 768-pixel side bound; the official processor
+uses 65,536–589,824 pixels. Text plus image tokens are bounded to 8,192.
+The qualified local configuration uses greedy generation, at most 512 new tokens under prompt
+`rekit-inspection-v5-constrained`, with schema `rekit-inspection-schema-v1` and
+a 120-second cooperative deadline. The service adds
+a 150-second request deadline. Historical v1/v2 attempts used 384 tokens;
+all four failed results remain in the [evaluation record](../../evaluation/README.md).
 
-- Run ID, requesting service, server start/end times, outcome, and input evidence
-  version; all asset IDs, SHA-256 hashes, source observations, component IDs,
-  image dimensions, and any crop or normalization transforms.
-- Provider/deployment identity, model repository and immutable revision, license,
-  tokenizer/processor revision, precision or quantization, prompt/chat-template
-  version, output-schema version, and generation settings.
-- AMD GPU model and memory, Linux/kernel and driver, ROCm, PyTorch, vLLM, Python,
-  adapter code revision, and pinned serving dependencies. Separate OCR,
-  localization, and matching models also need their own versioned identities.
-- Observed text/attributes, proposed labels, supporting asset/region references,
-  uncertainty and additional-view reasons; raw scores retain their source and
-  meaning. Preserve bounded raw output separately from validated interpretation.
+The local grammar caps observations at two, candidates at one, uncertainties
+at one or two, and additional views at one; text/reasons/markings are bounded to
+160 characters, view text to 100, and identifiers to 128. Single- and two-image
+schemas have distinct recorded hashes. Image indices remain claims about the
+actual ordered inputs. Never attach all sources indiscriminately or hide a
+change from joint inference to separate image calls.
 
-Treat OCR, image text, and generated output as untrusted evidence, never as
-instructions to invoke tools or change policy. Enforce response size/schema
-limits, allowed references, timeouts, cancellation, bounded retries, and stable
-request identity. Malformed or missing output must not create approval or
-eligible inventory. Record the failure for review; do not fabricate observations
-or silently fall back to a different runtime while claiming AMD execution.
+Preserve these limits or introduce a reviewed, versioned change and repeat
+qualification. Record transformations so original hashes stay distinct from
+normalized payload hashes. Measure actual image-token and KV-cache behavior;
+do not assume vLLM and Transformers preprocessing or memory use are identical.
 
-## Runtime separation
+Admission permits one process-local computation with no queue. Timeout records
+`timed_out` and discards late output but retains the slot until work returns.
+Restart does not resume orphaned pending runs. Map remote unavailability,
+timeouts, transport failures, and malformed output to the existing honest
+outcomes. Bound response sizes and retries; cancellation must not claim GPU work
+stopped without serving-side confirmation. Manual review remains available.
+Never hold an inventory transaction across inference.
 
-Preserve the existing Windows development `.venv` and its working PyTorch
-`2.9.0+cu128` CUDA packages. Future local NVIDIA experiments belong behind a local
-inference adapter. They do not replace the AMD demonstration or establish AMD
-compatibility. The AMD service needs its own Linux runtime and dependency pins;
-do not add ROCm or vLLM to the local backend environment.
+## Official compatibility checks
 
-The backend will call the inference adapter through a typed application
-contract. The adapter owns provider request/response translation, timeouts,
-bounded retries, output validation, and model/runtime provenance. Missing or
-invalid inference evidence must produce an explicit incomplete or review state.
-The inference service cannot approve compatibility, reserve inventory, or
-execute workflow transitions directly.
+The following primary sources were checked on **2026-10-13**. They identify
+required checks, not a selected ReKit deployment:
 
-## Compatibility gate for a later deployment task
+- [AMD ROCm compatibility matrix](https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html)
+  ties GPU support to operating systems, kernel drivers, firmware and runtime
+  components. Use a versioned matrix for the actual cloud allocation.
+- [vLLM GPU installation](https://docs.vllm.ai/en/latest/getting_started/installation/gpu/)
+  specifies Linux and separate ROCm wheel, Python, and glibc combinations.
+  Pin a mutually supported release instead of copying moving latest examples.
+- [vLLM supported models](https://docs.vllm.ai/en/latest/models/supported_models/)
+  lists `Qwen3VLForConditionalGeneration` with image support. This does not
+  qualify the exact checkpoint, precision, attention backend, or device.
+- [vLLM Qwen3-VL recipe](https://docs.vllm.ai/projects/recipes/en/stable/Qwen/Qwen3-VL.html)
+  contains AMD instructions for particular Instinct hardware and a larger MoE
+  model. Its example does not qualify ReKit's pinned 2B checkpoint.
+- [vLLM structured outputs](https://docs.vllm.ai/en/latest/features/structured_outputs/)
+  documents JSON-schema generation and backend selection. The current page lists
+  xgrammar and guidance and replaces older `guided_*` fields with
+  `structured_outputs`. Select and pin the mechanism supported by the actual
+  deployed release; do not copy LMFE's older vLLM examples or infer ROCm support
+  from its local Transformers integration.
 
-The AMD GPU, cloud allocation, Linux distribution, driver, ROCm release, vLLM
-version, and model are all unselected. Before provisioning, record and verify
-the complete combination against the official [AMD compatibility matrix](https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html).
-Use the versioned documentation for the selected release in the qualification
-record; a link to current documentation is not itself a qualified configuration.
+Before deployment, record the actual GPU model/count/VRAM, Linux/kernel,
+driver/firmware, ROCm, Python, PyTorch, vLLM, attention implementation, precision,
+model/processor revision, and serving package or container digest. Keep this
+runtime separate from Windows Python 3.12 and its working PyTorch
+`2.9.0+cu128` / torchvision `0.24.0+cu128`. Do not install ROCm/vLLM into that
+environment or replace CUDA packages.
 
-Verify the chosen GPU and runtime against the matching release of the
-[vLLM GPU installation documentation](https://docs.vllm.ai/en/latest/getting_started/installation/gpu/).
-Check the candidate model's image capabilities and limitations in the
-[vLLM supported-model documentation](https://docs.vllm.ai/en/latest/models/supported_models/).
-An architecture appearing in a model support list is not evidence that a
-particular quantization, attention implementation, or complete deployment
-combination has passed ReKit's workload tests.
+Review the model license and redistribution attribution, evidence usage rights,
+cloud/hackathon terms, remote-code requirements, and serving dependency licenses
+for the intended workload. A hardware or model replacement needs its own
+selection and evaluation; it is not an undocumented fallback.
 
-Then review the model license, immutable revision, input image limits, memory
-budget, tokenizer/processor and chat template, output contract, and any remote
-code requirement. Qualify the exact combination on representative images,
-including multi-image and ambiguous-component cases. Capture the runtime
-manifest, quality results, and p95 latency described in the
-[evaluation plan](../../evaluation/README.md).
+## Network and deployment acceptance
 
-## Planned configuration and operations
+Use a server-owned endpoint restricted to the backend's network identity, TLS
+with certificate verification, and separate model-service credentials. Never
+forward operator bearers to vLLM or expose service keys in `VITE_*`, browser
+storage, logs, or Git. Restrict routes and payload sizes; do not expose generic
+URL fetching, local model files, or model-management operations to operators.
 
-The repository [.env.example](../../.env.example) describes future server-side
-settings. `REKIT_INFERENCE_PROVIDER=amd_vllm` names the intended provider;
-`REKIT_INFERENCE_BASE_URL` is an intentionally unusable example address.
-`REKIT_INFERENCE_MODEL` and `REKIT_INFERENCE_API_KEY` remain empty until the
-service is selected. The current app does not load these inference settings or call that
-endpoint.
+The factory currently supports only `disabled` and `local-transformers`.
+`REKIT_INFERENCE_BASE_URL`, `REKIT_INFERENCE_MODEL`, and
+`REKIT_INFERENCE_API_KEY` in [.env.example](../../.env.example) are reserved;
+setting them does not enable AMD. Implement an explicit provider branch when
+its adapter and configuration are ready. API health and provider readiness
+remain separate.
 
-Future deployment must keep credentials server-side, use authenticated network
-access, and avoid secrets or raw customer imagery in logs. Plan request size
-limits, concurrency limits, timeout/cancellation behavior, readiness checks,
-and an explicit failure mode when AMD inference is unavailable. API liveness
-and inference readiness should remain distinguishable. Hardware changes and
-model/runtime upgrades require a new manifest and a repeat of the relevant
-quality and performance qualification.
+The AMD gate requires real image execution on the selected deployment while
+preserving every human and deterministic decision boundary. Test one/two images,
+unreadable labels, unknown/conflicting identities, malformed/truncated output,
+unavailability, timeout/late response, exact retry, concurrent admission, new
+evidence, and reservation races. Compare identical input hashes and reviewed
+labels with the local path, without requiring identical generated wording.
 
-See the [architecture](../../docs/architecture.md) and
-[implementation roadmap](../../docs/roadmap.md) for dependent work.
+Measure cold load, warm inference and end-to-end latency, p50/p95 with stated
+sample counts, throughput, concurrency, errors, GPU memory and KV-cache headroom
+at permitted input bounds. Report unsupported claims, human corrections, and
+additional-view usefulness separately from software correctness. Independently
+labelled real product-photo evaluation is still missing. See
+[evaluation](../../evaluation/README.md) and the [roadmap](../../docs/roadmap.md).

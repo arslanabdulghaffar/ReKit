@@ -8,6 +8,15 @@ and [unverified evidence storage](inference-evidence.md). The operator workspace
 exposes that workflow through an AI-assisted inspection panel. The model has no
 catalog, approval, or inventory authority.
 
+Mission 03 Task 5's local integration qualification passed: the current API,
+two complete real-AI browser runs, and the default manual browser regression
+completed successfully. The selected implementation constrains joint generation
+and retains the strict downstream parser. The four earlier browser/GPU failures
+and reproduced v4 baseline remain recorded below as history. These synthetic
+results establish execution and workflow behavior, not recognition accuracy or
+AMD readiness. The [mission report](reports/development-mission-03.md) records
+the final artifacts and separately tracks commit, push, and CI status.
+
 ## Pinned model and download budget
 
 The immutable revision is
@@ -103,6 +112,12 @@ fresh-machine installation recipe. The actual qualification added ten packages,
 downloaded 16,558,685 wheel bytes (about 15.79 MiB), and replaced no existing
 package. This is below the separate 2 GiB package-download budget.
 
+The Task 5 recovery continuation additionally installed
+`lm-format-enforcer==0.11.3` and `interegular==0.3.3`: two audited wheels totaling
+69,053 bytes, with no existing package updated. These optional pins support
+CPU token filtering during the existing local GPU generation path. They do not
+replace PyTorch, CUDA, Transformers, or the model checkpoint.
+
 Existing Pillow, torchvision, and Jinja2 provide image processing and template
 support. Windows wheels exist for the tokenizer and safetensors versions. No
 PyTorch reinstall, Accelerate, qwen-vl-utils, FlashAttention package, CUDA
@@ -140,7 +155,8 @@ the image within 768 by 768, then uses the official processor with 65,536 to
 589,824 pixels. The
 [official processor implementation](https://github.com/huggingface/transformers/blob/v4.57.6/src/transformers/models/qwen3_vl/processing_qwen3_vl.py)
 handles image tensors and the chat template. Text plus visual tokens are bounded
-to 8,192; generated output defaults to 256 tokens and cannot exceed 512.
+to 8,192. The standalone adapter defaults to 256 generated tokens and cannot
+exceed 512; the configured backend uses the 512-token limit described below.
 
 Only one request can use a provider instance at a time. Repeated requests reuse
 loaded weights. The smoke test checks the selected CUDA device, actual image
@@ -233,7 +249,10 @@ invented successful HTTP payloads; polling that existing run still returns 200.
 The backend prompt requests bounded structured observations, candidate
 identities, uncertainty, and additional views. It supplies catalog labels as
 untrusted context, not as visual proof or compatibility decisions. Generation
-uses at most 384 new tokens and a 120-second cooperative deadline. A separate
+uses the qualified local configuration `rekit-inspection-v5-constrained` with
+`rekit-inspection-schema-v1`, at most 512 new tokens, and a
+120-second cooperative deadline. The historical v1-v4 results below used their
+recorded settings. A separate
 150-second request deadline records `timed_out` and discards any late result.
 The slot remains busy until the actual worker returns, even after timeout.
 Shutdown stops admission, records failure for an active pending run, and waits
@@ -355,8 +374,10 @@ the same Python, PyTorch, CUDA, and Transformers versions as Task 1.
 | Generated tokens | 267 |
 | Observed visual-encoder forward calls | 1 |
 
-The worker elapsed measurement includes managed-input handling and provider
-execution; it is not browser latency or a throughput benchmark. The model was
+This historical API request used prompt `rekit-inspection-v1` and a 384-token
+generation budget. The worker elapsed measurement includes managed-input
+handling and provider execution; it is not browser latency or a throughput
+benchmark. The model was
 loaded for this request. Its terminal result was structurally valid and current
 (`succeeded`, `stale: false`), and an exact HTTP retry reused the stored run.
 
@@ -385,6 +406,190 @@ hash. The synthetic illustration remains unsuitable for a product-recognition
 benchmark. Literal matching of a revision against model-quoted text would not
 establish that either string is visible or correct; human image review remains
 required.
+
+## Task 5 browser failures retained for evaluation
+
+The real-inference browser scenario first analyzes two labelled synthetic views
+of one physical component. Four attempts failed before that scenario could
+complete; none is a successful browser/GPU acceptance result:
+
+| Prompt | Configured output budget | Observed failure |
+| --- | ---: | --- |
+| `rekit-inspection-v1` | 384 tokens | Candidate and additional-view objects omitted required `image_indices`. |
+| `rekit-inspection-v2` | 384 tokens | Candidate omitted `image_indices`; all 384 tokens were generated and JSON ended inside an additional-view reason. |
+| `rekit-inspection-v3` | 512 tokens | Complete 188-token JSON included source indices, but paired `body` revision `A` with null `revision_marking` and copied placeholder prose. |
+| `rekit-inspection-v4` | 512 tokens | Complete 257-token JSON added a forbidden top-level `image_indices` field. |
+
+All four runs ended as `invalid_output` with zero applied model evidence events.
+The component remained held and unverified. Their original responses are in
+ignored `var/mission02-acceptance/run-ai-jiwykyk_/inference-results.json`,
+`var/mission02-acceptance/run-ai-kxmilqsw/inference-results.json`,
+`var/mission02-acceptance/run-ai-zpfefrhu/inference-results.json`, and
+`var/mission02-acceptance/run-ai-ngy_f2t6/inference-results.json`, respectively.
+The default browser regression passed separately in `run-btavldmf`; that pass
+does not turn a failed inference attempt into a success.
+
+Prompt and generation-setting changes must receive a new version and a separate
+qualification record. Do not repair malformed model output, relax required
+source references, or discard failed attempts to make a scenario pass. See the
+[evaluation procedure](../evaluation/README.md#explicit-browser-and-gpu-mode)
+for execution and artifact handling.
+
+The second bounded repair introduced `rekit-inspection-v3`: a shorter template
+placed `image_indices` first and asked for fewer, shorter records. The backend
+budget increased to 512 tokens within the existing adapter ceiling. The strict
+output schema, parser, 120-second generation deadline, and 150-second request
+deadline are unchanged. Its valid JSON was still invalid against the contract;
+neither brevity nor source indices alone established an acceptable response.
+
+The third and final prompt repair in the earlier attempt used
+`rekit-inspection-v4`. It replaced the
+populated candidate example with a valid unknown-result example and explicit
+record-key definitions, then repeats the revision/marking pair requirement after
+catalog context. It still requests image-grounded observations and permits
+supported identity and revision hypotheses. The 512-token limit, strict schema,
+parser and deadlines were unchanged. It also failed, so that attempt stopped.
+Every attempt stopped before the intended ambiguous second request and full
+AI-browser recovery sequence. The earlier blocked report and all four artifacts
+remain historical evidence; the recovery continuation below does not erase or
+reclassify them. An unknown response alone would not establish useful recognition
+or correct abstention.
+
+## Task 5 recovery continuation
+
+Before changing generation, the actual browser/GPU baseline was reproduced in
+`var/mission02-acceptance/run-ai-znk3_cc4/inference-results.json`. It used the same
+v4 prompt SHA-256
+`6d4fb1690f7f50e36fba647e31944d4d67eb8bb4217ecbc704089ad77742a7ec`, 512-token cap,
+model/runtime, and ordered inputs as `run-ai-ngy_f2t6`. Its 839-character,
+257-token raw response was byte-for-byte identical, with SHA-256
+`4db4750ba7578322a14f24f4a79e278ee5b2a8dc9091d4da43539bcbdde40f09`. The forbidden
+root `image_indices` again caused `invalid_output`; evidence remained version 3,
+with zero applied events and held, unverified stock.
+
+| Reproduced baseline measurement | Actual value |
+| --- | ---: |
+| Load time | 3.830398 s |
+| Inference time | 25.420950 s |
+| Request time | 34.283795 s |
+| Input / generated tokens | 1,145 / 257 |
+| Peak allocated GPU bytes | 4,683,341,312 |
+| Peak reserved GPU bytes | 4,747,952,128 |
+| Visual-encoder forward calls | 1 |
+
+The two ordered PNGs were VIEW 2 then VIEW 1: hashes
+`46ec41e1283e4d9e51db0039a38a903d859bd056f4177ab34cb2a14dd2295caf` and
+`b5c752dced801379fd69d686df342b190b6036540cf6e8aeea0ff08f4ca71c35`, respectively.
+The earlier v3 attempt reversed that order; record this difference when comparing
+historical outputs. In v4, each distinct view-number marking was attributed to
+both images. That is a source-attribution error separate from the schema failure.
+
+**Approach 1 passed the bounded structural experiment:** it constrains one joint
+two-image generation using a bounded schema, then validates the untouched raw
+output with the existing strict
+parser and domain models. The
+[LM Format Enforcer project](https://github.com/noamgat/lm-format-enforcer#basic-tutorial)
+documents `JsonSchemaParser` and Transformers' `prefix_allowed_tokens_fn` hook
+for filtering allowable next tokens. ReKit records the decoder, schema version
+and schema hashes in addition to prompt/model/runtime provenance. Source indices
+remain model assertions for the admitted ordered images; the server does not
+attach both indices to every claim or invent missing visual content.
+
+The decoder constrains shape, not visual truth. Its
+[documented semantic limitation](https://github.com/noamgat/lm-format-enforcer#diagnostics---will-i-always-get-good-results)
+requires separate review of the generated claims. ReKit also retains stricter
+domain checks for unsupported constraints, including unique source indices,
+nonblank identifiers/text, and the revision/marking relationship. A cutoff or
+invalid result remains a failure, without JSON repair or relaxed acceptance.
+Neither the library's format support nor a CPU test is a measured model result.
+
+The separate [structured qualification procedure](../evaluation/README.md#structured-output-recovery-qualification)
+first exercises two fixed-order label views jointly, then an ambiguous single
+image, through the direct provider. API acceptance and two complete real-AI
+browser passes are separate gates; all passed in the final qualification below.
+
+### Approach 1 measured result
+
+`var/mission03-recovery/approach1.json` records two actual CUDA requests on
+2026-10-13. Both passed JSON syntax and the unchanged strict domain parser;
+the report status is `structure_passed`. This was direct-provider execution,
+without HTTP, SQLite evidence mutation, or browser interaction. The first
+request processed both label images jointly in the fixed order above; the
+second processed the single 10,904-byte ambiguous illustration with SHA-256
+`cf1a8f595ff3986a947e7160cdb76d7493e9748d2d1f5a03b83d0d23343de38b`.
+
+The v5 configuration retains exactly the v4 prompt text/hash, adding constrained
+decoding rather than another text-only prompt repair. Decoder schema
+`rekit-inspection-schema-v1` hashes are
+`906d95c1e45e74cd0f45c759eb9c48dbb748d32de82f2ee483f87cdbb17a6aad` for two images
+and `27facf0396266bc294975d293391c27def44f5a9d8373f0ddfa05d682a74449e` for one.
+The generation grammar permits at most two observations, one candidate, one or
+two uncertainties, and one additional view. It bounds descriptions, reasons,
+markings and uncertainty strings to 160 characters, view text to 100, and
+identifiers to 128. Candidate revision and marking are paired as strings or
+paired nulls. The independent domain contract is unchanged; no intermediate
+translation, JSON repair, or manufactured observation is used.
+
+| Measurement | Two label views | Ambiguous illustration |
+| --- | ---: | ---: |
+| JSON / domain valid | Yes / Yes | Yes / Yes |
+| Raw characters / generated tokens | 1,018 / 304 | 733 / 201 |
+| Input tokens | 1,145 | 911 |
+| Inference time | 36.708006 s | 21.103608 s |
+| Constraint setup time | 2.465740 s | 0.000983 s |
+| Peak allocated GPU bytes | 4,683,341,312 | 4,565,379,072 |
+| Peak reserved GPU bytes | 4,747,952,128 | 4,747,952,128 |
+| Visual-encoder forward calls | 1 | 1 |
+
+Initial loading took 3.799643 seconds; the second request reused the loaded
+weights and tokenizer data. Constraint setup is included in inference time,
+not an additional latency to add to it. The second metrics record repeats the
+initial load measurement while explicitly setting `model_loaded_this_request`
+to false; it does not represent a second load.
+
+Manual source review found correct VIEW 2 -> image 1 and VIEW 1 -> image 2
+attribution. The proposed `body/A` and quoted `REV A` have visible support in
+these invented labels only. The reason reaches 160 characters and ends
+mid-sentence; uncertainty also ends mid-thought, and the requested VIEW 2 was
+already provided. Structural completeness does not make the explanation useful.
+
+The ambiguous response is an observed recognition error: it invents `body/A`
+with revision marking `A`, despite describing an illustration rather than a
+product. Its proposed top-view explanation also asserts unsupported content.
+Raw output and these contradictions remain intact. The complete browser runs
+kept such output unverified and held, explicitly rejected unsupported claims on
+the known illustration, and required independent human verification before
+recovery. These cases neither measure reliable abstention nor establish
+representative recognition accuracy.
+
+## Final local integration qualification
+
+Current-version authenticated API acceptance passed in
+`var/mission03-recovery/api-current.json` and the final repeat
+`var/mission03-recovery/final-api.json`. Both used the selected constrained
+configuration and actual local GPU inference.
+
+The two complete AI browser passes are
+`var/mission02-acceptance/run-ai-52823ogs/` and
+`var/mission02-acceptance/run-ai-73rjz6dy/`, each about 1.2 minutes. Each processed
+the two labelled views jointly, inspected a separate ambiguous view, retained
+the unsupported hypothesis, and rejected it through the human review UI.
+Human verification linked both actual run IDs in its reason and cited the
+original uploaded observations. The deterministic workflow then completed two
+kits from four unique components, consuming four components with four audit
+events and a synthetic modeled value of 17,500 cents.
+
+The default regression `run-ugm19txq` passed in 4.5 seconds. A further actual-AI
+QA repeat, `run-ai-2qrs3sdt`, passed in about 1.3 minutes after the browser test
+waited for the visible reserved count before capturing screenshots. The tested
+model, schema, and production UI behavior were unchanged.
+
+Final local checks passed 631 backend tests in 24.20 seconds, the focused
+264-test inference selection in 12.56 seconds, and 48 frontend tests in
+27.85 seconds. TypeScript, production build, the installed dependency graph,
+and synthetic recovery evaluation also passed. See the
+[mission report](reports/development-mission-03.md) for artifact details,
+screenshot review, and separate repository/CI evidence.
 
 ## Limits and AMD boundary
 

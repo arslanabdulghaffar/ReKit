@@ -1,11 +1,13 @@
 """CPU-only input/failure checks; these tests do not establish model accuracy."""
 
 from importlib.util import module_from_spec, spec_from_file_location
+from contextlib import nullcontext
 import io
 import json
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 
 from PIL import Image
 import pytest
@@ -76,7 +78,7 @@ import importlib.abc
 import sys
 class BlockModelRuntime(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in {'torch', 'torchvision', 'transformers'}:
+        if fullname.split('.')[0] in {'torch', 'torchvision', 'transformers', 'lmformatenforcer', 'interegular'}:
             raise AssertionError('Default backend import attempted model runtime: ' + fullname)
 sys.meta_path.insert(0, BlockModelRuntime())
 from rekit.inference.adapters.local_transformers import LocalTransformersVision
@@ -177,3 +179,123 @@ def test_smoke_rejects_missing_gpu_or_image_execution_evidence(patch):
     result.update(patch)
     with pytest.raises(RuntimeError):
         smoke._verify_image_execution(result, "hash", 1)
+
+
+@pytest.fixture
+def fake_generation(tmp_path, monkeypatch):
+    """Execute the adapter control flow with CPU doubles, never model weights."""
+    import rekit.inference.adapters.local_transformers as adapter
+
+    class Tensor:
+        def __init__(self, shape):
+            self.shape = shape
+
+        def tolist(self):
+            return [[1, 2, 3]]
+
+        def __getitem__(self, key):
+            return Tensor((1, self.shape[-1] - key[1].start))
+
+    class Inputs(dict):
+        def to(self, device):
+            assert device == "cuda:1"
+            return self
+
+    provider = LocalTransformersVision(tmp_path, max_new_tokens=512, timeout_seconds=120)
+    calls = []
+    hook = {}
+
+    def register(callback):
+        hook["callback"] = callback
+        return SimpleNamespace(remove=lambda: hook.pop("callback"))
+
+    def generate(**kwargs):
+        calls.append(kwargs)
+        hook["callback"](None, None, None)
+        return Tensor((1, 12))
+
+    processor = SimpleNamespace(
+        tokenizer=object(),
+        apply_chat_template=lambda *args, **kwargs: Inputs(
+            input_ids=Tensor((1, 5)), pixel_values=Tensor((24, 12)), image_grid_thw=Tensor((1, 3))),
+        batch_decode=lambda *args, **kwargs: ['{"model":"CPU test double"}'],
+    )
+    provider._processor = processor
+    provider._model = SimpleNamespace(model=SimpleNamespace(visual=SimpleNamespace(register_forward_hook=register)),
+                                      generate=generate)
+    monkeypatch.setattr(provider, "_load", lambda: None)
+    monkeypatch.setattr(adapter, "version", lambda package: "0.11.3" if package == "lm-format-enforcer" else "test")
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(
+        __version__="test", version=SimpleNamespace(cuda="test"), inference_mode=nullcontext,
+        cuda=SimpleNamespace(reset_peak_memory_stats=lambda device: None, synchronize=lambda device: None,
+                             max_memory_allocated=lambda device: 100, max_memory_reserved=lambda device: 200,
+                             get_device_name=lambda device: "CPU test double"),
+    ))
+    return provider, calls, hook
+
+
+def test_unconstrained_adapter_does_not_load_optional_decoder(fake_generation, monkeypatch):
+    from rekit.inference import constrained
+
+    provider, calls, hook = fake_generation
+    monkeypatch.setattr(constrained, "build_tokenizer_data", lambda *args: pytest.fail("decoder was not requested"))
+    result = provider.inspect([picture()], "Describe visible evidence")
+    assert "prefix_allowed_tokens_fn" not in calls[0]
+    assert "decoding" not in result["generation"]
+    assert "lm_format_enforcer" not in result["runtime"]
+    assert result["metrics"]["vision_forward_calls"] == 1
+    assert hook == {}
+
+
+def test_constrained_adapter_caches_only_tokenizer_data_and_attests_actual_schema(fake_generation, monkeypatch):
+    from rekit.inference import constrained
+
+    provider, calls, hook = fake_generation
+    prepared = []
+    parsers = []
+    cached = object()
+
+    def prepare(tokenizer):
+        prepared.append(tokenizer)
+        return cached
+
+    def prefix(data, schema):
+        assert data is cached
+        function = lambda batch_id, tokens: [0]
+        parsers.append((schema, function))
+        return function
+
+    monkeypatch.setattr(constrained, "build_tokenizer_data", prepare)
+    monkeypatch.setattr(constrained, "build_prefix", prefix)
+    for count in (1, 2):
+        schema = constrained.inspection_schema(count)
+        result = provider.inspect([picture()] * count, "Describe visible evidence", json_schema=schema)
+        assert calls[-1]["prefix_allowed_tokens_fn"] is parsers[-1][1]
+        assert calls[-1]["max_new_tokens"] == 512
+        assert calls[-1]["max_time"] == 120
+        assert result["generation"]["schema_sha256"] == constrained.schema_digest(schema)
+        assert result["metrics"]["schema_sha256"] == result["generation"]["schema_sha256"]
+        assert result["metrics"]["decoding"] == "lm-format-enforcer"
+        assert result["metrics"]["schema_version"] == constrained.SCHEMA_VERSION
+        assert result["metrics"]["constraint_setup_seconds"] >= 0
+        assert result["runtime"]["lm_format_enforcer"] == "0.11.3"
+        assert result["text"] == '{"model":"CPU test double"}'
+        assert hook == {}
+    assert len(prepared) == 1
+    assert parsers[0][1] is not parsers[1][1]
+
+
+def test_decoder_failure_never_falls_back_to_unconstrained_generation(fake_generation, monkeypatch):
+    from rekit.inference import constrained
+
+    provider, calls, hook = fake_generation
+
+    def broken(tokenizer):
+        raise RuntimeError("private tokenizer data")
+
+    monkeypatch.setattr(constrained, "build_tokenizer_data", broken)
+    with pytest.raises(LocalVisionError, match=r"^Local visual inference failed \(RuntimeError\)$"):
+        provider.inspect([picture()], "Describe visible evidence", json_schema=constrained.inspection_schema(1))
+    assert calls == [] and hook == {}
+    assert provider._lock.acquire(blocking=False)
+    provider._lock.release()

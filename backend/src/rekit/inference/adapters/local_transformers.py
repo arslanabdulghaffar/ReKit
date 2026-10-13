@@ -76,6 +76,7 @@ class LocalTransformersVision:
         self.timeout_seconds = float(timeout_seconds)
         self._lock = threading.Lock()
         self._model = self._processor = None
+        self._tokenizer_data = None
         self._state = "unloaded"
         self._load_seconds = 0.0
         self._load_peak_bytes = 0
@@ -144,7 +145,7 @@ class LocalTransformersVision:
                 raise
             raise LocalVisionError(f"Local model loading failed ({type(error).__name__})") from error
 
-    def inspect(self, images: list[bytes], prompt: str) -> dict:
+    def inspect(self, images: list[bytes], prompt: str, *, json_schema: dict | None = None) -> dict:
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 12_000:
             raise LocalVisionError("Inspection prompt must contain 1 to 12000 characters")
         decoded = _decode_images(images)
@@ -171,6 +172,22 @@ class LocalTransformersVision:
             input_tokens = inputs["input_ids"].shape[-1]
             if input_tokens > 8192:
                 raise LocalVisionError("Processed input exceeds the 8192 token limit")
+            generation_arguments = {}
+            constraint_metadata = {}
+            constraint_runtime = {}
+            if json_schema is not None:
+                from rekit.inference.constrained import (
+                    SCHEMA_VERSION, build_prefix, build_tokenizer_data, schema_digest,
+                )
+
+                constraint_started = time.perf_counter()
+                if self._tokenizer_data is None:
+                    self._tokenizer_data = build_tokenizer_data(self._processor.tokenizer)
+                generation_arguments["prefix_allowed_tokens_fn"] = build_prefix(self._tokenizer_data, json_schema)
+                constraint_metadata = {"decoding": "lm-format-enforcer", "schema_version": SCHEMA_VERSION,
+                                       "schema_sha256": schema_digest(json_schema)}
+                constraint_runtime = {"lm_format_enforcer": version("lm-format-enforcer")}
+                constraint_seconds = time.perf_counter() - constraint_started
             vision_calls = 0
 
             def count_visual_forward(module, arguments, output):
@@ -182,7 +199,7 @@ class LocalTransformersVision:
                 with torch.inference_mode():
                     output = self._model.generate(
                         **inputs, do_sample=False, max_new_tokens=self.max_new_tokens,
-                        max_time=self.timeout_seconds, use_cache=True,
+                        max_time=self.timeout_seconds, use_cache=True, **generation_arguments,
                     )
                 torch.cuda.synchronize(self.device)
             finally:
@@ -203,11 +220,13 @@ class LocalTransformersVision:
                 "runtime": {"python": platform.python_version(), "torch": torch.__version__,
                             "torchvision": version("torchvision"), "transformers": version("transformers"),
                             "processor_class": type(self._processor).__name__, "pillow": version("Pillow"),
-                            "cuda": torch.version.cuda, "gpu": torch.cuda.get_device_name(self.device)},
+                            "cuda": torch.version.cuda, "gpu": torch.cuda.get_device_name(self.device),
+                            **constraint_runtime},
                 "preprocessing": {"max_side": 768, "min_pixels": 65_536, "max_pixels": 589_824,
                                   "exif_transpose": True, "color": "RGB", "max_images": 2},
                 "generation": {"do_sample": False, "max_new_tokens": self.max_new_tokens,
-                               "timeout_seconds": self.timeout_seconds, "dtype": "bfloat16", "attention": "sdpa"},
+                               "timeout_seconds": self.timeout_seconds, "dtype": "bfloat16", "attention": "sdpa",
+                               **constraint_metadata},
                 "metrics": {"load_seconds": self._load_seconds, "model_loaded_this_request": cold,
                             "load_peak_allocated_bytes": self._load_peak_bytes, "inference_seconds": elapsed,
                             "peak_allocated_bytes": torch.cuda.max_memory_allocated(self.device),
@@ -216,7 +235,8 @@ class LocalTransformersVision:
                             "image_tensor_shape": list(inputs["pixel_values"].shape),
                             "image_grid_thw": inputs["image_grid_thw"].tolist(),
                             "input_sha256": [hashlib.sha256(raw).hexdigest() for raw in images],
-                            "vision_forward_calls": vision_calls},
+                            "vision_forward_calls": vision_calls, **constraint_metadata,
+                            **({"constraint_setup_seconds": constraint_seconds} if json_schema is not None else {})},
             }
         except LocalVisionError:
             raise

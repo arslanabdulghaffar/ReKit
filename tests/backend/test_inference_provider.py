@@ -14,6 +14,7 @@ from rekit.inference.adapters.local_transformers import (
     LocalVisionBusy, LocalVisionError, LocalVisionTimeout, MODEL_ID, MODEL_REVISION,
 )
 from rekit.inference import provider
+from rekit.inference.parsing import parse_output
 from rekit.inference.provider import (
     LocalVisionProvider, VisionError, VisionTimeout, VisionUnavailable,
 )
@@ -46,8 +47,9 @@ def adapters(monkeypatch):
             }
             instances.append(self)
 
-        def inspect(self, images, prompt):
+        def inspect(self, images, prompt, *, json_schema=None):
             self.calls.append((images, prompt))
+            self.last_schema = json_schema
             if self.error is not None:
                 raise self.error
             self.status = "ready"
@@ -82,7 +84,7 @@ def test_one_adapter_is_reused_with_bounded_qualified_settings(adapters, tmp_pat
     assert len(adapters) == 1
     assert first is second is adapters[0].result
     assert adapters[0].options == {
-        "model_dir": tmp_path, "device": 0, "max_new_tokens": 384,
+        "model_dir": tmp_path, "device": 0, "max_new_tokens": 512,
         "timeout_seconds": 120,
     }
     assert len(adapters[0].calls) == 2
@@ -92,15 +94,19 @@ def test_one_adapter_is_reused_with_bounded_qualified_settings(adapters, tmp_pat
     assert configuration.model_repository == MODEL_ID
     assert configuration.model_revision == configuration.processor_revision == MODEL_REVISION
     assert configuration.device == "cuda:0"
-    assert configuration.prompt_version == "rekit-inspection-v1"
+    assert configuration.prompt_version == "rekit-inspection-v5-constrained"
     assert configuration.generation == {
-        "do_sample": False, "max_new_tokens": 384,
+        "do_sample": False, "max_new_tokens": 512,
         "timeout_seconds": 120.0, "dtype": "bfloat16", "attention": "sdpa",
+        "decoding": "lm-format-enforcer", "schema_version": provider.SCHEMA_VERSION,
+        "schema_sha256_1": provider.schema_digest(provider.inspection_schema(1)),
+        "schema_sha256_2": provider.schema_digest(provider.inspection_schema(2)), "image_mode": "joint",
     }
     assert configuration.preprocessing["max_side"] == 768
     assert configuration.preprocessing["min_pixels"] == 65_536
     assert configuration.preprocessing["max_pixels"] == 589_824
     assert configuration.preprocessing["max_images"] == 2
+    assert adapters[0].last_schema == provider.inspection_schema(2)
 
 
 def test_model_text_and_actual_result_metadata_are_not_repaired(adapters, tmp_path):
@@ -116,7 +122,7 @@ def test_prompt_uses_catalog_labels_without_compatibility_authority(adapters, tm
     instance.inspect([b"image"])
     prompt = adapters[0].calls[0][1]
     marker = "Catalog labels, not visual proof or a compatibility decision: "
-    assert json.loads(prompt.split(marker)[1]) == [
+    assert json.loads(prompt.split(marker)[1].split("\nFINAL CHECK:")[0]) == [
         {"component_type_id": "adapter", "name": "Synthetic adapter", "revisions": ["A", "B"]},
         {"component_type_id": "body", "name": "Synthetic body", "revisions": ["A"]},
     ]
@@ -132,6 +138,65 @@ def test_prompt_uses_catalog_labels_without_compatibility_authority(adapters, tm
 def test_without_catalog_prompt_requires_unknown_identity(adapters, tmp_path):
     LocalVisionProvider(tmp_path).inspect([b"image"])
     assert "Return no identity candidates and explain the uncertainty" in adapters[0].calls[0][1]
+
+
+def test_v4_unknown_example_is_valid_without_placeholder_observations_or_candidates(adapters, tmp_path):
+    LocalVisionProvider(tmp_path).inspect([b"image"])
+    prompt = adapters[0].calls[0][1]
+    example = prompt.split("Unknown example:\n", 1)[1].split("\n", 1)[0]
+    output = parse_output(example, image_count=1)
+    assert not output.observations and not output.candidates and not output.additional_views
+    assert output.uncertainties
+    assert "Still report visible details when identity is unknown" in prompt
+    for name in ("observations", "candidates", "additional_views"):
+        assert f"{name}: image_indices," in prompt
+    for copied_placeholder in ("visible support", "unresolved detail", "needed photograph", "missing detail"):
+        assert copied_placeholder not in prompt
+    assert "at most 2 observations, 1 candidate, 1 uncertainty, and 1 additional view" in prompt
+    assert "within 12 words" in prompt
+    assert "Use exact catalog component_type_id and revision IDs" in prompt
+    assert prompt.endswith(provider._FINAL_CHECK)
+    assert "Never output a revision with a null or missing marking" in provider._FINAL_CHECK
+
+
+def test_missing_candidate_and_additional_view_references_remain_invalid(adapters, tmp_path):
+    instance = LocalVisionProvider(tmp_path)
+    # Reproduce the observed omission class without repairing model-generated data.
+    output = {
+        "observations": [],
+        "candidates": [{"component_type_id": "body", "reason": "A label names the component."}],
+        "uncertainties": [],
+        "additional_views": [{"view": "Underside close-up", "reason": "The underside is obscured."}],
+    }
+    raw = json.dumps(output)
+    adapters[0].result["text"] = raw
+    assert instance.inspect([b"image"])["text"] == raw
+    with pytest.raises(ValueError):
+        parse_output(raw, image_count=1)
+
+
+@pytest.mark.parametrize("marking", [None, "missing-field"])
+def test_revision_without_actual_marking_is_not_repaired_or_accepted(adapters, tmp_path, marking):
+    candidate = {"image_indices": [1], "component_type_id": "body", "revision": "A",
+                 "reason": "Controlled reproduction of an unsupported revision pair."}
+    if marking is None:
+        candidate["revision_marking"] = None
+    raw = json.dumps({"observations": [], "candidates": [candidate], "uncertainties": [], "additional_views": []})
+    instance = LocalVisionProvider(tmp_path)
+    adapters[0].result["text"] = raw
+    assert instance.inspect([b"image"])["text"] == raw
+    with pytest.raises(ValueError):
+        parse_output(raw, image_count=1)
+
+
+def test_candidate_with_omitted_optional_revision_remains_unknown_without_schema_changes():
+    output = parse_output(json.dumps({
+        "observations": [],
+        "candidates": [{"image_indices": [1], "component_type_id": "body", "reason": "The visible label names a body."}],
+        "uncertainties": ["Revision is unreadable."], "additional_views": [],
+    }), image_count=1)
+    assert output.candidates[0].revision is None
+    assert output.candidates[0].revision_marking is None
 
 
 def test_prompt_digest_covers_full_catalog_context_and_is_order_stable(adapters, tmp_path, catalog):
@@ -231,4 +296,4 @@ def test_configuration_mutation_cannot_change_future_provenance(adapters, tmp_pa
     fresh = instance.configuration
     assert fresh.runtime["torch"] == "installed-torch"
     assert fresh.preprocessing["prompt_sha256"] == original_digest
-    assert fresh.generation["max_new_tokens"] == 384
+    assert fresh.generation["max_new_tokens"] == 512

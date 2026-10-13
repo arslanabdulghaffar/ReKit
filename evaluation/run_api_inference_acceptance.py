@@ -23,7 +23,7 @@ from rekit.catalog.models import Catalog
 from rekit.evidence.assets import ImageAssetStore
 from rekit.evidence.store import EvidenceStore
 from rekit.inference.adapters.local_transformers import MODEL_REVISION
-from rekit.inference.provider import LocalVisionProvider
+from rekit.inference.provider import LocalVisionProvider, PROMPT_VERSION
 from rekit.inference.service import InferenceService
 from rekit.inference.store import InferenceStore
 from rekit.inventory.store import InventoryStore
@@ -106,6 +106,16 @@ async def _workflow(app, token: str, fixture: dict, raw: bytes, record: dict, de
         metrics = outcome["metrics"]
         if metrics.get("vision_forward_calls", 0) < 1 or metrics.get("peak_allocated_bytes", 0) <= 0:
             raise RuntimeError("The stored run did not establish actual vision/GPU execution")
+        configuration = start["configuration"]
+        if (configuration["prompt_version"] != PROMPT_VERSION
+                or configuration["generation"]["decoding"] != "lm-format-enforcer"
+                or metrics.get("schema_sha256") != configuration["generation"]["schema_sha256_1"]
+                or metrics.get("schema_version") != configuration["generation"]["schema_version"]
+                or metrics.get("decoding") != configuration["generation"]["decoding"]):
+            raise RuntimeError("The actual structured decoder did not match current configuration")
+        for group in (outcome["output"]["observations"], outcome["output"]["candidates"], outcome["output"]["additional_views"]):
+            if any(item["image_indices"] != [1] for item in group):
+                raise RuntimeError("Single-image output has an invalid source reference")
         after = _checked(await client.get(f"/components/{cid}/history"))
         inventory = _checked(await client.get("/inventory"))
         compatibility = _checked(await client.get(f"/components/{cid}/compatibility?configuration_id=standard-kit"))
@@ -119,9 +129,25 @@ async def _workflow(app, token: str, fixture: dict, raw: bytes, record: dict, de
         runs = _checked(await client.get(f"/components/{cid}/inference"))
         if len(runs) != 1 or runs[0] != current:
             raise RuntimeError("The request created an unexpected duplicate inference run")
+        # This known fixture is an illustration, not evidence of a product ID or
+        # revision. Record explicit human rejection of any actual model guess.
+        if outcome["output"]["candidates"]:
+            rejection = {"rejection_id": "real-api-unsupported-illustration",
+                         "expected_version": after["current"]["version"],
+                         "reason": "Synthetic shapes illustration does not establish a physical product identity or revision; the model proposal is unsupported."}
+            _checked(await client.post(f"/inference/{run_id}/reject", json=rejection))
+            rejected = _checked(await client.get(f"/components/{cid}/history"))
+            event = next(item for item in rejected["events"] if item["event_id"] == rejection["rejection_id"])
+            if (event["kind"] != "uncertainty" or run_id not in event["payload"]["reason"]
+                    or rejected["current"]["verification"] is not None
+                    or _checked(await client.get(f"/inference/{run_id}")) != current):
+                raise RuntimeError("Human rejection did not preserve the original unverified run")
+            record["unsupported_proposal_rejection"] = event
+            record["evidence_after_rejection"] = rejected
         record["checks"] = {
             "authenticated_invocation": True, "managed_image_bytes_used": True,
             "actual_vision_execution": True, "physical_identity_preserved": True,
+            "current_structured_decoder_verified": True, "image_references_validated": True,
             "exact_retry_reused_run": True, "human_verification_still_required": True,
             "unverified_inventory_held": True, "compatible_without_human_review": False,
         }
