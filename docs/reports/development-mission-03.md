@@ -2,9 +2,9 @@
 
 Report date: 2026-10-13. Repository: `A:\hackathon\ReKit`, private `arslanabdulghaffar/ReKit`, branch `main`.
 
-**Task 5 local acceptance completed.** Mission 03 Tasks 1–4 remain accepted, committed and pushed at last verified HEAD `f6aa873dc6c3e47b36b744da756ecea91a88d28c`. Their exact records are retained in Appendix 1. Task 5's earlier blocked attempt and ten-request measurement history are retained in Appendix 2. The separately authorized recovery continuation below preserves that work and investigates implementation reliability; it does not begin Mission 04.
+**Task 5 completed, committed and pushed; both CPU CI jobs passed.** Mission 03 Tasks 1–4 remain accepted through commit `f6aa873dc6c3e47b36b744da756ecea91a88d28c`. Their exact records are retained in Appendix 1. Task 5's earlier blocked attempt and ten-request measurement history are retained in Appendix 2. The separately authorized recovery continuation below preserves that work and resolves the measured integration blocker; it does not begin Mission 04.
 
-Current evidence: constrained direct-provider experiment passed both cases; current-version API acceptance and its final repeat passed with explicit rejection of an unsupported claim; three complete constrained browser scenarios and the default regression passed. Final backend/frontend/dependency/synthetic/smoke checks, scoped source scans and actual screenshot QA passed. Task 5 commit/push and remote CI verification follow this local validation record; no unobserved CI success is claimed.
+Current evidence: constrained direct-provider experiment passed both cases; current-version API acceptance and its final repeat passed with explicit rejection of an unsupported claim; three complete constrained browser scenarios and the default regression passed. Final backend/frontend/dependency/synthetic/smoke checks, scoped source scans and actual screenshot QA passed. Task 5 implementation commit `44877ddfc0851aa4029cb7df8e80959d6b83e434` was pushed normally and its actual remote CI completed successfully. This report update records those observed results.
 
 ## A. Root cause and repair
 
@@ -95,7 +95,7 @@ The existing safeguards remain: strict extra-field/duplicate-key/truncation/sour
 
 ## D. Full verification
 
-Observed recovery evidence and pending final gates must be distinguished. Historical counts in Appendix 2 apply to the earlier stopped attempt, not the final recovery tree.
+All required local gates and both remote CPU jobs passed. Historical counts in Appendix 2 apply to the earlier stopped attempt, not the final recovery tree.
 
 | Gate | Result |
 | --- | --- |
@@ -116,7 +116,7 @@ Observed recovery evidence and pending final gates must be distinguished. Histor
 | Final actual GPU smoke | Passed two requests, `var/mission03-recovery/final-smoke.json`; actual image execution and warm reuse. |
 | Final whitespace / scoped secrets and ignored-artifact checks | Whitespace passed; scoped secret scan of 114 files found zero matches. Ignore checks confirmed weights, local run artifacts and credentials remain excluded; staging is reviewed separately before commit. |
 | Actual screenshot QA | Root inspected six first-pass screenshots and the stabilized third-run reservation/ambiguity/final-inventory captures; satisfactory readability/state and no overlap. Transient header timing was addressed by the test wait. |
-| Task 5 GitHub Actions | Pending the validated Task 5 commit and normal push. |
+| Task 5 GitHub Actions | Both jobs completed successfully for `44877ddfc0851aa4029cb7df8e80959d6b83e434`: Python backend and TypeScript operator workspace, [run 38384406220](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38384406220). |
 
 The source tree includes focused decoder, domain, API and provider tests; controlled doubles are software evidence, not model outputs. The counts above are measured local results. CPU GitHub Actions remains free of model downloads and GPU/browser requirements.
 
@@ -147,7 +147,11 @@ git ls-remote origin refs/heads/main
 
 ## E. Repository status
 
-At the pre-commit review, branch is `main`; local HEAD, origin/main and independently queried remote main match `f6aa873dc6c3e47b36b744da756ecea91a88d28c`. Accepted Tasks 1–4 remain intact. The 13 starting working-tree files were backed up before this continuation; all backup SHA-256 hashes still match. The validated Task 5 commit, normal push and actual remote CI results will be recorded after those operations complete.
+Task 5 implementation commit: `44877ddfc0851aa4029cb7df8e80959d6b83e434`, subject `Validate reliable AI visual inspection`. It contains the 22 reviewed paths below, including the initial complete local-validation report. Normal push to private `main` succeeded. After that push, local HEAD, origin/main and independently queried remote main all matched this SHA; the working tree was clean. GitHub API confirmed private visibility and default branch `main`.
+
+GitHub Actions [run 38384406220](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38384406220) completed with overall success for that exact commit. Both Python backend and TypeScript operator workspace completed successfully, including dependency checks, backend tests, frontend tests, TypeScript and production build. CI remained CPU-only and did not download weights or claim GPU/browser execution.
+
+This documentation-only follow-up records the already-observed push and CI results without rewriting the implementation commit. The implementation SHA above is the fixed reference for its runtime measurements and successful CI. Accepted Tasks 1–4 remain intact. The 13 starting working-tree files were backed up before the continuation; all backup SHA-256 hashes still match. No reset, force push, history rewrite or visibility change occurred.
 
 The reviewed Task 5 change set contains exactly **22 paths: 18 modified and four new**. No new source directory was required:
 
@@ -176,7 +180,7 @@ The reviewed Task 5 change set contains exactly **22 paths: 18 modified and four
 | New | `evaluation/run_structured_qualification.py` |
 | New | `tests/backend/test_constrained.py` |
 
-Only the reviewed Task 5 changes and this report are selected for the validated increment. Weights, local inputs, credentials, databases, logs and generated reports remain outside Git. Preserve private visibility and normal history; no force push or reset is authorized. Historical verified CI links remain in Appendix 1 and must not be presented as CI for the current dirty tree.
+Only the reviewed Task 5 changes and this report were committed. Weights, local inputs, credentials, databases, logs and generated evaluation artifacts remain outside Git. Whitespace and scoped secret checks passed; no forbidden paths were staged. Historical verified CI links remain in Appendix 1, separate from the successful Task 5 run above.
 
 ## F. Remaining limitations
 
