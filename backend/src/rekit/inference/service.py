@@ -12,7 +12,7 @@ from rekit.auth import Actor
 from rekit.evidence.store import ConflictError
 from rekit.inference.models import InferenceRun, InspectionRequest, ScalarMap
 from rekit.inference.parsing import MAX_OUTPUT_CHARACTERS, parse_output
-from rekit.inference.provider import VisionProvider, VisionTimeout, VisionUnavailable
+from rekit.inference.provider import VisionInvalidOutput, VisionProvider, VisionTimeout, VisionUnavailable
 from rekit.inference.store import InferenceStore
 
 
@@ -118,16 +118,16 @@ class InferenceService:
             if (result.get("metrics", {}).get("input_sha256") != [item.sha256 for item in run.start.inputs]
                     or (config.provider == "local-transformers"
                         and result.get("metrics", {}).get("vision_forward_calls", 0) < 1)):
-                raise ValueError("Inference provider did not attest to processing the admitted images")
-            if config.generation.get("decoding") == "lm-format-enforcer":
+                raise ValueError("Inference provider input hashes did not match the admitted images")
+            if config.generation.get("decoding") in {"lm-format-enforcer", "json-schema-request"}:
                 schema_version = config.generation.get("schema_version")
                 schema_digest = config.generation.get(f"schema_sha256_{len(images)}")
                 if (not isinstance(schema_version, str) or not schema_version.strip()
                         or not isinstance(schema_digest, str) or re.fullmatch(r"[a-f0-9]{64}", schema_digest) is None
-                        or result.get("metrics", {}).get("decoding") != "lm-format-enforcer"
+                        or result.get("metrics", {}).get("decoding") != config.generation["decoding"]
                         or result.get("metrics", {}).get("schema_version") != schema_version
                         or result.get("metrics", {}).get("schema_sha256") != schema_digest):
-                    raise ValueError("Executed decoding schema did not match the admitted configuration")
+                    raise ValueError("Provider schema provenance did not match the admitted configuration")
             metrics = self._metrics(result)
             metrics["request_seconds"] = time.perf_counter() - started
             try:
@@ -141,8 +141,23 @@ class InferenceService:
                 outcome = {"status": "succeeded", "output": output, "raw_output": raw_output, "metrics": metrics}
         except VisionTimeout:
             outcome = {"status": "timed_out", "failure_reason": "The model exceeded its execution deadline"}
-        except VisionUnavailable:
-            outcome = {"status": "unavailable", "failure_reason": "The configured model or GPU is unavailable; manual inspection remains available"}
+        except VisionInvalidOutput as error:
+            raw = error.raw_output
+            outcome = {"status": "invalid_output",
+                       "raw_output": raw[:MAX_OUTPUT_CHARACTERS] if isinstance(raw, str) else None,
+                       "failure_reason": "The provider response failed its strict output contract; no evidence was applied"}
+        except VisionUnavailable as error:
+            reasons = {
+                "authentication": "Remote authentication was rejected.",
+                "rate_limited": "The remote endpoint is rate limited; no automatic retry was made.",
+                "unsupported": "The remote endpoint rejected the model, images, or structured-output contract.",
+                "endpoint": "The remote HTTPS endpoint is unavailable.",
+                "busy": "The remote provider already has an active request.",
+            }
+            code = error.reason_code
+            reason = reasons.get(code, "The configured inference provider is unavailable.")
+            outcome = {"status": "unavailable", "failure_reason": reason + " Manual inspection remains available.",
+                       "metrics": {"remote_error_code": code} if code in reasons else {}}
         except Exception as error:
             outcome = {"status": "failed", "raw_output": diagnostic_raw,
                        "failure_reason": f"Inspection failed ({type(error).__name__}); no model evidence was applied"}

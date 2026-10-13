@@ -64,5 +64,5 @@ export interface InferenceRun {
     output: InspectionOutput | null; raw_output: string | null; failure_reason: string | null; metrics: Record<string, JsonScalar>;
     stale: boolean; stale_reason: string | null; applied_event_ids: string[]; evidence_version_after: number } | null;
 }
-export interface InferenceStatus { status: 'unloaded' | 'loading' | 'ready' | 'unavailable'; busy: boolean;
+export interface InferenceStatus { status: 'unloaded' | 'loading' | 'configured' | 'busy' | 'ready' | 'unavailable'; busy: boolean;
   provider: string | null; model_repository: string | null; model_revision: string | null; device: string | null; request_timeout_seconds?: number }

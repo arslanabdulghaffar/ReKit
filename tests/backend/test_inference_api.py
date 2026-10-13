@@ -667,3 +667,271 @@ def test_rejection_cannot_change_pending_failed_or_newer_evidence(workflow, late
             }), 409)
             assert workflow.evidence.history(workflow.component_id) == before
     asyncio.run(scenario())
+
+
+class RemoteHttpDouble:
+    """Only the HTTP transport is controlled; the production provider runs normally."""
+
+    model_id = "test/offline-remote-model"
+    token = "offline-remote-token-never-a-real-credential"
+
+    def __init__(self):
+        self.calls = []
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.release.set()
+        self.status = 200
+        self.raw = json.dumps(CONTROLLED_OUTPUT)
+        self.response_model = self.model_id
+        self.error = None
+
+    def __call__(self, endpoint, token, payload, **limits):
+        from rekit.inference.adapters.remote_transport import HttpResponse
+
+        self.calls.append((endpoint, token, payload, limits))
+        self.entered.set()
+        assert self.release.wait(5), "Test must release the controlled transport"
+        if self.error is not None:
+            raise self.error
+        body = json.dumps({"model": self.response_model, "choices": [{
+            "index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": self.raw},
+        }]}).encode()
+        return HttpResponse(status=self.status, body=body, content_type="application/json")
+
+
+@pytest.fixture
+def remote_workflow(workflow):
+    from pydantic import SecretStr
+    from rekit.inference.adapters.openai_remote import OpenAICompatibleVision, RemoteVisionSettings
+
+    workflow.service.close()
+    transport = RemoteHttpDouble()
+    settings = RemoteVisionSettings(
+        base_url="https://vision.example.test/v1",
+        allowed_endpoints=("https://vision.example.test/v1/chat/completions",),
+        api_key=SecretStr(transport.token), model_id=transport.model_id,
+        model_revision="c" * 40, processor_revision="d" * 40,
+    )
+    workflow.provider = OpenAICompatibleVision(settings, workflow.evidence.catalog, transport=transport)
+    workflow.service = InferenceService(workflow.store, workflow.provider, timeout_seconds=5)
+    workflow.app = create_app(workflow.inventory, auth=workflow.auth, assets=workflow.assets, inference=workflow.service)
+    workflow.remote_transport = transport
+    try:
+        yield workflow
+    finally:
+        transport.release.set()
+        workflow.service.close()
+
+
+@pytest.mark.parametrize("image_count", [1, 2])
+def test_remote_api_original_bytes_and_unverified_inventory_boundary(remote_workflow, image_count):
+    import base64
+
+    workflow = remote_workflow
+    asset_ids = [workflow.uploads[workflow.component_id].asset.asset_id]
+    original_bytes = [workflow.raw_images[workflow.component_id]]
+    if image_count == 2:
+        component = workflow.evidence.get_component(workflow.component_id)
+        with Image.new("RGB", (20, 28), "purple") as image, BytesIO() as buffer:
+            image.save(buffer, format="PNG")
+            raw = buffer.getvalue()
+        uploaded = workflow.assets.upload(component.physical_component_id, component.source_return_id, raw, "image/png", "reviewer")
+        asset_ids.append(uploaded.asset.asset_id)
+        original_bytes.append(raw)
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver",
+                                     headers=headers(workflow)) as client:
+            status = checked(await client.get("/inference/status"))
+            assert status["provider"] == "openai-remote"
+            assert status["device"] == "remote"
+            accepted = checked(await client.post(f"/components/{workflow.component_id}/inference",
+                                                 json=command(workflow, asset_ids=asset_ids)), 202)
+            run = await poll(client, accepted["start"]["run_id"])
+            assert run["outcome"]["status"] == "succeeded"
+            assert run["outcome"]["output"] == CONTROLLED_OUTPUT
+            assert run["outcome"]["stale"] is False
+            assert run["outcome"]["applied_event_ids"]
+            assert run["start"]["actor_id"] == "reviewer"
+            assert [entry["sha256"] for entry in run["start"]["inputs"]] == [hashlib.sha256(raw).hexdigest() for raw in original_bytes]
+            config = run["start"]["configuration"]
+            metrics = run["outcome"]["metrics"]
+            assert config["runtime"]["revision_verification"] == "not_attested_by_response"
+            assert metrics["runtime_hardware_verification"] == "unverified"
+            assert metrics["response_model_id_matched"] is True
+            assert metrics["schema_sha256"] == config["generation"][f"schema_sha256_{image_count}"]
+            assert "vision_forward_calls" not in metrics
+            assert workflow.remote_transport.token not in json.dumps(run)
+            assert len(workflow.remote_transport.calls) == 1
+            sent = json.loads(workflow.remote_transport.calls[0][2])
+            encoded_inputs = sent["messages"][0]["content"][:-1]
+            assert [base64.b64decode(part["image_url"]["url"].split(",", 1)[1]) for part in encoded_inputs] == original_bytes
+            history = checked(await client.get(f"/components/{workflow.component_id}/history"))
+            assert history["current"]["verification"] is None
+            assert not any(event["kind"] == "verification" for event in history["events"])
+            snapshot = checked(await client.get("/inventory"))
+            assert all(item["availability"] == "held" for item in snapshot["items"])
+            assert snapshot["completed_kits"] == []
+            assert checked(await client.get(f"/components/{workflow.component_id}/compatibility?configuration_id=standard-kit"))["compatible"] is False
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("defect,status,code", [
+    ("wrong_model", "invalid_output", None), ("invalid_text", "invalid_output", None),
+    ("secret_echo", "invalid_output", None), ("authentication", "unavailable", "authentication"),
+    ("rate_limited", "unavailable", "rate_limited"), ("unsupported", "unavailable", "unsupported"),
+    ("endpoint", "unavailable", "endpoint"), ("timeout", "timed_out", None),
+])
+def test_remote_api_failures_preserve_evidence_and_sanitize_diagnostics(remote_workflow, defect, status, code):
+    from rekit.inference.adapters.remote_transport import RemoteTransportError
+
+    workflow = remote_workflow
+    transport = workflow.remote_transport
+    if defect == "wrong_model": transport.response_model = "substituted-model"
+    elif defect == "invalid_text": transport.raw = '{"observations":[]}'
+    elif defect == "secret_echo": transport.raw = transport.token
+    elif defect == "timeout": transport.error = RemoteTransportError("timeout")
+    else: transport.status = {"authentication": 401, "rate_limited": 429, "unsupported": 400, "endpoint": 500}[defect]
+    before = workflow.evidence.history(workflow.component_id)
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver",
+                                     headers=headers(workflow)) as client:
+            accepted = checked(await client.post(f"/components/{workflow.component_id}/inference", json=command(workflow)), 202)
+            final = await poll(client, accepted["start"]["run_id"])
+            outcome = final["outcome"]
+            assert outcome["status"] == status
+            assert outcome["output"] is None
+            assert outcome["applied_event_ids"] == []
+            assert outcome["metrics"].get("remote_error_code") == code
+            assert outcome["raw_output"] == (transport.raw if defect == "invalid_text" else None)
+            assert transport.token not in json.dumps(final)
+            assert len(transport.calls) == 1
+            assert workflow.evidence.history(workflow.component_id) == before
+            if defect == "authentication":
+                verification = dict(workflow.fixture["components"][0]["verification"])
+                verification.pop("operator_id")
+                verification["evidence_observation_ids"] = [workflow.uploads[workflow.component_id].asset.observation_id]
+                current = checked(await client.post(f"/components/{workflow.component_id}/verification", json={
+                    "verification": verification, "expected_version": before.current.version,
+                }))
+                assert current["state"] == "verified"
+                assert current["verification"]["operator_id"] == "reviewer"
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("tamper", ["provider", "input_sha256", "schema_sha256"])
+def test_remote_api_rejects_tampered_execution_provenance(remote_workflow, monkeypatch, tamper):
+    workflow = remote_workflow
+    inspect = workflow.provider.inspect
+
+    def changed(images):
+        result = inspect(images)
+        if tamper == "provider": result["provider"] = "local-transformers"
+        elif tamper == "input_sha256": result["metrics"][tamper] = ["0" * 64]
+        else: result["metrics"][tamper] = "0" * 64
+        return result
+
+    monkeypatch.setattr(workflow.provider, "inspect", changed)
+    before = workflow.evidence.history(workflow.component_id)
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver",
+                                     headers=headers(workflow)) as client:
+            accepted = checked(await client.post(f"/components/{workflow.component_id}/inference", json=command(workflow)), 202)
+            final = await poll(client, accepted["start"]["run_id"])
+            assert final["outcome"]["status"] == "failed"
+            assert final["outcome"]["applied_event_ids"] == []
+            assert workflow.evidence.history(workflow.component_id) == before
+            assert len(workflow.remote_transport.calls) == 1
+    asyncio.run(scenario())
+
+
+def test_remote_api_retry_is_one_call_and_new_evidence_prevents_late_application(remote_workflow):
+    workflow = remote_workflow
+    transport = workflow.remote_transport
+    transport.release.clear()
+    request_body = command(workflow)
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver",
+                                     headers=headers(workflow)) as client:
+            route = f"/components/{workflow.component_id}/inference"
+            first = checked(await client.post(route, json=request_body), 202)
+            await wait_entered(transport)
+            retry = checked(await client.post(route, json=request_body), 202)
+            assert retry["start"]["run_id"] == first["start"]["run_id"]
+            checked(await client.post(route, json=command(workflow, request_id="other-remote-request")), 409)
+            component = workflow.evidence.get_component(workflow.component_id)
+            with Image.new("RGB", (24, 18), "lime") as image, BytesIO() as buffer:
+                image.save(buffer, format="PNG")
+                checked(await client.post(f"/components/{workflow.component_id}/images?return_id={component.source_return_id}",
+                                          content=buffer.getvalue(), headers={"Content-Type": "image/png"}), 201)
+            before = workflow.evidence.history(workflow.component_id)
+            transport.release.set()
+            final = await poll(client, first["start"]["run_id"])
+            assert final["outcome"]["status"] == "succeeded"
+            assert final["outcome"]["stale"] is True
+            assert final["outcome"]["applied_event_ids"] == []
+            assert workflow.evidence.history(workflow.component_id) == before
+            assert checked(await client.post(route, json=request_body), 202) == final
+            assert len(transport.calls) == 1
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("extra", ["base_url", "api_key", "model_id", "allowed_endpoints", "provider"])
+def test_remote_configuration_cannot_be_supplied_by_api_client(remote_workflow, extra):
+    workflow = remote_workflow
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver",
+                                     headers=headers(workflow)) as client:
+            checked(await client.post(f"/components/{workflow.component_id}/inference",
+                                      json=command(workflow) | {extra: "untrusted override"}), 422)
+            assert workflow.remote_transport.calls == []
+            assert workflow.store.list_for_component(workflow.component_id) == ()
+    asyncio.run(scenario())
+
+
+def test_remote_factory_uses_only_explicit_trusted_server_configuration(workflow, tmp_path, monkeypatch):
+    from rekit.inference.adapters import openai_remote
+
+    auth_path = tmp_path / "remote-factory-auth.json"
+    auth_path.write_text(workflow.auth.model_dump_json(), encoding="utf-8")
+    values = {
+        "REKIT_DATABASE_PATH": str(workflow.evidence.path),
+        "REKIT_CATALOG_PATH": str(FIXTURES / workflow.fixture["catalog_file"]),
+        "REKIT_DISPOSITION_POLICY_PATH": str(FIXTURES / workflow.fixture["disposition_policy_file"]),
+        "REKIT_AUTH_CONFIG_PATH": str(auth_path), "REKIT_EVIDENCE_DIR": str(workflow.assets.root),
+        "REKIT_INFERENCE_PROVIDER": "openai-remote", "REKIT_INFERENCE_BASE_URL": "https://vision.example.test/v1",
+        "REKIT_INFERENCE_ALLOWED_ENDPOINTS": "https://vision.example.test/v1/chat/completions",
+        "REKIT_INFERENCE_API_KEY": RemoteHttpDouble.token, "REKIT_INFERENCE_MODEL": RemoteHttpDouble.model_id,
+        "REKIT_INFERENCE_MODEL_REVISION": "c" * 40, "REKIT_INFERENCE_PROCESSOR_REVISION": "d" * 40,
+        "REKIT_INFERENCE_TIMEOUT_SECONDS": "20", "REKIT_INFERENCE_MAX_IMAGES": "2",
+    }
+    for key, value in values.items(): monkeypatch.setenv(key, value)
+    monkeypatch.delenv("REKIT_MODEL_DIR", raising=False)
+    real_provider = openai_remote.OpenAICompatibleVision
+    transport = RemoteHttpDouble()
+    constructions = []
+
+    def controlled_provider(settings, catalog):
+        constructions.append((settings, catalog))
+        return real_provider(settings, catalog, transport=transport)
+
+    monkeypatch.setattr(openai_remote, "OpenAICompatibleVision", controlled_provider)
+    app = create_configured_app()
+    try:
+        assert len(constructions) == 1
+        settings, catalog = constructions[0]
+        assert catalog == workflow.evidence.catalog
+        assert settings.api_key.get_secret_value() == transport.token
+        assert app.state.inference.provider.configuration.provider == "openai-remote"
+        assert app.state.inference.timeout_seconds == 35
+        assert transport.calls == []
+    finally:
+        app.state.inference.close()
+    monkeypatch.delenv("REKIT_INFERENCE_API_KEY")
+    with pytest.raises(RuntimeError, match="configuration is missing or invalid"):
+        create_configured_app()
+    assert len(constructions) == 1

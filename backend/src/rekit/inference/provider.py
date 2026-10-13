@@ -42,9 +42,21 @@ class VisionError(RuntimeError):
 class VisionUnavailable(VisionError):
     """The configured provider cannot currently perform inference."""
 
+    def __init__(self, message: str, *, reason_code: str | None = None):
+        super().__init__(message)
+        self.reason_code = reason_code
+
 
 class VisionTimeout(VisionError):
     """The provider exceeded its execution deadline."""
+
+
+class VisionInvalidOutput(VisionError):
+    """A response failed its provider contract; safe model text may be retained."""
+
+    def __init__(self, message: str, *, raw_output: str | None = None):
+        super().__init__(message)
+        self.raw_output = raw_output
 
 
 class VisionProvider(Protocol):

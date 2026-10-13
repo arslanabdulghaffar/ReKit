@@ -118,6 +118,52 @@ describe('unverified inspection evidence', () => {
     expect(calls.filter(call => call.method !== 'GET')).toEqual([])
   })
 
+  it('labels remote revisions as configured without asserting deployed weights or AMD hardware', async () => {
+    const remote = { ...ready, provider: 'openai-remote', device: 'remote' }
+    const run = completedRun()
+    Object.assign(run.start.configuration, { provider: remote.provider, device: remote.device })
+    transport([run], undefined, remote)
+    render(<InferencePanel {...props()} />)
+    expect(await screen.findByText(`Configured revision ${remote.model_revision}`)).toBeInTheDocument()
+    expect(await screen.findByText(/^Run model:/)).toHaveTextContent(`Configured revision ${remote.model_revision}`)
+    expect(screen.getAllByText(/Remote responses are checked for the configured model ID/)).toHaveLength(1)
+    expect(screen.getByText(/The response does not verify deployed weights, runtime, or AMD hardware/)).toBeInTheDocument()
+  })
+
+  it('preserves local model revision wording without remote deployment notices', async () => {
+    const local = { ...ready, provider: 'local-transformers', device: 'cuda:1' }
+    const run = completedRun()
+    Object.assign(run.start.configuration, { provider: local.provider, device: local.device })
+    transport([run], undefined, local)
+    render(<InferencePanel {...props()} />)
+    expect(await screen.findByText(`Revision ${local.model_revision}`)).toBeInTheDocument()
+    expect(await screen.findByText(/^Run model:/)).toHaveTextContent(`Revision ${local.model_revision}`)
+    expect(screen.queryByText(/Configured revision/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Remote responses are checked/)).not.toBeInTheDocument()
+  })
+
+  it('uses the recorded provider for historical provenance after the current provider changes', async () => {
+    const local = { ...ready, provider: 'local-transformers', device: 'cuda:1' }
+    const localRun = completedRun()
+    Object.assign(localRun.start.configuration, { provider: local.provider, device: local.device })
+    const remoteRun = completedRun()
+    remoteRun.start.run_id = 'historical-remote-run'
+    remoteRun.outcome!.run_id = remoteRun.start.run_id
+    Object.assign(remoteRun.start.configuration, { provider: 'openai-remote', device: 'remote', model_revision: 'e'.repeat(40) })
+    transport([localRun, remoteRun], undefined, local)
+    const user = userEvent.setup()
+    render(<InferencePanel {...props()} />)
+    const selector = await screen.findByRole('combobox', { name: /^Inspection run/ })
+    expect(screen.queryByText(/Remote responses are checked/)).not.toBeInTheDocument()
+    await user.selectOptions(selector, remoteRun.start.run_id)
+    expect(screen.getByText(`Revision ${local.model_revision}`)).toBeInTheDocument()
+    expect(screen.getByText(/^Run model:/)).toHaveTextContent(`openai-remote · remote · Configured revision ${'e'.repeat(40)}`)
+    expect(screen.getByText(/Remote responses are checked/)).toBeInTheDocument()
+    await user.selectOptions(selector, localRun.start.run_id)
+    expect(screen.queryByText(/Remote responses are checked/)).not.toBeInTheDocument()
+    expect(screen.getByText(/^Run model:/)).toHaveTextContent(`local-transformers · cuda:1 · Revision ${local.model_revision}`)
+  })
+
   it('shows unknown identity and alternatives without silently choosing a candidate', async () => {
     const unknown = completedRun()
     unknown.outcome!.output!.candidates = []
