@@ -2,6 +2,7 @@
 
 import asyncio
 import builtins
+import hashlib
 from importlib.util import module_from_spec, spec_from_file_location
 import io
 import json
@@ -287,6 +288,9 @@ def test_default_application_has_no_provider_optional_import_or_seeded_stock(
     monkeypatch.setenv("REKIT_MODEL_DIR", str(prepared_root / "must-not-be-loaded"))
     manifest_path, manifest = runner._prepare()
     assert manifest["real_inference"] is False
+    assert manifest["real_product_images"] is False
+    assert manifest["simulated_intake"] is True
+    assert "product_sources" not in manifest
     assert "ambiguous_image" not in manifest
     assert "model_dir" not in manifest
     assert sum(len(paths) for paths in manifest["images"].values()) == 8
@@ -410,6 +414,7 @@ def test_check_only_cleans_all_generated_state_and_never_executes_model_or_servi
 @pytest.mark.parametrize("arguments", [
     ["--check", "--model-dir", "not-authorized-without-opt-in"],
     ["--check", "--real-inference", "--device", "-1"],
+    ["--check", "--real-product-images"],
 ])
 def test_invalid_cli_configuration_fails_before_generating_state(monkeypatch, arguments, capsys):
     monkeypatch.setattr(runner.sys, "argv", ["run_browser_acceptance.py", *arguments])
@@ -437,3 +442,175 @@ def test_explicit_ai_browser_timeout_is_bounded_and_preserves_cleanup(sandbox):
     assert result["status"] == "timed_out"
     assert result["real_inference_enabled"] is True
     assert_cleaned(sandbox, result)
+
+
+@pytest.fixture
+def product_collection(prepared_root, monkeypatch):
+    """Tiny original JPEG stand-ins; no downloaded corpus or model needed in CI."""
+    from PIL import Image
+
+    monkeypatch.syspath_prepend(str(SCRIPT.parent))
+    from product_data import DatasetManifest, split_for_group
+
+    image_root = prepared_root / "var" / "evaluation" / "abo"
+    (image_root / "images").mkdir(parents=True)
+    images, original_bytes = [], {}
+    assert split_for_group("B07XGQ9QJF") == "development"
+    for index, image_id in enumerate(runner.PRODUCT_IMAGE_IDS):
+        path = image_root / "images" / f"{image_id}.jpg"
+        with Image.new("RGB", (32, 24), (20 + index * 70, 40, 80)) as image:
+            image.save(path, format="JPEG")
+        raw = path.read_bytes()
+        original_bytes[path] = raw
+        images.append({
+            "image_id": image_id, "listing_id": "B07XGQ9QJF", "group_id": "B07XGQ9QJF",
+            "split": "development", "source_url": f"https://example.test/{image_id}.jpg",
+            "local_path": f"images/{image_id}.jpg", "sha256": hashlib.sha256(raw).hexdigest(),
+            "byte_size": len(raw), "width": 32, "height": 24, "category": "CPU fixture",
+            "source_labels": {"title": "Fixture listing metadata is not visual truth"},
+            "downloaded_at": "2026-10-14T00:00:00+00:00",
+        })
+    manifest = DatasetManifest.model_validate({
+        "source_url": "https://example.test/dataset", "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "attribution": "CPU-only fixture attribution; no external download",
+        "downloaded_at": "2026-10-14T00:00:00+00:00", "metadata_receipts": [],
+        "images": list(reversed(images)),
+    })
+    path = prepared_root / "evaluation" / "fixtures" / "abo-manifest.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+    return SimpleNamespace(root=image_root, manifest=manifest, path=path, original_bytes=original_bytes)
+
+
+def test_product_manifest_preserves_order_originals_and_unreviewed_provenance(
+    product_collection, optional_imports_blocked,
+):
+    manifest_path, manifest = runner._prepare(real_inference=True, real_product_images=True)
+    assert manifest["synthetic"] is manifest["simulated_intake"] is True
+    assert manifest["real_product_images"] is manifest["real_inference"] is True
+    assert manifest["dataset_manifest_sha256"] == hashlib.sha256(product_collection.path.read_bytes()).hexdigest()
+    assert manifest["dataset_attribution"] == product_collection.manifest.attribution
+    assert manifest["dataset_source"] == product_collection.manifest.source_url
+    assert manifest["dataset_license"] == {"id": "CC-BY-4.0", "url": product_collection.manifest.license_url}
+    sources = manifest["product_sources"]
+    assert [item["image_id"] for item in sources] == list(runner.PRODUCT_IMAGE_IDS)
+    assert all(item["review_status"] == "pending" and item["revision_supported"] is None for item in sources)
+    paths = manifest["images"]["photo-demo-unit"]
+    assert len(paths) == 2
+    for source, original_path in zip(sources, paths, strict=True):
+        path = Path(original_path)
+        assert path.resolve() == product_collection.root / source["local_path"]
+        assert path.read_bytes() == product_collection.original_bytes[path]
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == source["sha256"]
+        assert not path.is_relative_to(Path(manifest["state_dir"]))
+    fixture = manifest["fixture"]
+    assert fixture["batch"]["batch_id"] == "photo-demo-batch"
+    assert len(fixture["returns"]) == 1 and fixture["returns"][0]["return_id"] == "photo-demo-return"
+    assert fixture["returns"][0]["declared_configuration_id"] is None
+    assert len(fixture["components"]) == 1 and set(fixture["components"][0]) == {"component"}
+    assert fixture["components"][0]["component"]["physical_component_id"] == "photo-demo-unit"
+    assert "scenario" not in fixture and "expected" not in fixture
+    assert "ambiguous_image" not in manifest
+    assert not list(Path(manifest["state_dir"]).rglob("*.png"))
+    assert not list(Path(manifest["state_dir"]).rglob("*.jpg"))
+    assert json.loads(manifest_path.read_text(encoding="utf-8")) == manifest
+
+
+def test_product_application_uses_no_identity_catalog_and_does_not_seed_intake(
+    product_collection, optional_imports_blocked, provider_constructions,
+):
+    _, manifest = runner._prepare(real_inference=True, real_product_images=True)
+    app = runner._application(manifest)
+    try:
+        assert len(provider_constructions) == 1
+        assert provider_constructions[0].arguments["catalog"] is None
+        assert app.state.inventory.evidence.catalog.synthetic is True
+        assert app.state.inventory.inventory().items == ()
+        assert app.state.inventory.evidence.list_batches() == ()
+        assert app.state.inventory.evidence.list_returns() == ()
+    finally:
+        app.state.inference.close()
+
+
+def test_product_check_verifies_sources_without_model_and_cleanup_preserves_originals(
+    product_collection, optional_imports_blocked, provider_constructions, monkeypatch, capsys,
+):
+    captured = []
+    original_prepare = runner._prepare
+
+    def prepare(**options):
+        result = original_prepare(**options)
+        captured.append(result)
+        return result
+
+    monkeypatch.setattr(runner, "_prepare", prepare)
+    assert runner.run(check_only=True, real_inference=True, real_product_images=True) == 0
+    manifest_path, manifest = captured[0]
+    assert not manifest_path.exists() and not Path(manifest["state_dir"]).exists()
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["synthetic_images"] == 0 and summary["original_product_images"] == 2
+    assert summary["real_product_images"] is summary["simulated_intake"] is True
+    assert summary["model_executed"] is summary["browser_run"] is False
+    assert summary["registered_components"] == 0
+    assert len(provider_constructions) == 1 and provider_constructions[0].arguments["catalog"] is None
+    run_dir = Path(manifest["artifacts_dir"])
+    preserved = (run_dir / "runner-result.json").read_text(encoding="utf-8")
+    result = json.loads(preserved)
+    assert result["status"] == "setup_passed"
+    assert result["real_product_images"] is result["simulated_intake"] is True
+    assert result["credentials_removed"] is result["temporary_state_removed"] is True
+    assert manifest["operator_token"] not in preserved and manifest["viewer_token"] not in preserved
+    for path, raw in product_collection.original_bytes.items():
+        assert path.read_bytes() == raw
+
+
+@pytest.mark.parametrize("change", ["hash", "missing_image", "different_group", "holdout", "missing_id"])
+def test_product_source_failure_blocks_setup_before_credentials_or_provider(
+    product_collection, provider_constructions, change,
+):
+    if change in {"hash", "missing_image"}:
+        path = next(iter(product_collection.original_bytes))
+        if change == "hash":
+            raw = path.read_bytes()
+            path.write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))
+        else:
+            path.unlink()
+    else:
+        from product_data import split_for_group
+
+        value = json.loads(product_collection.path.read_text(encoding="utf-8"))
+        image = value["images"][0]
+        if change == "different_group":
+            group = next(f"other-{i}" for i in range(100) if split_for_group(f"other-{i}") == "development")
+            image.update(group_id=group, listing_id=group)
+        elif change == "holdout":
+            group = next(f"holdout-{i}" for i in range(100) if split_for_group(f"holdout-{i}") == "holdout")
+            image.update(group_id=group, listing_id=group, split="holdout")
+        else:
+            value["images"].pop()
+        product_collection.path.write_text(json.dumps(value), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="Product-image setup failed"):
+        runner._prepare(real_inference=True, real_product_images=True)
+    assert not runner.OUTPUT.exists()
+    assert provider_constructions == []
+
+
+@pytest.mark.parametrize("options", [
+    {"real_product_images": True}, {"real_inference": 1},
+    {"real_inference": True, "real_product_images": "yes"},
+])
+def test_product_flags_are_explicit_and_fail_before_source_access(prepared_root, monkeypatch, options):
+    monkeypatch.setattr(runner, "_load_product_sources", lambda: pytest.fail("Invalid flags accessed product data"))
+    for function in (runner._prepare, runner.run):
+        with pytest.raises(RuntimeError):
+            function(**options)
+    assert not runner.OUTPUT.exists()
+
+
+def test_product_cli_passes_explicit_flags_and_check_without_running_model(monkeypatch):
+    monkeypatch.setattr(runner.sys, "argv", ["run_browser_acceptance.py", "--check", "--real-inference", "--real-product-images"])
+    calls = []
+    monkeypatch.setattr(runner, "run", lambda **options: calls.append(options) or 0)
+    assert runner.main() == 0
+    assert calls == [{"check_only": True, "real_inference": True, "real_product_images": True,
+                      "model_dir": None, "device": 1}]

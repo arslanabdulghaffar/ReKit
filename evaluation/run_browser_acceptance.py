@@ -6,6 +6,7 @@ Only screenshots and credential-free results/logs survive the run.
 
 import argparse
 from datetime import UTC, datetime
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -30,6 +31,8 @@ OUTPUT = ROOT / "var" / "mission02-acceptance"
 HOST = "127.0.0.1"
 API_URL = f"http://{HOST}:8000"
 BASE_URL = f"http://{HOST}:5173"
+PRODUCT_IMAGE_IDS = ("71rr7OjqWqL", "812Xgtrv0EL")
+PRODUCT_COMPONENT_ID = "photo-demo-unit"
 
 
 def _console(text: str, *, stream=None) -> None:
@@ -65,12 +68,47 @@ def _checked_directory(path: Path, parent: Path) -> Path:
     return resolved
 
 
-def _prepare(*, real_inference: bool = False, model_dir: Path | None = None,
+def _load_product_sources() -> dict:
+    """Read and verify the fixed development pair; never fetch or alter images."""
+    from product_data import DatasetManifest, MAX_MANIFEST_BYTES, verify_images
+
+    manifest_path = ROOT / "evaluation" / "fixtures" / "abo-manifest.json"
+    with manifest_path.open("rb") as source:
+        raw = source.read(MAX_MANIFEST_BYTES + 1)
+    if len(raw) > MAX_MANIFEST_BYTES:
+        raise RuntimeError("The product-image source manifest exceeds its bound")
+    try:
+        dataset = DatasetManifest.model_validate_json(raw)
+        by_id = {image.image_id: image for image in dataset.images}
+        selected = [by_id[image_id] for image_id in PRODUCT_IMAGE_IDS]
+        if any(image.split != "development" for image in selected) or len({image.group_id for image in selected}) != 1:
+            raise ValueError("The selected pair must come from one development listing")
+        image_root = ROOT / "var" / "evaluation" / "abo"
+        verify_images(dataset.model_copy(update={"images": selected}), image_root)
+    except (KeyError, ValueError) as error:
+        raise RuntimeError(f"Product-image setup failed: {error}") from None
+    return {
+        "images": {PRODUCT_COMPONENT_ID: [str((image_root / image.local_path).resolve()) for image in selected]},
+        "product_sources": [image.model_dump(mode="json") for image in selected],
+        "dataset": dataset.dataset,
+        "dataset_attribution": dataset.attribution,
+        "dataset_source": dataset.source_url,
+        "dataset_license": {"id": dataset.license_id, "url": dataset.license_url},
+        "dataset_manifest_sha256": hashlib.sha256(raw).hexdigest(),
+    }
+
+
+def _prepare(*, real_inference: bool = False, real_product_images: bool = False, model_dir: Path | None = None,
              device: int = 1) -> tuple[Path, dict]:
+    if type(real_inference) is not bool or type(real_product_images) is not bool:
+        raise RuntimeError("Inference and real-product options must be explicit booleans")
+    if real_product_images and not real_inference:
+        raise RuntimeError("Real product images require explicit --real-inference opt-in")
     if type(device) is not int or device < 0:
         raise RuntimeError("The GPU device must be a nonnegative index")
     if model_dir is not None and not real_inference:
         raise RuntimeError("A model directory requires explicit --real-inference opt-in")
+    product_sources = _load_product_sources() if real_product_images else None
     _checked_directory(OUTPUT, ROOT)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     run_dir = Path(tempfile.mkdtemp(prefix="run-ai-" if real_inference else "run-", dir=OUTPUT))
@@ -80,10 +118,23 @@ def _prepare(*, real_inference: bool = False, model_dir: Path | None = None,
         fixture = json.loads((FIXTURES / "synthetic_recovery.json").read_text(encoding="utf-8"))
         if fixture.get("synthetic") is not True or fixture["scenario"].get("scenario_estimate") is not True:
             raise RuntimeError("Browser acceptance requires explicitly synthetic inputs")
+        if real_product_images:
+            timestamp = fixture["batch"]["received_at"]
+            fixture = {
+                "fixture_id": "simulated-intake-real-product-images", "synthetic": True,
+                "description": "Simulated intake only. Original ABO source images have no verified identity or condition.",
+                "catalog_file": fixture["catalog_file"], "disposition_policy_file": fixture["disposition_policy_file"],
+                "batch": {"batch_id": "photo-demo-batch", "received_at": timestamp},
+                "returns": [{"return_id": "photo-demo-return", "batch_id": "photo-demo-batch",
+                             "product_family_id": fixture["returns"][0]["product_family_id"],
+                             "declared_configuration_id": None, "received_at": timestamp}],
+                "components": [{"component": {"physical_component_id": PRODUCT_COMPONENT_ID,
+                                              "source_return_id": "photo-demo-return", "registered_at": timestamp}}],
+            }
         image_dir = state / "input-images"
         image_dir.mkdir()
         images = {}
-        for index, record in enumerate(fixture["components"]):
+        for index, record in enumerate([] if real_product_images else fixture["components"]):
             component_id = record["component"]["physical_component_id"]
             identity = record["verification"]["identity"]
             paths = []
@@ -109,22 +160,27 @@ def _prepare(*, real_inference: bool = False, model_dir: Path | None = None,
             "fixture": fixture, "images": images, "artifacts_dir": str(run_dir),
             "state_dir": str(state),
             "real_inference": real_inference,
+            "real_product_images": real_product_images, "simulated_intake": True,
         }
+        if product_sources is not None:
+            manifest.update(product_sources)
         if real_inference:
             from rekit.inference.adapters.local_transformers import MODEL_REVISION
 
             model_dir = model_dir or ROOT / "models" / "Qwen3-VL-2B-Instruct" / MODEL_REVISION
-            ambiguous_path = image_dir / "synthetic-ambiguous-view.png"
-            with Image.new("RGB", (768, 512), "white") as image:
-                drawing = ImageDraw.Draw(image)
-                drawing.text((30, 20), "SYNTHETIC", fill="black", font=ImageFont.load_default(size=44))
-                drawing.polygon(((200, 140), (70, 390), (330, 390)), fill="red")
-                drawing.ellipse((440, 155, 690, 405), fill="blue")
-                drawing.text((30, 460), "Illustration only - not a product photograph", fill="black",
-                             font=ImageFont.load_default(size=22))
-                image.save(ambiguous_path, format="PNG")
             manifest.update(model_dir=str(model_dir.resolve()), device=device,
-                            model_revision=MODEL_REVISION, ambiguous_image=str(ambiguous_path))
+                            model_revision=MODEL_REVISION)
+            if not real_product_images:
+                ambiguous_path = image_dir / "synthetic-ambiguous-view.png"
+                with Image.new("RGB", (768, 512), "white") as image:
+                    drawing = ImageDraw.Draw(image)
+                    drawing.text((30, 20), "SYNTHETIC", fill="black", font=ImageFont.load_default(size=44))
+                    drawing.polygon(((200, 140), (70, 390), (330, 390)), fill="red")
+                    drawing.ellipse((440, 155, 690, 405), fill="blue")
+                    drawing.text((30, 460), "Illustration only - not a product photograph", fill="black",
+                                 font=ImageFont.load_default(size=22))
+                    image.save(ambiguous_path, format="PNG")
+                manifest["ambiguous_image"] = str(ambiguous_path)
         manifest_path = state / "fixture.json"
         descriptor = os.open(manifest_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8") as file:
@@ -165,7 +221,8 @@ def _application(manifest: dict):
         from rekit.inference.store import InferenceStore
 
         inference = InferenceService(InferenceStore(evidence, assets), LocalVisionProvider(
-            Path(manifest["model_dir"]), device=manifest["device"], catalog=catalog,
+            Path(manifest["model_dir"]), device=manifest["device"],
+            catalog=None if manifest.get("real_product_images") is True else catalog,
         ))
     return create_app(inventory, auth=auth, assets=assets, inference=inference)
 
@@ -268,6 +325,7 @@ def _finish(manifest_path: Path, manifest: dict, processes: list, logs: list,
         "browser_status": status, "browser_exit_code": browser_exit_code,
         "browser_run": len(processes) == 3, "synthetic": True,
         "real_inference_enabled": manifest.get("real_inference", False),
+        "real_product_images": manifest.get("real_product_images", False), "simulated_intake": True,
         "finished_at": datetime.now(UTC).isoformat(),
         "temporary_state_removed": state_removed, "credentials_removed": credentials_removed,
         "error": _redact(error, manifest) if error else None,
@@ -285,8 +343,12 @@ def _finish(manifest_path: Path, manifest: dict, processes: list, logs: list,
         raise RuntimeError(_redact("; ".join(cleanup_errors + reporting_errors), manifest))
 
 
-def run(*, check_only: bool = False, real_inference: bool = False,
+def run(*, check_only: bool = False, real_inference: bool = False, real_product_images: bool = False,
         model_dir: Path | None = None, device: int = 1) -> int:
+    if type(real_inference) is not bool or type(real_product_images) is not bool:
+        raise RuntimeError("Inference and real-product options must be explicit booleans")
+    if real_product_images and not real_inference:
+        raise RuntimeError("Real product images require explicit --real-inference opt-in")
     if type(device) is not int or device < 0:
         raise RuntimeError("The GPU device must be a nonnegative index")
     if model_dir is not None and not real_inference:
@@ -299,7 +361,8 @@ def run(*, check_only: bool = False, real_inference: bool = False,
             raise RuntimeError("Install the pinned local frontend dependencies before browser acceptance")
         for port in (8000, 5173):
             _port_free(port)
-    manifest_path, manifest = _prepare(real_inference=real_inference, model_dir=model_dir, device=device)
+    manifest_path, manifest = _prepare(real_inference=real_inference, real_product_images=real_product_images,
+                                       model_dir=model_dir, device=device)
     run_dir, state = Path(manifest["artifacts_dir"]), Path(manifest["state_dir"])
     processes, logs = [], []
     status = "error"
@@ -310,13 +373,13 @@ def run(*, check_only: bool = False, real_inference: bool = False,
         if check_only:
             app = _application(manifest)
             try:
-                for paths in manifest["images"].values():
+                for paths in ([] if real_product_images else manifest["images"].values()):
                     for path in paths:
                         with Image.open(path) as image:
                             image.load()
                             if image.format != "PNG" or image.size != (720, 440):
                                 raise RuntimeError("Generated acceptance image is invalid")
-                if real_inference:
+                if real_inference and not real_product_images:
                     with Image.open(manifest["ambiguous_image"]) as image:
                         image.load()
                         if image.format != "PNG" or image.size != (768, 512):
@@ -325,7 +388,9 @@ def run(*, check_only: bool = False, real_inference: bool = False,
                 if app.state.inference is not None:
                     app.state.inference.close()
             status = "setup_passed"
-            _console(json.dumps({"setup": "passed", "synthetic_images": sum(len(paths) for paths in manifest["images"].values()) + int(real_inference),
+            _console(json.dumps({"setup": "passed", "synthetic_images": 0 if real_product_images else sum(len(paths) for paths in manifest["images"].values()) + int(real_inference),
+                                 "real_product_images": real_product_images, "simulated_intake": True,
+                                 "original_product_images": len(manifest.get("product_sources", [])),
                                  "registered_components": len(app.state.inventory.inventory().items), "browser_run": False,
                                  "real_inference_enabled": real_inference, "model_executed": False}))
             return 0
@@ -373,7 +438,8 @@ def run(*, check_only: bool = False, real_inference: bool = False,
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Check disposable fixture setup without starting servers or a browser")
-    parser.add_argument("--real-inference", action="store_true", help="Explicitly run two real GPU inspections inside browser recovery acceptance")
+    parser.add_argument("--real-inference", action="store_true", help="Run actual GPU inference: two synthetic inspections, or one joint inspection with --real-product-images")
+    parser.add_argument("--real-product-images", action="store_true", help="Use a verified original ABO pair with simulated intake; requires --real-inference")
     parser.add_argument("--model-dir", type=Path, help="Server-controlled verified local checkpoint directory; never downloaded by this runner")
     parser.add_argument("--device", type=int, default=1, help="Single CUDA GPU index for the optional real inference scenario")
     parser.add_argument("--serve-state", type=Path, help=argparse.SUPPRESS)
@@ -386,6 +452,7 @@ def main() -> int:
         return 0
     try:
         return run(check_only=arguments.check, real_inference=arguments.real_inference,
+                   real_product_images=arguments.real_product_images,
                    model_dir=arguments.model_dir, device=arguments.device)
     except (RuntimeError, OSError) as error:
         _console(f"Acceptance runner failed: {error}", stream=sys.stderr)

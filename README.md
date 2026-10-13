@@ -6,8 +6,9 @@ system combines guided capture, AMD multimodal inference, traceable evidence,
 approved BOMs, economic planning, human review, and transactional execution.
 
 The current implementation is a local, operator-confirmed Python backend and
-React operator workbench. AMD
-inference is a required future integration; it has not been deployed or measured.
+React operator workbench. Local GPU inference and a server-configured remote
+vision adapter are implemented. The remote adapter has offline qualification;
+actual AMD deployment and inference remain required, uncompleted gates.
 
 ## What works
 
@@ -41,6 +42,16 @@ inference is a required future integration; it has not been deployed or measured
   model observations and uncertainty, and supports another-view uploads and
   accountable rejection. Proposal review only prefills identity fields; explicit
   human verification, condition review, and evidence selection remain required.
+- A verified cache of 52 ABO catalog images, source/license/hash manifests, and
+  separate human-review queues. All image labels and output assessments remain
+  pending; no independent human reviews or recognition-accuracy results exist.
+  Mission 04 Task 2 made 26 actual local GPU requests over the same 13-case sample
+  before and after a catalog-scope correction. No-catalog candidate violations
+  changed from 9/13 to 0/13: a protocol improvement, not a visual-accuracy result.
+- An optional `openai-remote` adapter with an exact HTTPS allowlist, original-byte
+  image transport, bounded execution, strict output validation, and no automatic
+  retry or fallback. Offline tests do not attest remote weights, runtime, or AMD
+  hardware. See the [AMD activation gate](deploy/amd/README.md#activation-checklist).
 
 ## Run and test locally
 
@@ -115,6 +126,36 @@ This adds two real inspections, including an ambiguous illustration, before
 explicit human review and normal recovery execution. It downloads nothing.
 The default browser command remains a manual recovery regression without AI.
 
+A separate Mission 04 mode uses two original ABO product views in one simulated
+intake record and makes one real joint local inspection:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_browser_acceptance.py --real-inference --real-product-images --device 1
+```
+
+It supplies no matching identity catalog, leaves the component unverified and
+held, and exercises an explicit operator-role rejection and additional-view
+request. The photographs are catalog sources, not an actual returned kit;
+automation does not create independent human labels. Its first actual browser/API
+acceptance passed in 49.8 seconds, with one joint GPU request, held inventory,
+zero page errors and successful cleanup. Artifacts are in
+`var/mission02-acceptance/run-ai-_hto37ic/`; see the
+[Mission 04 report](docs/reports/development-mission-04.md) for the recorded outcome.
+Together with Task 2, this totals 27 local requests on real catalog imagery; the
+browser/API request is counted once. Keep it separate from the synthetic two-kit recovery
+demonstration in the [demo script](docs/demo-script.md).
+
+Check the existing image cache without downloading or running a model:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/product_data.py check --manifest evaluation/fixtures/abo-manifest.json --root var/evaluation/abo
+```
+
+[Real-product evaluation](docs/real-product-evaluation.md) documents the source
+limitations, actual before/after outputs, independent-review workflow, and
+reproduction commands. Pending reviews contribute zero semantic denominators,
+so accuracy remains unmeasured rather than 0% error.
+
 The pinned local provider uses schema-constrained generation followed by strict
 domain validation. Two complete real-AI browser runs passed during Mission 03,
 including explicit rejection of an unsupported revision claim and separate human
@@ -138,12 +179,12 @@ reported separately.
 | `backend/src/rekit/recovery/` | CPU CP-SAT, integer economics, actual solver status, deterministic explanations |
 | `backend/src/rekit/inventory/` | Proposals, approvals, transactions, reservations, completion, audit |
 | `backend/src/rekit/workflows/` | Reserved boundary for richer review, rebuild instructions, and rework orchestration |
-| `backend/src/rekit/inference/adapters/` | Optional local Transformers GPU provider; future AMD ROCm/vLLM provider |
+| `backend/src/rekit/inference/adapters/` | Local Transformers GPU inference and bounded remote HTTPS transport; actual AMD qualification pending |
 | `backend/src/rekit/inference/` | Provider boundary, bounded worker, validated results, immutable run provenance |
 | `backend/src/rekit/integrations/evolus/` | Optional future integration through approved application commands |
 | `frontend/` | React, TypeScript, and Vite operator workbench and focused UI tests |
 | `tests/backend/`, `tests/fixtures/` | Automated contracts, integration tests, labeled synthetic inputs |
-| `evaluation/` | Reproducible synthetic CPU evaluation and future perception/AMD measurement plan |
+| `evaluation/` | Synthetic CPU recovery, real-image source integrity, local GPU evaluation, human-review queues, and browser acceptance |
 | `deploy/amd/` | AMD qualification and deployment boundary |
 | `docs/` | Architecture, contracts, workflow limits, and roadmap |
 
@@ -204,11 +245,17 @@ Read [architecture](docs/architecture.md), [domain contracts](docs/domain-contra
 [inventory execution](docs/inventory-workflow.md), and the [roadmap](docs/roadmap.md).
 The [foundation report](docs/foundation-report.md) is a historical inspection record.
 
-Mission 03 adds real local GPU inspection, immutable inference provenance, and
+Mission 03 added real local GPU inspection, immutable inference provenance, and
 AI-assisted human review. The [mission report](docs/reports/development-mission-03.md)
 separates actual execution measurements, software checks, and observed model errors.
 Task 5 resolved the earlier output-contract blocker with constrained decoding.
-Current-version API, repeated real-AI browser acceptance, and the original
+Its recorded API, repeated real-AI browser acceptance, and the original
 recovery regression passed; the report preserves the earlier failed attempts.
-Representative photo evaluation and AMD qualification remain required before a
-credible end-to-end AMD demonstration.
+Mission 04 adds bounded real catalog-image evaluation and review queues, a
+qualified offline remote transport, and a separate product-image browser mode.
+Independent human semantic review and actual AMD execution remain outstanding.
+Use the [Mission 04 report](docs/reports/development-mission-04.md),
+[AMD activation checklist](deploy/amd/README.md#activation-checklist),
+[demo script](docs/demo-script.md), and
+[submission checklist](docs/hackathon-submission-checklist.md) to distinguish
+completed evidence from remaining delivery gates.

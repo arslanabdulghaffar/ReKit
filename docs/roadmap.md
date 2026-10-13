@@ -104,8 +104,9 @@ Linux/ROCm/vLLM runtime, and compatible open vision-language model. Verify acces
 license, immutable model revision, image request format, memory fit, and real
 request behavior. Keep the current Windows CUDA environment separate.
 
-Implement the existing `VisionProvider` interface as a narrow AMD adapter,
-retaining `InferenceService`, parsing, and `InferenceStore` authority boundaries.
+Configure and qualify the implemented `openai-remote` provider against the selected
+actual AMD endpoint, retaining `InferenceService`, parsing, and `InferenceStore`
+authority boundaries. Its offline transport qualification does not establish AMD execution.
 Record timeouts, malformed outputs, refusal/uncertainty, runtime/model provenance,
 and representative measured results. No model may set compatibility, calculate
 financial results, reserve inventory, or grant human approval.

@@ -1,119 +1,238 @@
-# ReKit Development Mission 04 — Task 1 recovery progress
+# ReKit Development Mission 04 — Recovery and completion
 
-Date: October 14, 2026 (Asia/Seoul).
+October 14, 2026, Asia/Seoul. Repository: `A:\hackathon\ReKit`.
 
-Mission 04 is incomplete. The separately authorized Task 1 recovery has successfully finalized the existing cached collection, produced its source manifest, and passed independent acceptance checks and updated tests. The Task 1 commit/push is pending at this interim report. Tasks 2–4 remain pending. The earlier stopped attempt and native-crash evidence are preserved; no source data was replaced or downloaded again.
+The four local development tasks passed their acceptance checks: cached-data recovery, real-image evaluation, offline AMD transport preparation, and the two separate demonstrations. Independent human semantic review and actual AMD execution remain outstanding. This is not a production-readiness or hackathon-eligibility claim.
 
-## Current task outcomes
+The final Task 4 commit contains this report. Its own SHA and post-push Actions result cannot be embedded in that same commit; they will be recorded in the completion addendum and ignored `var/mission04-final/final-verification.json` after independent remote verification. Earlier exact commits and CI outcomes are below.
 
-| Task | Outcome |
+## 1. Recovery, source integrity and dataset acceptance
+
+Before changes, six uncommitted files, crash/download ledgers and all 73 cached objects were preserved under `var/recovery/mission04-20261014-031112/`. No valid image or metadata object was removed, replaced or downloaded again.
+
+The earlier native failure was exit `-1073741819` / `0xC0000005`, with Windows identifying `python312.dll`; a diagnostic stack reached `json.decoder.raw_decode`. Its **root cause remains unknown**. The evidence does not establish source corruption, a Python defect, hardware failure, a Unicode trigger or a responsible native extension.
+
+Only recovery Approach A was needed. All 16 shards parsed successfully in fresh standard-library interpreters. The finalizer now uses serial isolated child processes with `-I -S -X utf8 -X faulthandler`, bounded records/decompressed data/output/time, compact retained fields, and original shard/hash/source-line validation. It streams relevant image-index entries and delays native application imports. Failed parsing cannot publish a successful manifest or rewrite receipts.
+
+Cached finalization exited 0 twice, in 8.1 and 8.8 seconds. Repetition reproduced every manifest field except the top-level finalization timestamp. Independent acceptance verified all 52 image-to-listing/source associations, index URLs/dimensions and original hashes. A separate all-shard diagnostic passed in 40.13 seconds, with a 2,752,844-byte tracemalloc peak; that is traced Python allocation, not total process RAM. This is a working mitigation, not a crash explanation.
+
+| Preserved assets | Count | Bytes | Original budget |
+| --- | ---: | ---: | ---: |
+| JPEG image objects | 52 | 9,809,702 | 200 MiB |
+| Metadata, index and source documents | 21 | 93,897,585 | 150 MiB |
+
+These are receipted acquisition totals, not exact total network traffic: earlier small documentation reads and three 32-KiB range probes were outside that ledger. Recovery downloaded no additional assets.
+
+The final manifest has **52 images, 48 listing groups, four additional same-listing views, 34 development images and 18 holdout images**, across six categories. Group splits prevent the same listing from entering both splits. Listing identity does not establish a unique physical returned unit.
+
+Source and license: [official Amazon Berkeley Objects distribution](https://amazon-berkeley-objects.s3.us-east-1.amazonaws.com/index.html), [CC BY 4.0 distribution license](https://amazon-berkeley-objects.s3.us-east-1.amazonaws.com/LICENSE-CC-BY-4.0.txt). Credit: Amazon Berkeley Objects data and images © Amazon.com; dataset-builder credit is retained in the manifest and [source guide](../real-product-evaluation.md#source-license-and-attribution). Original bytes are unchanged; shared crops/overlays must be identified and attribution retained.
+
+The collection includes catalog photographs, composites, a logo (`61OnkGVhMWL`) and reference charts (`51ajqjMk6hL`, `51a0DlkplcL`). It is not 52 independently certified product photographs, representative return damage, or verified kit inventory.
+
+Final read-only audit: `var/mission04-final/cache-integrity-audit.json`. All **73/73** originals match preserved records and current receipts; all nine backup copies and the original download, transfer and crash ledgers remain unchanged. The manifest SHA-256 is `4c04cbf85ba9fe0d025b2f1dfd0c0d3c6dbd22a67f82daeb506f9c7b925758bc`.
+
+## 2. Actual local evaluation and targeted repair
+
+The existing model remains **Qwen/Qwen3-VL-2B-Instruct**, Apache-2.0, revision `89644892e4d85e24eaac8bacfd4f463576704203`. No additional model or dependency was installed.
+
+Measured runtime: Python 3.12.10, PyTorch 2.9.0+cu128, torchvision 0.24.0+cu128, CUDA 12.8, Transformers 4.57.6, LM Format Enforcer 0.11.3, and NVIDIA RTX 4080 SUPER on `cuda:1`. The two-GPU environment, drivers and CUDA installation were preserved.
+
+Settings: EXIF-aware RGB input, maximum side 768, processor area bounds 65,536–589,824, maximum 8,192 input tokens and 512 generated tokens, greedy decoding, bfloat16/SDPA, 120-second cooperative generation and 150-second service deadlines. Prompt `rekit-inspection-v5-constrained` and its SHA-256 `3fdef4495d4eba03cc6af53e9b1778afc7821d46d6d22460e0422bb5a9846fe2` stayed unchanged.
+
+Task 2 ran the same preselected **13 development cases** before and after the change: 12 single-image requests and one joint two-image request per pass. That is **26 real-image GPU requests, 28 image presentations, 13 unique images and 12 listing groups**. Holdout images were not evaluated.
+
+| Result | Baseline schema v1 | Catalog-scope schema v2 |
+| --- | ---: | ---: |
+| Attempted/completed requests | 13/13 | 13/13 |
+| Accepted schema/provenance responses | 13/13 | 13/13 |
+| Responses proposing candidates without a supplied catalog | 9/13 | 0/13 |
+| Instructed/constrained abstention | 4/13 | 13/13 |
+| Observation records / marking records | 23 / 5 | 23 / 5 |
+| Identity / revision candidates | 9 / 9 | 0 / 0 |
+| Additional-view records | 13 | 13 |
+| Source-reference records / individual links | 45 / 45 | 36 / 36 |
+| Independently reviewed cases | 0 | 0 |
+
+The baseline proposed catalog identities/revisions despite receiving no catalog. Schema v2 now forbids candidates in that mode; catalog-backed requests retain unverified hypotheses. Strict parsing rejects a violation with raw text preserved and no applied model events.
+
+Actual decoder tests exposed that LM Format Enforcer 0.11.3 permits a first array member despite `maxItems: 0`: the first focused gate had two failures and 90 passes. A narrow immutable character-parser guard now enforces an empty top-level candidate array, including escaped/reordered JSON, without patching the installed package or deleting generated claims. The corrected focused and full gates passed.
+
+The measured 9/13-to-0/13 change demonstrates **catalog-scope enforcement, not improved recognition accuracy or semantic abstention**. Free-text claims can still be incorrect, contradictory or clipped at their field limit; view suggestions can repeat existing information. Both original outputs remain available, with no failed cases silently removed:
+
+- `var/evaluation/abo/qwen-baseline-v1.json` — SHA-256 `f731569d02617dd077843516a3a44d76c609c46ccf56908bf4c186a8a54aa128`.
+- `var/evaluation/abo/qwen-after-v2.json` — SHA-256 `791dac0795263fc5e42978baf93cd568be177c484fd9b48111cc592a032730ea`.
+
+| GPU measurement | Baseline, n=13 | After, n=13 |
+| --- | ---: | ---: |
+| Inference seconds: minimum / median / nearest-rank p95 / maximum | 33.314 / 50.594 / 90.833 / 90.833 | 15.599 / 20.942 / 35.416 / 35.416 |
+| Wall seconds: minimum / median / p95 / maximum | 33.404 / 50.717 / 90.998 / 90.998 | 15.658 / 21.022 / 35.513 / 35.513 |
+| Cold inference, n=1 / warm median, n=12, seconds | 55.105 / 50.519 | 24.763 / 20.269 |
+| One cold model load, seconds | 4.694 | 3.879 |
+| Model-load peak allocated bytes | 4,256,128,000 | 4,256,128,000 |
+| Maximum inference allocated / reserved bytes | 4,904,651,776 / 4,980,736,000 | 4,904,651,776 / 4,980,736,000 |
+
+These are single sequential passes with different generated text, not repeated controlled performance trials. Lower observed latency does not establish a causal speedup or production guarantee. Load metrics repeated in request metadata describe one cold load per process.
+
+## 3. Human review and valid denominators
+
+Independent human labels remain **0**. All **52 image reviews are pending** in `var/evaluation/abo/reviews.json`. Both output queues contain **13 pending, zero reviewed cases**:
+
+- `var/evaluation/abo/review-baseline-v1/index.html`
+- `var/evaluation/abo/review-after-v2/index.html`
+
+The queues display original inputs before collapsed predictions, preserve source/raw-result hashes, require an explicit independent reviewer declaration, and export separate assessments. Editing assessments does not grant inventory authority. Browser QA loaded 13 cards/14 images, checked desktop/mobile display and confirmed a pending-only export; artifacts are in `var/mission04-review-qa/run-2026-10-13T18-46-32-219Z/`.
+
+Unsupported identity, unsupported revision, unsupported marking, incorrect visual source attribution, useful additional views, exact transcription and human-correction metrics each have **null numerator, denominator 0, null rate, and 13 excluded cases per queue**. Absence, uncertainty, pending and missing assessments are excluded as documented. Recognition accuracy is **not yet measurable**, not 0% error. Valid image indices and matching byte hashes do not establish visually correct attribution.
+
+## 4. AMD provider preparation
+
+The existing `VisionProvider` boundary now supports trusted `disabled`, `local-transformers` and `openai-remote` selection. Remote credentials remain server-only. The adapter uses an exact HTTPS endpoint allowlist, verified TLS, original-byte base64 transport for one/two images, strict requested/advertised model-ID matching, versioned configuration/schema provenance, bounded bodies and explicit errors. There is no automatic retry, model substitution or local fallback.
+
+Limits include 10 MiB per image, 16 million pixels, 8,192-pixel dimensions, 30 MiB request, 128 KiB response and a maximum 120-second request budget. An isolated standard-library worker and deadline timer bound DNS/TLS/slow I/O, including blocked stdin. On timeout the worker is killed/reaped; OS spawn/cleanup overhead may exceed the nominal wall budget, and remote GPU cancellation is not guaranteed.
+
+Offline qualification covers valid/invalid JSON and schema, unsupported requests, 401/403, 429, unavailable/oversized/malformed responses, incorrect model/provenance/image attribution, stale evidence, authorization and absence of inventory authority. Final focused gate: **237 passed**, comprising 64 transport, 104 provider and 69 inference-API cases. These are controlled transport simulations and local subprocess tests, not AMD results.
+
+The first Task 3 Linux CI run exposed two failures after 967 passes/25 skips: killed-worker stdin remained open, followed by its delayed ResourceWarning in another test. The parent now explicitly closes all subprocess pipes. The first local repair run also exposed two incomplete process test doubles; they were updated to expose real pipe attributes, without relaxing assertions. The next 237-case gate passed, and corrective Linux CI passed. Diagnostic log: `var/mission04-ci/task3-initial-backend.log`.
+
+A response model-name match does not attest weights or hardware. Configured model/processor revisions remain explicitly server-declared and unverified; remote runtime, schema-enforcement and hardware proof are unknown. Client image hashes prove encoded inputs, not remote visual processing.
+
+[AMD access research](../amd-access.md) distinguishes official Developer Cloud, event TokenFactory and separate Radeon documentation. The [event page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii) describes TokenFactory access without the $100 voucher; the [public portal](https://notebooks.amd.com/tokenfactory) did not establish an authenticated vision model, exact API contract, two-image/schema support, immutable revisions or AMD execution evidence for ReKit. Generic vLLM capability is not deployment qualification.
+
+**Actual AMD requests: 0. Credits spent: 0. Deployments: 0.** The [activation checklist](../../deploy/amd/README.md#activation-checklist) requires authorization/access, exact model and endpoint capabilities, real deployment/runtime/hardware provenance, and bounded actual one/two-image and application tests. AMD remains on the delivery path.
+
+## 5. Demonstrations and final validation
+
+The real-product run used original images `71rr7OjqWqL` and `812Xgtrv0EL`, one listing's development views, with one simulated physical-unit record and no matching inference catalog. It passed actual browser/API acceptance on the first attempt in **49.8 seconds**, Chrome 154.0.8037.98.
+
+Artifacts: `var/mission02-acceptance/run-ai-_hto37ic/`, including `product-inference-results.json`, `runner-result.json`, `desktop-product-inspection.png`, `mobile-product-inspection.png` and `product-review-held.png`. All three screenshots were inspected. The run verified original hashes, actual joint visual execution, visible unverified output, scripted operator rejection, a readable-label/detail request, duplicate-upload identity preservation, 401/403 rejection, zero page errors and cleanup. Inventory stayed held with zero verifications, plans, reservations or kits. Scripted review did not create human ground truth.
+
+Its **one actual request** returned two appearance observations, no candidates, one uncertainty and one back-view request. The uncertainty ended mid-sentence; the output remains unchanged and unverified. Inference took **38.313 s**, whole provider request **46.990 s**, model load **3.822 s**, with **4,901,876,736 allocated / 4,949,278,720 reserved peak bytes**, 1,503 input tokens and 156 output tokens.
+
+Mission 04 totals are **27 actual real-image requests**, **30 image presentations**, still **13 unique images / 12 listing groups**. The browser/API request is counted once. Two additional genuine GPU requests used synthetic illustrations in the existing AI regression; total local GPU requests across these Mission 04 checks are **29**.
+
+The separate synthetic recovery gates passed:
+
+| Run | Outcome and artifact directory |
 | --- | --- |
-| 1 — Real-product collection | Acceptance passed: 52 images, 48 listing groups, four extra same-listing views; independent verification, deterministic repeat and updated tests passed. Commit/push pending. |
-| 2 — Actual GPU evaluation and improvements | Not started. No real-product inference, quality comparison, or model improvement claimed. |
-| 3 — AMD remote provider | Not started. No provider switch, transport simulations, or TokenFactory capability verification completed in this mission. |
-| 4 — Demonstration and final validation | Not started. Real-image demonstration, submission checklist, demo script and final mission validation remain outstanding. |
+| Existing AI browser regression | Passed, about 1.2 minutes; `var/mission02-acceptance/run-ai-n2j7_p4b/`. Two actual synthetic-image requests succeeded; their inference times were 35.052 and 22.262 seconds. The second reused loaded weights. |
+| Default browser recovery | Passed, 4.4 seconds; `var/mission02-acceptance/run-qz_ybush/`. No GPU request. |
+| Actual CPU synthetic evaluation | OR-Tools 9.15.6755 returned OPTIMAL: three returns, four unique components, two completed kits, four consumed components, 60 labor minutes, four audit events and USD 175 modeled value. |
 
-## Recovery evidence and scope
+The AI regression still proposed unsupported `body/A` identity on ambiguous shapes; explicit operator rejection preserved that defect. Subsequent synthetic verification used original fixture evidence and linked the runs. Both recovery browser modes exercised four exclusive reservations and two explicit completions. Their USD 175 is an illustrative scenario estimate, not realized savings. No unrelated retail photos were converted into a real recovered kit. All three browser runs removed temporary credentials/state and reported no cleanup errors. All 13 AI/default regression screenshots were independently inspected: no layout blockers or visible credentials, and reservation/final-inventory states matched the records. Audit: `var/mission04-final/browser-artifact-audit.json`.
 
-Before editing, the accepted HEAD and six uncommitted files were preserved. `var/recovery/mission04-20261014-031112/preservation.json` records their hashes, backups of the crash and download ledgers, and successful verification of all 73 cached assets: 21 metadata/source documents and 52 original JPEGs. Original crash records and byte accounting remain intact.
+Commands executed from the repository root, using the existing environment unless noted:
 
-Only **Approach A: isolated Python parsing** was used. All 16 listing shards parsed successfully in fresh standard-library-only interpreters; their exit codes and read-only diagnostics are in `var/recovery/mission04-20261014-031112/approach-a-shards.json`. The implementation now launches one shard per serial child using `-I -S -X utf8 -X faulthandler`, limits record/decoded/projected size and child time, and validates child results against the original shard hash. It retains compact selection fields and source shard/line, streams the image index for referenced IDs, and imports Pydantic/Pillow only after metadata parsing. A failed child cannot publish a successful manifest or change acquisition receipts.
-
-Actual `evaluation/prepare_abo.py --cached-only` finalization exited **0** twice, with command wall times of 8.1 and 8.8 seconds. The first wrote `evaluation/fixtures/abo-manifest.json`; the repeat matched every manifest field except the top-level `downloaded_at` finalization timestamp. The result records 52 images across 48 listing groups: 34 development images and 18 holdout images. The power-accessory category contains 12 images, including four extra views; each other category contains eight. An independent standard-library audit verified the source shard/line, listing/domain and image membership for all 52 images; official CSV URL/dimensions and original-byte SHA-256 checks also passed 52/52. The integrity CLI verified all images and the separate review template contains 52 pending entries.
-
-A diagnostic across all 16 shards also passed in 40.13 seconds. It reported a `tracemalloc` peak of 2,752,844 bytes and 26,879 currently traced bytes at the last observation. These are traced Python allocations, **not total process RAM**. The production parser's successful isolated execution and lower retained metadata are the acceptance evidence; these measurements do not establish why the earlier process crashed.
-
-This is an effective mitigation, not an established explanation of the native crash. No source corruption, Python defect, hardware fault, specific native extension or Unicode trigger has been proven responsible. No alternate Node parsing approach, new dependency, Python reinstall, CUDA/driver change or model change was needed. No GPU inference has run in this Task 1 recovery.
-
-## Preserved earlier stop history
-
-The first acquisition reached final manifest validation and exposed a schema limit of 16 metadata receipts versus 21 actual receipts. That limit was corrected to 32; image identifiers containing `+` are also supported. Subsequent processing produced inconsistent JSON errors, although a separate parse of all 16 cached listing shards succeeded. Another acquisition exited without output. Instrumented diagnostics reproduced a JSON delimiter error, then a fatal access violation inside `json.decoder.raw_decode`.
-
-Python reported exit `-1073741819` (`0xC0000005`). Windows Application Error records at approximately 01:36 and 01:37 identify `python312.dll`, fault offset `0x00000000000be1b7`. A diagnostic verified cached receipts before parsing. Troubleshooting stopped under the earlier bounded-attempt rule before the new recovery authorization. The prior 703 passing CPU tests did not establish real-data acceptance. No interpreter, driver, CUDA, or hardware configuration was changed. Local crash records remain at `var/evaluation/abo/python-crash-events.json`; the complete earlier stop report is also preserved in the recovery backup.
-
-## Exact source files created
-
-- `evaluation/prepare_abo.py` — official-object acquisition, persistent byte budgets, receipt/hash checks, deterministic selection, and manifest finalization.
-- `evaluation/product_data.py` — strict manifest, local image integrity checks, listing-level splits, and separate independent-human-review ledger.
-- `tests/backend/test_abo_acquisition.py` — 44 offline acquisition and isolated-parser tests, including synthetic selection and failure boundaries.
-- `tests/backend/test_product_data.py` — 49 manifest, integrity, and review tests.
-- `docs/real-product-evaluation.md` — source/license evidence, attribution, isolated parsing, cached finalization and independent review instructions.
-- `docs/reports/development-mission-04.md` — this report.
-- `evaluation/fixtures/abo-manifest.json` — actual source/license, listing/group, image-byte and pending-review manifest; no image bytes.
-
-The six preserved source/documentation files and the new manifest form the current seven-file Task 1 increment. No new source directory was required. The final reviewed staging set, commit and independently verified push will be recorded after acceptance; this interim report claims none of them.
-
-Ignored storage at `var/evaluation/abo/` contains `metadata/`, `images/`, acquisition ledgers and crash evidence. Exact downloaded filenames, source URLs, SHA-256 values, byte sizes and timestamps remain in the original download ledger. The source manifest is now separate from those receipts; human annotations and generated diagnostics remain outside Git.
-
-## Dataset, license, and ground truth
-
-Source: the [official Amazon Berkeley Objects distribution](https://amazon-berkeley-objects.s3.us-east-1.amazonaws.com/index.html), using individual public S3 objects rather than archives. The distributed READMEs and [license file](https://amazon-berkeley-objects.s3.us-east-1.amazonaws.com/LICENSE-CC-BY-4.0.txt) specify CC BY 4.0. The [AWS registry](https://registry.opendata.aws/amazon-berkeley-objects/) records the 2023 change from CC BY-NC to CC BY.
-
-Attribution: Amazon Berkeley Objects data and images © Amazon.com. Dataset builders: Matthieu Guillaumin, Thomas Dideriksen, Kenan Deng, Himanshu Arora, Arnab Dhua, Xi (Brian) Zhang, Tomas Yago-Vicente, Jasmine Collins, Shubham Goel, and Jitendra Malik. Original downloaded bytes are unchanged. Shared examples must retain appropriate credit, source and license links, identify modifications, and avoid implied endorsement.
-
-Receipted acquisition totals:
-
-| Assets | Count | Exact bytes | Approximate MiB | Mission limit |
-| --- | ---: | ---: | ---: | ---: |
-| Metadata, index, license, READMEs | 21 | 93,897,585 | 89.55 | 150 MiB |
-| Original product-image objects | 52 | 9,809,702 | 9.36 | 200 MiB |
-
-Small preliminary documentation reads and three 32-KiB metadata range probes are outside these acquisition-ledger totals; the totals are not a claim of exact overall network traffic. No image archive, 3D package, additional model, or container was downloaded.
-
-The actual finalized selection contains 48 listing groups across six categories plus four additional same-listing views, totaling 52 images. Photographic versus rendered/composite content, difficult-case coverage and physical identity remain unreviewed. Listing metadata does not establish visible identity or revision, and a listing group is not a unique returned physical unit.
-
-Contact-sheet triage identified a logo-only image (`61OnkGVhMWL`), USB reference charts (`51aqijMk6hL` and `51a0DIkpJcL`), and composites. The acquired set is therefore described as catalog imagery, not 52 verified product photographs. This triage did not create human-reviewed labels or establish image-level truth. Task 2 must retain this limitation and identify the actual product-view subset used for examples. Original download/transfer ledgers and crash JSON were also rechecked and remain hash-identical to the preserved copies.
-
-Independent human reviews: **0**. Images awaiting review: **52**. Accuracy denominator: **0 eligible reviewed images**; accuracy is **not yet measurable**, not 0%. The review tooling binds annotations to original image IDs and hashes and rejects pending annotations that assert reviewed truth. The generated template contains 52 pending entries; generating it did not create any human review.
-
-## Model, runtime, and evaluation metrics
-
-The accepted baseline remains Qwen3-VL-2B-Instruct revision `89644892e4d85e24eaac8bacfd4f463576704203`. Environment inspection found Python 3.12.10, PyTorch 2.9.0+cu128, torchvision 0.24.0+cu128, CUDA 12.8, and two GPUs. Node.js 26.3.1 and npm 11.16.0 were available. No dependency was added, installed, or upgraded.
-
-Mission 04 model requests: **0**. No inference settings were changed or exercised. Schema-valid response rate, unsupported identity/revision/marking rates, abstention behavior, transcription quality, incorrect source attribution, useful recapture requests, and human corrections are all **not measured**. Their evaluation numerators are unavailable and denominators are zero because no inference cases ran; no percentages are calculated. Inference latency distribution and GPU memory usage are also not measured. There is no before/after comparison and no quality gain or regression claim. Additional models downloaded: **0**.
-
-## Validation and Git
-
-The following results belong to the **earlier stopped attempt**. They are retained as history and are not the acceptance gate for the changed parser:
-
-| Command/check | Result |
+| Validation command/check | Result |
 | --- | --- |
-| `.venv\Scripts\python.exe -m pytest -q -W error` before changes | 631 passed in 27.60 seconds. |
-| `.venv\Scripts\python.exe -m pytest -q -W error tests/backend/test_product_data.py` | 49 passed in 0.82 seconds. |
-| `.venv\Scripts\python.exe -m pytest -q -W error tests/backend/test_abo_acquisition.py` | 23 passed in 0.67 seconds; synthetic files and transport only. |
-| `.venv\Scripts\python.exe -m pytest -q -W error` after changes | 703 passed in 25.27 seconds. |
-| `.venv\Scripts\python.exe -m pip check` | No broken requirements found. |
-| `.venv\Scripts\python.exe evaluation/prepare_abo.py` | Failed real-data acceptance as described above. |
-| Read-only cached-shard parsing and `-X faulthandler` diagnostics | Inconsistent parse outcomes; native access violation captured. |
-| `git diff --check`, scoped secret-pattern/artifact checks | Passed; no flagged secrets or forbidden unignored artifacts. Pattern checks are not a comprehensive secret audit. |
-| `git check-ignore`, `git status --short`, `git diff --cached --stat` | Local assets ignored; six untracked source/documentation files; index empty. |
-| `git rev-parse HEAD`, `git rev-parse origin/main`, `git ls-remote origin refs/heads/main` | All match the accepted baseline SHA below. |
+| `.venv\Scripts\python.exe -W error -m pytest -q` | **1,007 passed in 30.97 s** on the final implementation tree. |
+| Focused acquisition tests / manifest-review tests | Task 1: **44 / 49 passed**; full Task 1 **724 passed**. |
+| Task 2 focused/full backend gates | **185 / 806 passed**. |
+| `.venv\Scripts\python.exe -W error -m pytest tests/backend/test_remote_transport.py tests/backend/test_remote_provider.py tests/backend/test_inference_api.py -q` | **237 passed in 8.67 s**, after the pipe fix. |
+| Browser-runner CPU tests | **30 passed in 1.34 s**; no downloaded corpus or GPU required. |
+| `npm.cmd test`, in frontend | **51 passed in 27.98 s**. |
+| `npm.cmd run typecheck`; `npm.cmd run build`, in frontend | Passed. |
+| `.venv\Scripts\python.exe -m pip check`; `npm.cmd ls --all` | Passed; npm lists unused optional peers without a dependency failure. |
+| `evaluation/prepare_abo.py --cached-only`, original/repeat destinations | Both actual finalizations passed without downloads. |
+| `evaluation/product_data.py check --manifest evaluation/fixtures/abo-manifest.json --root var/evaluation/abo` | 52 images/48 groups verified; zero reviewed. |
+| `evaluation/product_review.py check`, exact saved-queue commands below | Both digest-bound assessments valid; 13 pending each. |
+| `.venv\Scripts\python.exe -I -S var/mission04-final/audit_cache.py` | All 73 originals and preserved ledgers verified. |
+| `evaluation/run_product_evaluation.py`, exact baseline/after commands below | Two real 13-request GPU passes completed; immutable artifacts listed above. |
+| `evaluation/run_browser_acceptance.py --check --real-inference --real-product-images` | Original-pair setup passed without GPU/services. |
+| `evaluation/run_browser_acceptance.py --real-inference --real-product-images` | Actual real-image browser/API gate passed. |
+| `evaluation/run_browser_acceptance.py --real-inference` | Existing actual-AI synthetic browser regression passed. |
+| `evaluation/run_browser_acceptance.py` | Default browser regression passed. |
+| `evaluation/run_synthetic.py` | End-to-end CPU recovery and both greedy comparisons passed. |
+| Scoped secret/artifact scan; `git diff --check` | 134 source/document files and 18 final browser JSON/log files scanned without flagged secrets; no forbidden tracked/unignored assets; whitespace check passed. Pattern scans are not a comprehensive secret audit. |
 
-Recovery acceptance results:
+The two historical GPU commands and final review checks were:
 
-| Command/check | Result |
-| --- | --- |
-| Preservation receipt verification | All 73 cached objects match their original byte sizes and SHA-256 values; six source/documentation files and crash/download records backed up. |
-| Fresh standard-library listing-shard diagnostics | All 16 shards exited 0. |
-| `evaluation/prepare_abo.py --cached-only` and repeat to a fresh manifest path | Both exited 0; 8.1 and 8.8 seconds command wall time; all manifest fields identical except top-level `downloaded_at`. No new downloads. |
-| Independent source audit | 52/52 original listing/domain/image associations, 52/52 index URLs and dimensions, and 52/52 original image hashes verified. |
-| `evaluation/product_data.py check --manifest evaluation/fixtures/abo-manifest.json --root var/evaluation/abo` | All 52 images verified across 48 groups. |
-| `evaluation/product_data.py review-template --manifest evaluation/fixtures/abo-manifest.json --output var/evaluation/abo/reviews.json` | 52 pending entries created; zero human reviews. |
-| `.venv\Scripts\python.exe -m pytest -q -W error tests/backend/test_abo_acquisition.py` | 44 passed in 1.91 seconds. |
-| `.venv\Scripts\python.exe -m pytest -q -W error` | 724 passed in 35.79 seconds. |
+```powershell
+.venv\Scripts\python.exe evaluation/run_product_evaluation.py --output var/evaluation/abo/qwen-baseline-v1.json
+.venv\Scripts\python.exe evaluation/run_product_evaluation.py --output var/evaluation/abo/qwen-after-v2.json
+.venv\Scripts\python.exe evaluation/product_review.py check --result var/evaluation/abo/qwen-baseline-v1.json --assessments var/evaluation/abo/review-baseline-v1/case-assessments.json
+.venv\Scripts\python.exe evaluation/product_review.py check --result var/evaluation/abo/qwen-after-v2.json --assessments var/evaluation/abo/review-after-v2/case-assessments.json
+```
 
-Frontend, GPU evaluation, real-image API/browser acceptance and final mission regression gates remain for later tasks. Existing frontend and inference source files are unchanged by Task 1.
+The baseline used its original schema-v1 implementation; current code does not recreate that historical configuration. Existing result destinations cannot be overwritten by the runner.
 
-GitHub API verification confirmed the repository remains private with default branch `main`. The accepted baseline's [CPU Actions run 38384727999](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38384727999) succeeded for both **Python backend** and **TypeScript operator workspace**. This is baseline CI evidence only; no Mission 04 commit exists and no new Actions run was triggered.
+The evaluation, browser and synthetic commands above use `.venv\Scripts\python.exe`. Exact CLI examples and metric definitions are in the evaluation guides. No database schema, optimizer policy or inventory authority was changed to make the demonstrations pass.
 
-Accepted starting local HEAD, local `origin/main`, and independently checked remote `main`:
+## 6. Exact source changes and dependencies
 
-`02fedeb4f9e966960cec7a8ef94e6999a5f3ee80`
+Compared with accepted baseline `02fedeb4f9e966960cec7a8ef94e6999a5f3ee80`, the mission creates these 20 files:
 
-Mission 04 commits/pushes: **pending after Task 1 acceptance**. This report does not attempt to contain its own future commit SHA. Later task/final report updates will record the exact Task 1 commit, normal push and independent remote verification. The working tree contains the Task 1 drafts and manifest. No history rewrite, publication, visibility change, authenticated remote inference or cloud deployment occurred.
+```text
+backend/src/rekit/inference/adapters/https_worker.py
+backend/src/rekit/inference/adapters/openai_remote.py
+backend/src/rekit/inference/adapters/remote_transport.py
+docs/amd-access.md
+docs/demo-script.md
+docs/hackathon-submission-checklist.md
+docs/real-product-evaluation.md
+docs/reports/development-mission-04.md
+evaluation/fixtures/abo-manifest.json
+evaluation/prepare_abo.py
+evaluation/product_data.py
+evaluation/product_review.py
+evaluation/run_product_evaluation.py
+frontend/e2e/real-product.spec.ts
+tests/backend/test_abo_acquisition.py
+tests/backend/test_product_data.py
+tests/backend/test_product_evaluation.py
+tests/backend/test_product_review.py
+tests/backend/test_remote_provider.py
+tests/backend/test_remote_transport.py
+```
 
-## Remaining work
+It modifies these 20 existing files:
 
-Review the accepted seven-file Task 1 increment, then commit and verify a normal push before starting Task 2. Keep the original crash evidence: the successful isolated parser is a mitigation, not a root-cause finding. Human review remains necessary for semantic accuracy; absent labels do not prevent measuring later real inference structure, latency and memory while reporting accuracy as unmeasured.
+```text
+.env.example
+README.md
+backend/src/rekit/inference/constrained.py
+backend/src/rekit/inference/parsing.py
+backend/src/rekit/inference/provider.py
+backend/src/rekit/inference/service.py
+backend/src/rekit/main.py
+deploy/amd/README.md
+docs/architecture.md
+docs/roadmap.md
+evaluation/README.md
+evaluation/run_browser_acceptance.py
+frontend/playwright.config.ts
+frontend/src/inference.test.tsx
+frontend/src/inference.tsx
+frontend/src/types.ts
+tests/backend/test_browser_runner.py
+tests/backend/test_constrained.py
+tests/backend/test_inference_api.py
+tests/backend/test_inference_provider.py
+```
 
-Tasks 2–4, AMD access-route research and remote adapter, real-image demonstrations, submission checklist, demo script, and final mission validation remain outstanding. AMD execution and hackathon eligibility are **unverified**. No Mission 05 work began.
+No new source directory was needed. Ignored recovery, dataset, review, CI and browser artifacts remain under the `var/` paths listed above. Image bytes, metadata archives, weights, credentials and databases are excluded from Git.
+
+**Dependencies added/upgraded: none. Installation blockers: none.** Python/frontend manifests and locks remain unchanged. No global software, model, dataset or container was installed during recovery/continuation. Node 26.3.1/npm 11.16.0 and the existing browser were used.
+
+## 7. Commits, pushes and GitHub verification
+
+Each listed commit was normally pushed to private `main` and independently matched with `git ls-remote origin refs/heads/main`. No history rewrite, force push or visibility change occurred.
+
+| Stage | Exact commit | CPU GitHub Actions |
+| --- | --- | --- |
+| Task 1 — Finalize bounded real-product evaluation dataset | `5506b69bb827ef2b4c836d0adac8c1577b10a997` | [38446001965](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38446001965): backend/frontend success |
+| Task 2 — Evaluate real-product visual evidence | `662d3354bbb341357fb88ca8e734cb86df4f2b48` | [38450291059](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38450291059): backend/frontend success |
+| Task 3 — Prepare AMD remote visual inference | `a53a482e88ed156d6cc96c2a401896fdd5a281b7` | [38452216288](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38452216288): backend failed, frontend passed; preserved and repaired |
+| Task 3 correction — Close remote worker pipes after deadline cleanup | `6dd805ee44b132c83a24e7471a187a2e9c512e25` | [38453167659](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38453167659): backend/frontend success |
+| Task 4 — Final local demonstration/report | Commit containing this report | Exact final SHA, clean-tree status and post-push CI will be recorded in the completion addendum. |
+
+GitHub API checks confirm private visibility and default branch `main`. Actions remain CPU-only; they neither execute the local model nor download the evaluation corpus. This report distinguishes local GPU/browser results from CI.
+
+## 8. Remaining limits and next action
+
+Human review is still required before measuring semantic accuracy. The dataset is small and selected, includes non-photographic imagery, lacks reviewed return-condition labels and has no approved real-product BOM. Model prose and catalog-backed revision hypotheses remain unreliable; string/schema validity does not prove evidence, function or safety. Confidence wording is not a calibrated probability.
+
+The native crash root cause is unresolved despite successful bounded recovery. Local generation deadlines are cooperative; remote transport cannot prove server cancellation. Remote identity, revision and AMD hardware need deployment evidence, not API-name echoes. Existing production limits, including multi-user deployment, catalog migration and supervised partial-plan recovery, remain as documented.
+
+The [demo script](../demo-script.md) provides separate real-image inspection and synthetic recovery tracks plus a 4:40 recording plan. The [submission checklist](../hackathon-submission-checklist.md) records required assets and approval gates. Actual AMD qualification, public release/hosting, final video/slides and submission are not completed. The official public-GitHub requirement does not authorize changing this private repository. The observed event end is not a verified portal submission cutoff.
+
+Recommended next implementation task, after user review and explicit cloud authorization: qualify the selected AMD vision endpoint using the documented activation checklist and the same source hashes. Independent human annotation can proceed separately. **No Mission 05 work has started.**

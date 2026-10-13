@@ -6,7 +6,7 @@ still performs no perception inference. GPU procedures below explicitly invoke
 the already downloaded local model; none measures AMD performance, representative
 product-recognition accuracy, or operator time savings.
 
-**Mission 03 Task 5's local integration qualification passed.** Current-version
+**Historical Mission 03 Task 5 local integration qualification passed.** Its
 API acceptance, two complete real-AI browser runs, the default browser
 regression, and final CPU/frontend checks passed with schema-constrained joint
 generation. The four earlier failures and reproduced v4 baseline remain
@@ -14,6 +14,57 @@ historical evidence below. Unsupported visual claims still occurred and required
 human rejection; these runs do not qualify recognition accuracy or AMD inference.
 See the [mission report](../docs/reports/development-mission-03.md) for final
 artifacts and the separate commit, push, and CI record.
+
+## Mission 04 real-image evaluation and review
+
+The existing ABO cache contains 52 catalog images from 48 listing groups, with
+original-byte hashes and source/license provenance in
+[`fixtures/abo-manifest.json`](fixtures/abo-manifest.json). It includes product
+views, composites, a logo and reference charts; it is not a set of 52 verified
+product photographs or actual customer returns. All 52 image reviews remain
+pending. Baseline and corrected-output queues each contain 13 pending cases and
+zero independently reviewed cases. Semantic rates remain null with zero eligible
+denominators.
+
+Task 2 executed 13 local GPU requests before and 13 after the catalog-scope fix:
+26 requests, 28 image presentations, 13 unique images and 12 listing groups.
+Both passes accepted 13/13 responses under their recorded contracts. Responses
+with candidates despite no supplied catalog changed from **9/13 to 0/13**.
+The corrected decoder and strict parser enforce an empty candidate array in that
+mode; catalog-backed requests retain unverified hypotheses. This establishes a
+protocol boundary, not better recognition, accurate markings, correct prose,
+source attribution, or useful additional-view advice. The holdout split was not
+used. [Detailed results and review rules](../docs/real-product-evaluation.md)
+retain the actual raw outputs, timings, hashes, and exclusions.
+
+These commands check the existing cache and the pending output-assessment file
+without downloading data or invoking a model:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/product_data.py check --manifest evaluation/fixtures/abo-manifest.json --root var/evaluation/abo
+.\.venv\Scripts\python.exe evaluation/product_review.py check --result var/evaluation/abo/qwen-after-v2.json --assessments var/evaluation/abo/review-after-v2/case-assessments.json
+```
+
+Open `var/evaluation/abo/review-after-v2/index.html` locally for the human-review
+queue. Reviewers must supply their own judgments and export a separate assessment;
+opening or generating the queue does not complete a review. See the detailed guide
+for image-review templates and digest-bound output assessment. An explicitly
+requested new evaluation uses the current provider and a new output destination:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_product_evaluation.py --output var/evaluation/abo/qwen-current-new.json
+```
+
+That command makes 13 actual local GPU requests; it is not part of CPU CI and
+must not overwrite the preserved baseline or corrected-run artifacts.
+
+The `openai-remote` provider is implemented and qualified with controlled offline
+HTTPS responses. No actual remote inference or AMD execution has been measured.
+Remote model/processor revisions are configured declarations; a matching response
+model ID does not attest deployed weights, runtime or hardware. Complete the
+[AMD activation gate](../deploy/amd/README.md#activation-checklist) before making
+an AMD claim. The Mission 03 sections below preserve historical measurements and
+failed attempts rather than relabeling them as current real-product results.
 
 ## Reproduce the synthetic evaluation
 
@@ -175,7 +226,7 @@ length/token count, JSON and domain errors, independently reviewed source/visual
 claims, latency boundaries, memory, events, inventory state, and artifact paths.
 Preserve failed attempts; unknown output and failed parsing are different outcomes.
 
-Current-version API acceptance, **two complete real-AI browser passes**, the
+Mission 03's recorded API acceptance, **two complete real-AI browser passes**, the
 default browser regression, and the documented backend/frontend checks passed
 separately from this direct experiment. All results retain the actual
 model/prompt/schema configuration; the mission report records screenshot review.
@@ -258,6 +309,43 @@ under `frontend/src`. The GitHub Actions workflow runs backend tests and fronten
 unit, type, build, and dependency checks on CPU; it does not claim a remote browser
 run. Local browser results and actual GitHub job status are reported separately
 in the [Mission 02 report](../docs/reports/development-mission-02.md).
+
+### Original product images with simulated held intake
+
+The separate Mission 04 mode passed its first actual browser/API acceptance in
+49.8 seconds. Reproduce it with:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_browser_acceptance.py --real-inference --real-product-images --device 1
+```
+
+It uses the verified original JPEG pair `71rr7OjqWqL` and `812Xgtrv0EL`, supplies
+no approved identity catalog to inference, and makes **one** joint GPU request.
+The UI registers one simulated batch, return and physical-unit ID, uploads both
+originals, and displays actual observations, uncertainty and immutable provenance.
+An automated operator-role rejection records a request for readable label/detail
+evidence; duplicate additional uploads retain the same component and observations.
+The scenario requires the component to remain unverified and held, with no plan,
+reservation, completion, or recovered value. It does not supply human truth labels
+or judge whether model prose is visually correct.
+
+`frontend/e2e/real-product.spec.ts` is selected only for this explicit mode; the
+existing synthetic recovery spec remains separate. Sanitized
+`product-inference-results.json` preserves actual output, source records, manifest
+hash, API checks, held history and limitations. Desktop/mobile screenshots and
+the normal runner cleanup record accompany it under the ignored run directory.
+No synthetic replacement images, model download, or browser download are involved.
+The accepted run is `var/mission02-acceptance/run-ai-_hto37ic/`: one joint model
+request, zero page errors, held/unverified inventory, no plans, 401/403 authority
+checks, duplicate evidence reuse, and successful credential/state cleanup. Three
+screenshots were inspected. This adds one request to Task 2's 26, for **27 actual
+local requests on real catalog imagery**; browser and API are the same request,
+not two measurements. Independent human semantic reviews remain zero, and this
+pass supplies no recognition-accuracy or AMD-execution result.
+See the [demo script](../docs/demo-script.md),
+[submission checklist](../docs/hackathon-submission-checklist.md), and
+[Mission 04 report](../docs/reports/development-mission-04.md) for presentation
+boundaries and the acceptance record.
 
 ### Explicit browser and GPU mode
 
@@ -364,6 +452,8 @@ gate, representative recognition reliability, correct abstention, or AMD readine
 | Exhaustive optimizer oracle and greedy comparison | `test_recovery.py`, `test_evaluation.py` |
 | Strict model output, source indices, run provenance, staleness and replay | `test_inference_models.py`, `test_inference_store.py` |
 | Provider metadata, lazy imports, authenticated lifecycle, rejection and failure outcomes | `test_local_vision.py`, `test_inference_provider.py`, `test_inference_api.py` |
+| Remote HTTPS bounds, credential redaction, strict response/provenance validation; controlled endpoints only | `test_remote_transport.py`, `test_remote_provider.py`, `test_inference_api.py` |
+| Original image/source integrity, isolated metadata acquisition, pending human reviews and bound output assessments | `test_product_data.py`, `test_abo_acquisition.py`, `test_product_evaluation.py`, `test_product_review.py` |
 | UI polling, stale sessions/components, proposal prefill and explicit human decisions | `frontend/src/inference.test.tsx`, `frontend/src/App.test.tsx` |
 
 The solver timeout test uses a real zero-second limit. Additional non-optimal/error
@@ -373,9 +463,10 @@ and HTTP responses in unit/component tests exercise software failure boundaries;
 they are labelled test doubles, not real inference results. The end-to-end
 planner is never replaced by a hardcoded plan.
 
-The sections below describe future representative evidence collection and
-AMD/perception measurement requirements. Independently labelled real product
-photographs and a representative accuracy evaluation are still missing.
+The sections below describe broader evidence collection and AMD/perception
+measurement requirements. The bounded ABO collection and execution results above
+exist; independent human labels, representative returned-product coverage and
+recognition-accuracy evaluation remain incomplete.
 
 ## Evidence and ground truth
 

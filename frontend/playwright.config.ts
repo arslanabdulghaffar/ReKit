@@ -4,7 +4,7 @@ import { defineConfig } from '@playwright/test'
 
 const fixturePath = process.env.REKIT_BROWSER_FIXTURE
 if (!fixturePath) throw new Error('Run evaluation/run_browser_acceptance.py to create isolated browser fixtures.')
-const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')) as { base_url: string; artifacts_dir: string; synthetic: boolean; real_inference?: boolean }
+const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')) as { base_url: string; artifacts_dir: string; synthetic: boolean; real_inference?: boolean; real_product_images?: boolean }
 if (fixture.synthetic !== true || fixture.base_url !== 'http://127.0.0.1:5173') {
   throw new Error('Browser acceptance requires the local synthetic runner.')
 }
@@ -17,7 +17,7 @@ if (!executablePath) throw new Error('An installed Chrome or Edge browser is req
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'recovery.spec.ts',
+  testMatch: fixture.real_product_images === true ? 'real-product.spec.ts' : 'recovery.spec.ts',
   fullyParallel: false,
   workers: 1,
   retries: 0,
