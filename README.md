@@ -37,6 +37,10 @@ inference is a required future integration; it has not been deployed or measured
   inspection uses managed image bytes, saves immutable run provenance, and adds
   only unverified evidence. [Inference contracts](docs/inference-evidence.md)
   explain schema validation, stale results, failures, and human review.
+- AI-assisted component review selects one or two managed images, displays actual
+  model observations and uncertainty, and supports another-view uploads and
+  accountable rejection. Proposal review only prefills identity fields; explicit
+  human verification, condition review, and evidence selection remain required.
 
 ## Run and test locally
 
@@ -149,9 +153,10 @@ integration. A plan cannot be cancelled after partial completion. If new evidenc
 blocks its remaining work, a future supervised recovery operation is needed.
 
 Live camera capture, detection/segmentation, dedicated OCR, visual matching,
-integrated AI review, active recapture guidance, richer rebuild instructions,
-and Evolus are not implemented. Local VLM execution is qualified separately;
-no AMD benchmark or visual-model
+automatic multi-view inspection, richer rebuild instructions, and Evolus are not
+implemented. Local VLM output can contain unsupported identity and revision
+claims even when its JSON is valid; see the measured example in
+[local inference](docs/local-inference.md). No AMD benchmark or visual-model
 accuracy result is claimed. AMD cloud qualification remains a required delivery
 gate once access and resource use are authorized.
 

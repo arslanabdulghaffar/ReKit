@@ -8,7 +8,8 @@ from pydantic import Field
 from rekit.api.workflow import Viewer
 from rekit.auth import Actor, Role, require_role
 from rekit.catalog.models import CatalogModel, Identifier
-from rekit.inference.models import AssetId, InferenceRun, InspectionRequest
+from rekit.evidence.models import CurrentEvidence
+from rekit.inference.models import AssetId, InferenceRun, InspectionRequest, InspectionRejection
 from rekit.inference.service import InferenceService
 
 
@@ -56,3 +57,9 @@ def component_runs(component_id: Identifier, actor: Viewer, service: InferenceDe
 @router.get("/inference/{run_id}", response_model=InferenceRun)
 def inference_run(run_id: Identifier, actor: Viewer, service: InferenceDependency) -> InferenceRun:
     return service.store.get(run_id)
+
+
+@router.post("/inference/{run_id}/reject", response_model=CurrentEvidence)
+def reject_inference(run_id: Identifier, body: InspectionRejection, actor: Reviewer,
+                     service: InferenceDependency) -> CurrentEvidence:
+    return service.store.reject(run_id, body, actor)

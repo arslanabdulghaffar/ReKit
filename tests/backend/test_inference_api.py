@@ -458,3 +458,77 @@ def test_configured_factory_requires_explicit_local_provider_opt_in(workflow, tm
         assert workflow.provider.calls == []
     finally:
         configured.state.inference.close()
+
+
+def test_human_rejection_is_audited_idempotent_and_does_not_rewrite_model_output(workflow):
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver",
+                                     headers=headers(workflow)) as client:
+            admitted = checked(await client.post(f"/components/{workflow.component_id}/inference", json=command(workflow)), 202)
+            run = await poll(client, admitted["start"]["run_id"])
+            run_id = run["start"]["run_id"]
+            body = {"rejection_id": "explicit-human-rejection", "expected_version": run["outcome"]["evidence_version_after"],
+                    "reason": "The model interpretation is not supported by the supplied test image."}
+            current = checked(await client.post(f"/inference/{run_id}/reject", json=body))
+            assert current["state"] == "review_required"
+            assert current["verification"] is None
+            assert current["version"] == body["expected_version"] + 1
+            assert checked(await client.post(f"/inference/{run_id}/reject", json=body)) == current
+            checked(await client.post(f"/inference/{run_id}/reject", json=body,
+                                      headers=headers(workflow, "other-reviewer")), 409)
+            checked(await client.post(f"/inference/{run_id}/reject", json=body | {"reason": "Different reason"}), 409)
+            checked(await client.post(f"/inference/{run_id}/reject", json=body | {"expected_version": current["version"]}), 409)
+            history = checked(await client.get(f"/components/{workflow.component_id}/history"))
+            event = history["events"][-1]
+            assert event["event_id"] == body["rejection_id"]
+            assert event["kind"] == "uncertainty"
+            assert event["payload"]["source"] == "operator"
+            assert event["payload"]["source_reference"] == "reviewer"
+            assert run_id in event["payload"]["reason"]
+            assert checked(await client.get(f"/inference/{run_id}")) == run
+            assert checked(await client.get("/inventory"))["items"][0]["availability"] == "held"
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("actor,status", [(None, 401), ("viewer", 403), ("service", 403)])
+def test_rejection_requires_authenticated_human_reviewer(workflow, actor, status):
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver") as client:
+            checked(await client.post("/inference/unknown-run/reject", json={
+                "rejection_id": "unauthorized-rejection", "expected_version": 2, "reason": "Not authorized",
+            }, headers=headers(workflow, actor) if actor else {}), status)
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("later_state", ["pending", "failed", "new_image", "human_correction", "stale_version"])
+def test_rejection_cannot_change_pending_failed_or_newer_evidence(workflow, later_state):
+    if later_state == "pending":
+        workflow.provider.release.clear()
+    elif later_state == "failed":
+        workflow.provider.text = "Controlled invalid JSON"
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver",
+                                     headers=headers(workflow)) as client:
+            admitted = checked(await client.post(f"/components/{workflow.component_id}/inference", json=command(workflow)), 202)
+            run = admitted if later_state == "pending" else await poll(client, admitted["start"]["run_id"])
+            if later_state == "new_image":
+                with Image.new("RGB", (32, 24), "yellow") as image, BytesIO() as buffer:
+                    image.save(buffer, format="PNG")
+                    component = workflow.evidence.get_component(workflow.component_id)
+                    checked(await client.post(f"/components/{workflow.component_id}/images?return_id={component.source_return_id}",
+                                              content=buffer.getvalue(), headers={"Content-Type": "image/png"}), 201)
+            elif later_state == "human_correction":
+                verification = dict(workflow.fixture["components"][0]["verification"])
+                verification.pop("operator_id")
+                verification["evidence_observation_ids"] = [workflow.uploads[workflow.component_id].asset.observation_id]
+                checked(await client.post(f"/components/{workflow.component_id}/verification", json={
+                    "verification": verification, "expected_version": workflow.evidence.current(workflow.component_id).version,
+                }))
+            before = workflow.evidence.history(workflow.component_id)
+            expected = 1 if later_state == "stale_version" else before.current.version
+            checked(await client.post(f"/inference/{run['start']['run_id']}/reject", json={
+                "rejection_id": "outdated-rejection", "expected_version": expected, "reason": "Unsupported proposal",
+            }), 409)
+            assert workflow.evidence.history(workflow.component_id) == before
+    asyncio.run(scenario())

@@ -8,7 +8,8 @@ transactional inventory execution.
 
 This persistence layer is separate from [local GPU qualification](local-inference.md).
 Task 2 provides contracts and storage; Task 3 connects the real provider to
-authenticated HTTP requests. Operator-interface integration is separate work.
+authenticated HTTP requests. Task 4 exposes inspection, proposal review, and
+human rejection in the existing component-review interface.
 CPU-only tests of parsing, persistence, and request handling use controlled
 inputs and do not demonstrate real model execution or accuracy.
 
@@ -185,6 +186,16 @@ observations within their contract limits.
 corresponding authenticated read routes return these persisted records.
 
 ## Authority and provider boundary
+
+An authenticated human reviewer can reject a current successful suggestion with
+`POST /inference/{run_id}/reject`, supplying `rejection_id`, `expected_version`,
+and a nonempty reason of at most 1,500 characters. The same transaction checks
+the current evidence version, the run's applicability, and inventory allocation.
+A pending, failed, stale, or superseded result cannot change current review state.
+An exact retry is bound to the actor, run, version, and reason. Rejection appends
+an operator-source uncertainty event naming the run and reviewer; the original
+model output remains immutable. Rejection does not verify a replacement identity.
+Use the existing explicit human verification or correction action for that.
 
 Only trusted application code supplies runtime metadata and finalizes runs.
 Caller-supplied `source=model` metadata through the existing generic evidence

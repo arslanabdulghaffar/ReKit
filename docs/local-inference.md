@@ -4,9 +4,9 @@ ReKit's first local provider uses the official
 [Qwen/Qwen3-VL-2B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct)
 checkpoint. Task 1 qualified image-to-text execution on one existing NVIDIA
 GPU. The backend now connects that provider to authenticated inspection requests
-and [unverified evidence storage](inference-evidence.md). The operator interface
-integration is separate work. The model has no catalog, approval, or inventory
-authority.
+and [unverified evidence storage](inference-evidence.md). The operator workspace
+exposes that workflow through an AI-assisted inspection panel. The model has no
+catalog, approval, or inventory authority.
 
 ## Pinned model and download budget
 
@@ -213,6 +213,16 @@ An exact POST retry returns the same run, including a terminal run, and does
 not schedule another computation. Reusing its request ID with changed contents
 or a different actor returns HTTP 409.
 
+A human reviewer can reject a current successful, nonstale suggestion through
+`POST /inference/{run_id}/reject`, with `rejection_id`, `expected_version`, and
+a written `reason`. The server records an operator-source uncertainty event
+linked to the run and authenticated actor, then returns the current evidence
+with HTTP 200. Rejection keeps the component under review and preserves the
+original model output. It is not identity verification. The same rejection ID
+and payload can be retried without adding another event; changed contents or
+actor conflict. A run whose evidence has changed, or a reserved/consumed
+component, cannot receive a new rejection through this operation.
+
 A fresh request while the slot is busy returns HTTP 409 without admission;
 there is no queue. Missing credentials return 401, insufficient role returns
 403, unknown references return 404, and malformed input returns 422. A disabled
@@ -234,6 +244,27 @@ it or invent a failure. If the restarted service is idle, a deliberate new
 request can use a new ID after checking the current evidence version. Manual
 inspection remains available. See [inference evidence](inference-evidence.md)
 for stale-result handling and the required human review boundary.
+
+## Operator workspace
+
+With the configured backend running, open the frontend and choose **Component
+review**. The **AI-assisted inspection** panel lets a human reviewer select
+one or two managed images, request analysis, and inspect the actual stored
+observations, hypotheses, uncertainty, additional-view requests, and provenance.
+Model text remains visibly unverified. The panel also supports uploading a new
+view to the same physical component and rejecting a current unsupported result
+with an attributable reason.
+
+**Review proposal** only prefills a complete catalog identity in the human
+form. It makes no verification request and does not choose visible condition.
+The operator must inspect the images, correct the proposed identity if needed,
+select supporting observations, provide a reason, and explicitly verify.
+Historical and stale suggestions cannot prefill the current form. Missing
+inference leaves the manual workflow available.
+
+See the [frontend workflow](../frontend/README.md#ai-assisted-review) for controls,
+roles, polling, retries, and additional images. Component tests use controlled
+HTTP responses; they do not constitute a real browser/GPU execution result.
 
 ## Task 1 measured qualification result
 

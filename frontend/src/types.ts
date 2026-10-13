@@ -44,3 +44,25 @@ export interface StoredPlan { plan: RecoveryPlan; version: number; state: 'propo
 export interface PlanSummary { plan_id: string; scenario_id: string; description: string; currency: string; version: number; state: StoredPlan['state']; status: string; modeled_value_cents: number | null; cash_recovery_cents: number | null; retained_value_cents: number | null; created_at: string }
 export interface AuditRecord { sequence: number; plan_id: string; operation_id: string; operator_id: string; kind: string; plan_version: number; reason: string; recorded_at: string; action_id: string | null }
 export interface WorkspaceData { catalog: Catalog; batches: ReturnBatch[]; returns: ReturnRecord[]; inventory: InventorySnapshot; plans: PlanSummary[] }
+export interface IdentityCandidate { component_type_id: string; revision: string | null; revision_marking: string | null; reason: string; image_indices: number[] }
+export interface InspectionOutput {
+  observations: { kind: 'appearance' | 'marking' | 'visible_damage' | 'missing_information'; text: string; image_indices: number[] }[];
+  candidates: IdentityCandidate[]; uncertainties: string[];
+  additional_views: { view: string; reason: string; image_indices: number[] }[];
+}
+export type JsonScalar = string | number | boolean | null;
+export interface InferenceConfiguration {
+  provider: string; model_repository: string; model_revision: string; processor_revision: string;
+  runtime: Record<string, string>; device: string; prompt_version: string;
+  preprocessing: Record<string, JsonScalar>; generation: Record<string, JsonScalar>;
+}
+export interface InferenceRun {
+  start: { run_id: string; request_id: string; actor_id: string; physical_component_id: string; source_return_id: string;
+    inputs: { asset_id: string; sha256: string; observation_id: string }[]; evidence_version: number;
+    configuration: InferenceConfiguration; started_at: string };
+  outcome: { run_id: string; status: 'succeeded' | 'failed' | 'unavailable' | 'timed_out' | 'invalid_output'; completed_at: string;
+    output: InspectionOutput | null; raw_output: string | null; failure_reason: string | null; metrics: Record<string, JsonScalar>;
+    stale: boolean; stale_reason: string | null; applied_event_ids: string[]; evidence_version_after: number } | null;
+}
+export interface InferenceStatus { status: 'unloaded' | 'loading' | 'ready' | 'unavailable'; busy: boolean;
+  provider: string | null; model_repository: string | null; model_revision: string | null; device: string | null; request_timeout_seconds?: number }

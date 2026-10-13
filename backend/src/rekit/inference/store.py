@@ -9,11 +9,11 @@ from pydantic import TypeAdapter
 from rekit.auth import Actor, ActorKind, Role
 from rekit.catalog.models import ComponentIdentity, Identifier
 from rekit.evidence.assets import ImageAssetStore
-from rekit.evidence.models import AssertionSource, IdentityProposal, Observation, UncertaintyFlag
+from rekit.evidence.models import AssertionSource, CurrentEvidence, IdentityProposal, Observation, UncertaintyFlag
 from rekit.evidence.store import ConflictError, EvidenceStore, NotFoundError, _canonical
 from rekit.inference.models import (
     InferenceConfiguration, InferenceOutcome, InferenceRun, InferenceStart, InputAsset,
-    InspectionOutput, InspectionRequest,
+    InspectionOutput, InspectionRequest, InspectionRejection,
 )
 
 
@@ -109,6 +109,38 @@ class InferenceStore:
             if row["actor_id"] != actor.actor_id or row["command_json"] != _canonical(command):
                 raise ConflictError("Inspection request ID belongs to a different actor or request")
             return self._get(connection, row["run_id"])
+
+    def reject(self, run_id: str, command: InspectionRejection, actor: Actor) -> CurrentEvidence:
+        """A human rejection adds an accountable hold; it never rewrites the model run."""
+        run_id = _IDENTIFIER.validate_python(run_id)
+        command = InspectionRejection.model_validate(command.model_dump(mode="json", warnings=False))
+        actor = self._authorized(actor)
+        with self.evidence.transaction() as connection:
+            run = self._get(connection, run_id)
+            existing = connection.execute("SELECT kind, payload FROM evidence_events WHERE event_id = ?",
+                                          (command.rejection_id,)).fetchone()
+            timestamp = datetime.now(UTC)
+            if existing is not None:
+                if existing["kind"] != "uncertainty":
+                    raise ConflictError("Rejection ID belongs to a different assertion")
+                timestamp = UncertaintyFlag.model_validate_json(existing["payload"]).created_at
+            flag = UncertaintyFlag(
+                flag_id=command.rejection_id, physical_component_id=run.start.physical_component_id,
+                source=AssertionSource.OPERATOR, source_reference=actor.actor_id, created_at=timestamp,
+                reason=f"Rejected unverified AI inspection {run_id} at evidence version {command.expected_version}: {command.reason}",
+            )
+            if self.evidence._duplicate_event(connection, flag.flag_id, "uncertainty", flag):
+                return self.evidence._history(connection, flag.physical_component_id).current
+            current = self.evidence._history(connection, flag.physical_component_id).current
+            if current.version != command.expected_version:
+                raise ConflictError("Rejection requested a stale evidence version")
+            if (run.outcome is None or run.outcome.status != "succeeded" or run.outcome.stale
+                    or run.outcome.evidence_version_after != current.version):
+                raise ConflictError("Only a current successful unverified inspection can be rejected")
+            if self._allocated(connection, flag.physical_component_id):
+                raise ConflictError("Reserved or consumed components cannot change review evidence")
+            self.evidence._append(connection, flag.flag_id, "uncertainty", flag)
+            return self.evidence._history(connection, flag.physical_component_id).current
 
     def begin(self, command: InspectionRequest, actor: Actor,
               configuration: InferenceConfiguration) -> tuple[InferenceRun, bool]:

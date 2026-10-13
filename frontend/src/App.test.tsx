@@ -85,6 +85,8 @@ function transport(responder?: Responder) {
     if (call.path === '/api/plans?limit=50') return json([])
     if (call.path === `/api/components/${componentId}/history`) return json(history)
     if (call.path === `/api/components/${componentId}/images`) return json([])
+    if (call.path === '/api/inference/status') return json({ status: 'unavailable', busy: false, provider: null, model_repository: null, model_revision: null, device: null })
+    if (call.path === `/api/components/${componentId}/inference`) return json([])
     if (call.path.startsWith(`/api/components/${componentId}/compatibility?`)) return json({ compatible: false, reasons: ['Component identity requires operator verification.'] })
     throw new Error(`Unexpected request: ${call.method} ${call.path}`)
   }))

@@ -6,10 +6,13 @@ verification or corrections, enter economic assumptions, request a real CPU
 CP-SAT plan, approve reservations, and confirm recovery actions. Inventory,
 completed-kit lineage, and audit history come from the backend.
 
-No vision model runs in this interface. Images remain evidence for human review.
-AMD ROCm/vLLM integration is a future backend capability; the browser never
-connects to an inference service. Visible appearance does not establish hidden
-functionality or safety, and scenario estimates are not realized profit.
+Vision models run in the backend, using managed image evidence. Their output
+remains unverified until an authorized human reviews the images and records a
+decision. The browser uses the authenticated ReKit API; it never receives model
+paths or connects directly to a model server. Local NVIDIA inference is
+available by explicit server configuration; AMD ROCm/vLLM qualification remains
+separate work. Visible appearance does not establish hidden functionality or
+safety, and scenario estimates are not realized profit.
 
 ## Requirements and installation
 
@@ -60,6 +63,23 @@ changing their files does not silently migrate existing records. No `.env` file
 is loaded automatically. The default `rekit.main:app` exposes health but does not
 configure the authenticated workflow.
 
+To enable the already qualified local model, also set these variables before
+starting the backend, and use exactly one Uvicorn worker:
+
+```powershell
+$env:REKIT_INFERENCE_PROVIDER = 'local-transformers'
+$env:REKIT_MODEL_DIR = '.\models\Qwen3-VL-2B-Instruct\89644892e4d85e24eaac8bacfd4f463576704203'
+$env:REKIT_CUDA_DEVICE = '1'
+.\.venv\Scripts\python.exe -m uvicorn rekit.main:create_configured_app --factory --host 127.0.0.1 --port 8000 --workers 1
+```
+
+These settings require the existing verified checkpoint and optional Python
+runtime described in [local inference](../docs/local-inference.md). They do not
+download a model or change CUDA. The model loads on the first inspection request
+and is reused thereafter. Inference defaults to disabled, and manual inspection
+continues to work without a GPU. Do not run multiple backend processes against
+the same inference device; the worker slot is process-local.
+
 In a second terminal:
 
 ```powershell
@@ -86,8 +106,9 @@ exposing either server publicly.
    rejected. An identical file for the same component reuses its observation.
    Identical bytes assigned to another component are rejected. Multiple files
    are uploaded sequentially, not as one all-or-nothing transaction.
-3. **Component review:** inspect images and history, then select the catalog
-   type, revision, visible condition, supporting observations, and a reason.
+3. **Component review:** inspect images and history, optionally request
+   AI-assisted inspection as described below, then select the catalog type,
+   revision, visible condition, supporting observations, and a reason.
    Verification uses the current evidence version. A correction explicitly
    supersedes the previous verification while preserving its history. Check
    compatibility to see the server's approved-policy decision and reasons.
@@ -125,6 +146,60 @@ fetched. Missing or corrupt required assets block new verification, approval,
 and completion decisions. Refresh after a conflict and inspect the current
 version before retrying. The backend remains authoritative for roles and all
 compatibility, financial, reservation, and completion decisions.
+
+## AI-assisted review
+
+In **Component review**, the **AI-assisted inspection** panel shows the
+server's provider status, model revision, and device. If inference is disabled
+or unavailable, continue with the manual verification form. The browser never
+substitutes a prediction or assigns a confidence probability.
+
+1. Select one or two existing managed views and choose **Analyze images**.
+   This requires a human reviewer role and an unallocated component. Only the
+   selected asset IDs and current evidence version go to the backend; the
+   server reads their integrity-checked bytes. A different photograph still
+   describes the same physical component.
+2. While the worker runs, the panel polls its stored result. Read **Model
+   observations**, **Uncertainty & missing evidence**, **Suggested additional
+   photographs**, and **Unverified identity hypotheses** together. Expand
+   **Source images & run provenance** to inspect the original image links,
+   hashes, model configuration, and measured runtime. **Original model text**
+   preserves the actual unverified response, including errors or contradictions.
+3. If more evidence is needed, use **Additional component images** and
+   **Upload another view** with the intake role. Select the new image for a
+   deliberate new analysis. An identical upload reuses its original evidence;
+   a new view advances the evidence version and makes older results historical.
+4. **Review proposal** copies a complete, known catalog identity into the
+   human form for inspection and correction. It does not verify the component
+   or approve its condition. Check the real images, choose visible condition
+   and supporting observations, write a reason, and explicitly submit human
+   verification. Unknown or unsupported identities must be resolved manually.
+5. To reject a current unsupported suggestion, write a **Rejection reason**
+   and choose **Reject unsupported proposal**. The backend records the
+   authenticated human decision while retaining the original model output.
+   Rejection keeps the component under review; it does not establish identity,
+   compatibility, or eligibility.
+
+Historical, stale, rejected, or evidence-version-mismatched results cannot
+prefill a current decision. New images and human decisions during inference can
+make its eventual result stale. Previous runs remain selectable for audit.
+The browser disables review changes for reserved and consumed components.
+Inference admission, rejection, and image intake also check allocation on the
+server. Existing plan execution revalidates its approved evidence versions.
+
+Only one inference computation runs at a time. A timed-out run can still own
+the GPU slot until the computation returns; **Refresh inference status** reads
+the current state. A pending run left by a crash has no invented result and
+is not automatically resumed. When the provider is idle, the panel permits a
+deliberate new request. **Retry same request** recovers a lost HTTP response
+using its original request ID and contents, without duplicating inference.
+Switching components or signing out discards obsolete polling responses.
+
+The [real backend qualification](../docs/local-inference.md#task-3-measured-api-execution-and-recognition-error)
+produced an unsupported adapter revision claim from a synthetic illustration.
+Its inventory stayed held. A valid response schema and a nonempty quoted
+marking do not make that claim true; compare every suggestion with its source
+images before recording your own decision.
 
 ## Supplied synthetic catalog and policy
 
@@ -226,6 +301,7 @@ tests live in `e2e/` and require this runner's temporary fixture.
 - `src/api.ts`: constrained authenticated JSON/image transport and errors.
 - `src/types.ts`: TypeScript mirrors of HTTP contracts.
 - `src/evidence.tsx`: intake, uploads, evidence review, and corrections.
+- `src/inference.tsx`: managed-image analysis, polling, unverified results, and human review actions.
 - `src/recovery.tsx`: economics, planning, approval, completion, and inventory.
 - `src/ui.tsx` and `src/styles.css`: shared controls, image previews, and layout.
 - `vite.config.ts`: loopback development/preview proxy and test configuration.

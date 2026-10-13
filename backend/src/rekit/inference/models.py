@@ -59,6 +59,12 @@ class InspectionRequest(CatalogModel):
         return self
 
 
+class InspectionRejection(CatalogModel):
+    rejection_id: Identifier
+    expected_version: Version
+    reason: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=1500, pattern=r"\S")]
+
+
 class InferenceStart(CatalogModel):
     run_id: Identifier
     request_id: Identifier
