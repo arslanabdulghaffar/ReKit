@@ -23,11 +23,13 @@ def _invalid_constant(value: str) -> None:
     raise ValueError("Model JSON cannot contain non-finite numeric constants")
 
 
-def parse_output(raw: str, image_count: int) -> InspectionOutput:
+def parse_output(raw: str, image_count: int, *, allow_candidates: bool = True) -> InspectionOutput:
     if not isinstance(raw, str) or not raw.strip() or len(raw) > MAX_OUTPUT_CHARACTERS:
         raise ValueError("Model output must contain one JSON object of at most 32000 characters")
     if type(image_count) is not int or image_count not in (1, 2):
         raise ValueError("An inference output requires one or two actual input images")
+    if type(allow_candidates) is not bool:
+        raise ValueError("Candidate permission must be an explicit boolean")
     text = raw.strip()
     fenced = _JSON_FENCE.fullmatch(text)
     if fenced:
@@ -40,4 +42,6 @@ def parse_output(raw: str, image_count: int) -> InspectionOutput:
         raise ValueError("Model output must be a JSON object")
     output = InspectionOutput.model_validate(payload)
     output.validate_image_count(image_count)
+    if not allow_candidates and output.candidates:
+        raise ValueError("Identity candidates require a supplied approved catalog")
     return output

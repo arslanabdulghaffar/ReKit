@@ -11,7 +11,7 @@ from types import ModuleType
 import pytest
 
 from rekit.inference.constrained import (
-    SCHEMA_VERSION, _protect_decoder_logs, build_prefix, build_tokenizer_data,
+    SCHEMA_VERSION, _protect_decoder_logs, build_character_parser, build_prefix, build_tokenizer_data,
     inspection_schema, schema_digest,
 )
 from rekit.inference.parsing import parse_output
@@ -49,7 +49,7 @@ def test_schema_is_fresh_bounded_and_digest_covers_source_count():
     assert schema_digest(schema) == schema_digest(dict(reversed(list(schema.items()))))
     schema["properties"]["observations"]["maxItems"] = 99
     assert inspection_schema(2)["properties"]["observations"]["maxItems"] == 2
-    assert SCHEMA_VERSION == "rekit-inspection-schema-v1"
+    assert SCHEMA_VERSION == "rekit-inspection-schema-v2"
 
 
 def test_optional_runtime_is_not_imported_by_schema_helpers():
@@ -109,10 +109,14 @@ def test_only_decoder_prefix_logs_are_redacted_before_handlers(caplog):
     assert "ordinary application error" in caplog.text
 
 
-def accepted_by_optional_decoder(value, image_count=2):
-    decoder = pytest.importorskip("lmformatenforcer")
-    parser = decoder.JsonSchemaParser(inspection_schema(image_count))
-    for character in json.dumps(value, separators=(",", ":")):
+def accepted_by_optional_decoder(value, image_count=2, *, allow_candidates=True):
+    pytest.importorskip("lmformatenforcer")
+    parser = build_character_parser(inspection_schema(image_count, allow_candidates=allow_candidates))
+    return accepted_characters(parser, json.dumps(value, separators=(",", ":")))
+
+
+def accepted_characters(parser, raw):
+    for character in raw:
         if character not in parser.get_allowed_characters():
             return False
         parser = parser.add_character(character)
@@ -129,6 +133,83 @@ def test_optional_real_parser_accepts_unknown_and_complete_revision_pair(count):
     assert parse_output(json.dumps(value), image_count=count).candidates[0].revision == "A"
     value["candidates"] = []
     assert accepted_by_optional_decoder(value, count)
+
+
+@pytest.mark.parametrize("count", [1, 2])
+def test_real_decoder_without_catalog_accepts_empty_candidates_and_blocks_invented_identity(count):
+    value = output()
+    schema = inspection_schema(count, allow_candidates=False)
+    assert schema["properties"]["candidates"]["maxItems"] == 0
+    assert schema_digest(schema) != schema_digest(inspection_schema(count, allow_candidates=True))
+    assert not accepted_by_optional_decoder(value, count, allow_candidates=False)
+    value["candidates"] = []
+    assert accepted_by_optional_decoder(value, count, allow_candidates=False)
+    parsed = parse_output(json.dumps(value), image_count=count, allow_candidates=False)
+    assert parsed.observations and parsed.uncertainties and not parsed.candidates
+
+
+def test_pinned_library_alone_does_not_enforce_zero_items_on_first_array_member():
+    decoder = pytest.importorskip("lmformatenforcer")
+    raw = json.dumps(output())
+    schema = inspection_schema(1, allow_candidates=False)
+    # Preserve the actual library limitation that necessitates the local guard.
+    assert accepted_characters(decoder.JsonSchemaParser(schema), raw)
+    assert not accepted_characters(build_character_parser(schema), raw)
+
+
+@pytest.mark.parametrize("candidate_first", [False, True])
+def test_empty_candidate_guard_preserves_whitespace_other_arrays_and_escaped_text(candidate_first):
+    pytest.importorskip("lmformatenforcer")
+    value = output()
+    value["candidates"] = []
+    value["observations"] *= 2
+    value["observations"][0]["text"] = 'Printed "candidates": [not a JSON key] with \\ and Unicode α.'
+    value["uncertainties"] = ["First uncertainty.", "Second uncertainty."]
+    value["additional_views"] = [{"image_indices": [1], "view": "Back label", "reason": "Need readable text."}]
+    if candidate_first:
+        value = {"candidates": [], **{key: field for key, field in value.items() if key != "candidates"}}
+    raw = json.dumps(value, indent=2).replace('"candidates": []', '"candidates" : [ \n\t ]')
+    assert accepted_characters(build_character_parser(inspection_schema(2, allow_candidates=False)), raw)
+
+
+def test_escaped_root_candidate_key_cannot_bypass_empty_array_guard():
+    pytest.importorskip("lmformatenforcer")
+    raw = json.dumps(output()).replace('"candidates"', '"\\u0063andidates"')
+    assert not accepted_characters(build_character_parser(inspection_schema(1, allow_candidates=False)), raw)
+
+
+def test_empty_candidate_guard_preserves_immutable_branch_state():
+    pytest.importorskip("lmformatenforcer")
+    parser = build_character_parser(inspection_schema(1, allow_candidates=False))
+    for character in '{"candidates":[':
+        assert character in parser.get_allowed_characters()
+        parser = parser.add_character(character)
+    assert "{" not in parser.get_allowed_characters() and "]" in parser.get_allowed_characters()
+    closed = parser.add_character("]")
+    assert "]" in parser.get_allowed_characters()  # Closing another branch cannot mutate this state.
+    assert "," in closed.get_allowed_characters()
+    assert not closed.can_end()
+
+
+@pytest.mark.parametrize("allow_candidates", [0, 1, None, "false"])
+def test_candidate_permission_requires_a_boolean_at_decoder_and_parser(allow_candidates):
+    with pytest.raises(ValueError):
+        inspection_schema(1, allow_candidates=allow_candidates)
+    with pytest.raises(ValueError):
+        parse_output(json.dumps(output()), image_count=1, allow_candidates=allow_candidates)
+
+
+def test_domain_parser_rejects_forbidden_candidate_instead_of_erasing_it():
+    value = output()
+    value["candidates"][0].update(revision="A", revision_marking="REV A")
+    raw = json.dumps(value)
+    with pytest.raises(ValueError, match="catalog"):
+        parse_output(raw, image_count=1, allow_candidates=False)
+    assert json.loads(raw)["candidates"] == value["candidates"]
+    # Existing approved-catalog use retains the original unverified hypothesis.
+    permitted = parse_output(raw, image_count=1, allow_candidates=True)
+    assert permitted.candidates[0].component_type_id == "body"
+    assert permitted.candidates[0].revision == "A"
 
 
 @pytest.mark.parametrize("mutation", [

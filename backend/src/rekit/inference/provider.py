@@ -85,6 +85,7 @@ class LocalVisionProvider:
 
     def __init__(self, model_dir: Path, device: int = 1, catalog: Catalog | None = None):
         self._prompt = _inspection_prompt(catalog)
+        self._allow_candidates = catalog is not None
         self._adapter = LocalTransformersVision(
             model_dir=model_dir, device=device, max_new_tokens=MAX_NEW_TOKENS,
             timeout_seconds=TIMEOUT_SECONDS,
@@ -108,8 +109,9 @@ class LocalVisionProvider:
             generation={"do_sample": False, "max_new_tokens": MAX_NEW_TOKENS,
                         "timeout_seconds": float(TIMEOUT_SECONDS), "dtype": "bfloat16", "attention": "sdpa",
                         "decoding": "lm-format-enforcer", "schema_version": SCHEMA_VERSION,
-                        "schema_sha256_1": schema_digest(inspection_schema(1)),
-                        "schema_sha256_2": schema_digest(inspection_schema(2)), "image_mode": "joint"},
+                        "schema_sha256_1": schema_digest(inspection_schema(1, allow_candidates=self._allow_candidates)),
+                        "schema_sha256_2": schema_digest(inspection_schema(2, allow_candidates=self._allow_candidates)),
+                        "identity_candidates_allowed": self._allow_candidates, "image_mode": "joint"},
         )
 
     @property
@@ -125,7 +127,8 @@ class LocalVisionProvider:
         if self._missing_packages:
             raise VisionUnavailable("Required local inference packages are not installed")
         try:
-            return self._adapter.inspect(images, self._prompt, json_schema=inspection_schema(len(images)))
+            return self._adapter.inspect(images, self._prompt,
+                                         json_schema=inspection_schema(len(images), allow_candidates=self._allow_candidates))
         except LocalVisionTimeout as error:
             raise VisionTimeout("Inspection exceeded its cooperative execution deadline") from error
         except LocalVisionError as error:

@@ -317,6 +317,48 @@ def test_failures_are_explicit_provenance_without_verified_facts(workflow, failu
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("candidate_present", [False, True])
+def test_no_catalog_permission_is_enforced_before_any_evidence_events(workflow, candidate_present):
+    configuration = workflow.provider.configuration.model_dump(mode="json")
+    configuration["generation"]["identity_candidates_allowed"] = False
+    workflow.provider.configuration = InferenceConfiguration.model_validate(configuration)
+    payload = json.loads(json.dumps(CONTROLLED_OUTPUT))
+    if candidate_present:
+        # Even a known catalog ID cannot bypass the admitted no-candidate policy.
+        payload["candidates"] = [{"image_indices": [1], "component_type_id": "body", "revision": "A",
+                                  "revision_marking": "REV A", "reason": "Controlled unsupported candidate."}]
+    workflow.provider.text = json.dumps(payload)
+    before = workflow.evidence.history(workflow.component_id)
+    inventory_before = workflow.inventory.inventory()
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver",
+                                     headers=headers(workflow)) as client:
+            body = command(workflow)
+            accepted = checked(await client.post(f"/components/{workflow.component_id}/inference", json=body), 202)
+            final = await poll(client, accepted["start"]["run_id"])
+            assert final["start"]["configuration"]["generation"]["identity_candidates_allowed"] is False
+            assert final["outcome"]["raw_output"] == workflow.provider.text
+            if candidate_present:
+                assert final["outcome"]["status"] == "invalid_output"
+                assert final["outcome"]["output"] is None
+                assert final["outcome"]["applied_event_ids"] == []
+                assert workflow.evidence.history(workflow.component_id) == before
+                assert workflow.inventory.inventory() == inventory_before
+                assert checked(await client.post(f"/components/{workflow.component_id}/inference", json=body), 202) == final
+                assert len(workflow.provider.calls) == 1
+            else:
+                assert final["outcome"]["status"] == "succeeded"
+                assert final["outcome"]["output"] == CONTROLLED_OUTPUT
+                assert final["outcome"]["applied_event_ids"]
+            assert workflow.evidence.current(workflow.component_id).verification is None
+            inventory = checked(await client.get("/inventory"))
+            assert all(entry["availability"] == "held" for entry in inventory["items"])
+            assert inventory["completed_kits"] == []
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("image_count,mismatch", [
     (1, None), (2, None), (2, "decoding"), (2, "schema_version"),
     (2, "schema_sha256"), (2, "missing_digest"), (2, "missing_configuration"),

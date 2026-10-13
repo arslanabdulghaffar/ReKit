@@ -99,14 +99,15 @@ def test_one_adapter_is_reused_with_bounded_qualified_settings(adapters, tmp_pat
         "do_sample": False, "max_new_tokens": 512,
         "timeout_seconds": 120.0, "dtype": "bfloat16", "attention": "sdpa",
         "decoding": "lm-format-enforcer", "schema_version": provider.SCHEMA_VERSION,
-        "schema_sha256_1": provider.schema_digest(provider.inspection_schema(1)),
-        "schema_sha256_2": provider.schema_digest(provider.inspection_schema(2)), "image_mode": "joint",
+        "schema_sha256_1": provider.schema_digest(provider.inspection_schema(1, allow_candidates=False)),
+        "schema_sha256_2": provider.schema_digest(provider.inspection_schema(2, allow_candidates=False)),
+        "identity_candidates_allowed": False, "image_mode": "joint",
     }
     assert configuration.preprocessing["max_side"] == 768
     assert configuration.preprocessing["min_pixels"] == 65_536
     assert configuration.preprocessing["max_pixels"] == 589_824
     assert configuration.preprocessing["max_images"] == 2
-    assert adapters[0].last_schema == provider.inspection_schema(2)
+    assert adapters[0].last_schema == provider.inspection_schema(2, allow_candidates=False)
 
 
 def test_model_text_and_actual_result_metadata_are_not_repaired(adapters, tmp_path):
@@ -136,8 +137,23 @@ def test_prompt_uses_catalog_labels_without_compatibility_authority(adapters, tm
 
 
 def test_without_catalog_prompt_requires_unknown_identity(adapters, tmp_path):
-    LocalVisionProvider(tmp_path).inspect([b"image"])
+    instance = LocalVisionProvider(tmp_path)
+    instance.inspect([b"image"])
     assert "Return no identity candidates and explain the uncertainty" in adapters[0].calls[0][1]
+    assert instance.configuration.generation["identity_candidates_allowed"] is False
+    assert adapters[0].last_schema["properties"]["candidates"]["maxItems"] == 0
+
+
+def test_supplied_catalog_retains_candidate_channel_and_distinct_schema_provenance(adapters, tmp_path, catalog):
+    absent = LocalVisionProvider(tmp_path)
+    supplied = LocalVisionProvider(tmp_path, catalog=catalog)
+    supplied.inspect([b"first image", b"second image"])
+    assert supplied.configuration.generation["identity_candidates_allowed"] is True
+    assert adapters[-1].last_schema == provider.inspection_schema(2, allow_candidates=True)
+    for count in (1, 2):
+        key = f"schema_sha256_{count}"
+        assert supplied.configuration.generation[key] == provider.schema_digest(provider.inspection_schema(count, allow_candidates=True))
+        assert supplied.configuration.generation[key] != absent.configuration.generation[key]
 
 
 def test_v4_unknown_example_is_valid_without_placeholder_observations_or_candidates(adapters, tmp_path):

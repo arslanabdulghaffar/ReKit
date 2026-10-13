@@ -10,13 +10,15 @@ import logging
 from typing import Any
 
 
-SCHEMA_VERSION = "rekit-inspection-schema-v1"
+SCHEMA_VERSION = "rekit-inspection-schema-v2"
 
 
-def inspection_schema(image_count: int) -> dict:
+def inspection_schema(image_count: int, *, allow_candidates: bool = True) -> dict:
     """Return a fresh schema for exactly the images admitted to this request."""
     if type(image_count) is not int or image_count not in (1, 2):
         raise ValueError("image_count must be one or two")
+    if type(allow_candidates) is not bool:
+        raise ValueError("Candidate permission must be an explicit boolean")
 
     def text(limit: int) -> dict:
         # LMFE 0.11.3 rejects pattern combined with length constraints. Domain
@@ -53,7 +55,7 @@ def inspection_schema(image_count: int) -> dict:
     view = record({"image_indices": indices(), "view": text(100), "reason": text(160)})
     return record({
         "observations": array(observation, 2),
-        "candidates": array({"anyOf": candidates}, 1),
+        "candidates": array({"anyOf": candidates}, 1 if allow_candidates else 0),
         "uncertainties": array(text(160), 2, 1),
         "additional_views": array(view, 1),
     })
@@ -95,10 +97,85 @@ def build_tokenizer_data(tokenizer: Any) -> Any:
     return build_token_enforcer_tokenizer_data(tokenizer)
 
 
+def build_character_parser(schema: dict) -> Any:
+    """Enforce the schema plus the pinned decoder's missing empty-array bound.
+
+    LMFE 0.11.3 checks maxItems only after its first item. Keep a narrow,
+    immutable character guard for the top-level candidates array when no
+    catalog was supplied. Never patch the installed package or rewrite output.
+    """
+    from lmformatenforcer import JsonSchemaParser
+
+    parser = JsonSchemaParser(schema)
+    if schema.get("properties", {}).get("candidates", {}).get("maxItems") != 0:
+        return parser
+    from lmformatenforcer.characterlevelparser import CharacterLevelParser
+
+    class EmptyCandidatesGuard(CharacterLevelParser):
+        def __init__(self, inner, depth=0, quoted=False, escaped=False,
+                     key_text="", key="", phase=""):
+            self.inner = inner
+            self.depth, self.quoted, self.escaped = depth, quoted, escaped
+            self.key_text, self.key, self.phase = key_text, key, phase
+
+        @property
+        def config(self):
+            return self.inner.config
+
+        @config.setter
+        def config(self, value):
+            self.inner.config = value
+
+        def get_allowed_characters(self):
+            allowed = self.inner.get_allowed_characters()
+            if self.phase:
+                permitted = ("[" if self.phase == "open" else "]") + " \t\r\n"
+                return "".join(c for c in allowed if c in permitted)
+            return allowed
+
+        def can_end(self):
+            return not self.phase and self.inner.can_end()
+
+        def shortcut_key(self):
+            return None if self.phase else self.inner.shortcut_key()
+
+        def add_character(self, character):
+            if character not in self.get_allowed_characters():
+                raise ValueError("Character violates the admitted output schema")
+            depth, quoted, escaped = self.depth, self.quoted, self.escaped
+            key_text, key, phase = self.key_text, self.key, self.phase
+            if quoted:
+                if depth == 1:
+                    key_text += character
+                if escaped:
+                    escaped = False
+                elif character == "\\":
+                    escaped = True
+                elif character == '"':
+                    quoted = False
+                    if depth == 1:
+                        key = json.loads(key_text)
+            elif character == '"':
+                quoted, key_text = True, '"'
+            elif character == ":" and depth == 1 and key == "candidates":
+                phase = "open"
+            elif character in "[{":
+                depth += 1
+                if phase == "open":
+                    phase = "close"
+            elif character in "]}":
+                depth -= 1
+                if phase == "close":
+                    phase = ""
+            return EmptyCandidatesGuard(self.inner.add_character(character), depth,
+                                        quoted, escaped, key_text, key, phase)
+
+    return EmptyCandidatesGuard(parser)
+
+
 def build_prefix(tokenizer: Any, schema: dict) -> Any:
     """Build fresh request state from a tokenizer or its reusable LMFE data."""
     _protect_decoder_logs()
-    from lmformatenforcer import JsonSchemaParser
     from lmformatenforcer.integrations.transformers import build_transformers_prefix_allowed_tokens_fn
 
-    return build_transformers_prefix_allowed_tokens_fn(tokenizer, JsonSchemaParser(schema))
+    return build_transformers_prefix_allowed_tokens_fn(tokenizer, build_character_parser(schema))

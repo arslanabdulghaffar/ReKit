@@ -131,7 +131,8 @@ class InferenceService:
             metrics = self._metrics(result)
             metrics["request_seconds"] = time.perf_counter() - started
             try:
-                output = parse_output(raw_output, image_count=len(images))
+                output = parse_output(raw_output, image_count=len(images),
+                                      allow_candidates=config.generation.get("identity_candidates_allowed", True))
             except (ValueError, TypeError):
                 outcome = {"status": "invalid_output", "raw_output": diagnostic_raw,
                            "failure_reason": "Model output did not satisfy the inspection schema; no evidence was applied",
