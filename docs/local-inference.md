@@ -2,9 +2,11 @@
 
 ReKit's first local provider uses the official
 [Qwen/Qwen3-VL-2B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct)
-checkpoint. Task 1 qualifies image-to-text execution on one existing NVIDIA
-GPU. It does not yet connect model output to evidence storage or the operator
-interface, and it gives the model no catalog, approval, or inventory authority.
+checkpoint. Task 1 qualified image-to-text execution on one existing NVIDIA
+GPU. The backend now connects that provider to authenticated inspection requests
+and [unverified evidence storage](inference-evidence.md). The operator interface
+integration is separate work. The model has no catalog, approval, or inventory
+authority.
 
 ## Pinned model and download budget
 
@@ -149,11 +151,91 @@ on the same provider check that the second request does not reload weights.
 Unavailable GPU, invalid input, loading failure, or inference failure is explicit;
 there is no fabricated answer or hidden CPU fallback.
 The generation deadline is cooperative: it is checked during generation and
-after return, and cannot interrupt a blocked GPU kernel or model loading. A
-later HTTP integration needs a separate request-lifecycle policy rather than
-presenting this setting as a hard process timeout.
+after return, and cannot interrupt a blocked GPU kernel or model loading. The
+HTTP service adds the separate request lifecycle described below; neither
+deadline can forcibly cancel a CUDA kernel.
 
-## Measured qualification result
+## Enable authenticated backend inspection
+
+First configure the database, catalog, disposition policy, managed image
+directory, and operator credentials as described in
+[API setup](api-workflow.md) and [authentication](operator-auth.md). The factory
+reads environment variables explicitly; it does not load `.env` automatically.
+Then opt in to the already downloaded, verified local checkpoint:
+
+```powershell
+$env:REKIT_INFERENCE_PROVIDER = 'local-transformers'
+$env:REKIT_MODEL_DIR = '.\models\Qwen3-VL-2B-Instruct\89644892e4d85e24eaac8bacfd4f463576704203'
+$env:REKIT_CUDA_DEVICE = '1'
+.\.venv\Scripts\python.exe -m uvicorn rekit.main:create_configured_app --factory --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Use exactly one worker and one serving process for this configuration. Admission
+is protected by a process-local slot, not a distributed GPU scheduler. Keep
+credentials, managed images, model files, and run artifacts out of Git. Clients
+cannot select a model, GPU, prompt, local file, or remote image URL.
+
+The default `REKIT_INFERENCE_PROVIDER=disabled` leaves the manual workflow
+available. Imports and application construction do not load model weights or
+initialize CUDA. With local inference enabled, the first admitted request loads
+the model lazily; later requests reuse it. Missing runtime packages, unavailable
+GPU, or model loading failure produce explicit unavailability without a
+fabricated prediction or CPU fallback. Invalid server configuration, such as an
+unsupported provider name or absent `REKIT_MODEL_DIR`, is a startup error.
+
+An authenticated viewer can call `GET /inference/status`. The response includes
+`status`, `busy`, `provider`, `model_repository`, `model_revision`, and `device`;
+a configured service also reports `request_timeout_seconds`. A disabled service
+returns HTTP 200 with `status: "unavailable"` and null provider fields. The
+configured local adapter reports `unloaded`, `loading`, `ready`, or
+`unavailable`; `busy` separately describes ownership of the computation slot.
+
+A human actor with the reviewer role submits
+`POST /components/{component_id}/inference` using existing managed asset IDs:
+
+```json
+{
+  "request_id": "inspection-example-001",
+  "asset_ids": ["asset-0123456789abcdef0123456789abcdef"],
+  "expected_version": 2
+}
+```
+
+Replace the example ID and version with the component's real uploaded image and
+current evidence version. Supply the existing bearer credential through the
+Authorization header. The server binds the authenticated actor; the body has
+no `operator_id`. One or two distinct images must belong to that component.
+
+HTTP 202 returns the stored `InferenceRun`, with `start.run_id` and normally
+`outcome: null`. Poll `GET /inference/{run_id}` as a viewer until `outcome` is
+present. `GET /components/{component_id}/inference` lists the latest 50 runs.
+An exact POST retry returns the same run, including a terminal run, and does
+not schedule another computation. Reusing its request ID with changed contents
+or a different actor returns HTTP 409.
+
+A fresh request while the slot is busy returns HTTP 409 without admission;
+there is no queue. Missing credentials return 401, insufficient role returns
+403, unknown references return 404, and malformed input returns 422. A disabled
+inference service returns 503 for invocation and run queries. Once a request
+is accepted, execution failures are terminal outcomes in the stored run, not
+invented successful HTTP payloads; polling that existing run still returns 200.
+
+The backend prompt requests bounded structured observations, candidate
+identities, uncertainty, and additional views. It supplies catalog labels as
+untrusted context, not as visual proof or compatibility decisions. Generation
+uses at most 384 new tokens and a 120-second cooperative deadline. A separate
+150-second request deadline records `timed_out` and discards any late result.
+The slot remains busy until the actual worker returns, even after timeout.
+Shutdown stops admission, records failure for an active pending run, and waits
+up to one second for its daemon thread; it cannot interrupt a blocked kernel.
+
+An abrupt crash can leave a run pending. Restart and exact replay do not resume
+it or invent a failure. If the restarted service is idle, a deliberate new
+request can use a new ID after checking the current evidence version. Manual
+inspection remains available. See [inference evidence](inference-evidence.md)
+for stale-result handling and the required human review boundary.
+
+## Task 1 measured qualification result
 
 The real smoke command passed on 2026-10-13, finishing at 06:08:52 UTC. Both
 requests used the same provider instance on `cuda:1`, an NVIDIA GeForce
@@ -212,15 +294,77 @@ existing frontend baseline passed 25 tests, TypeScript validation, and its
 production build. The real GPU evidence is the separate two-request report
 above; local checks do not imply a completed GitHub Actions run.
 
+## Task 3 measured API execution and recognition error
+
+The authenticated API acceptance completed on 2026-10-13 at 06:36:44 UTC.
+It used real ASGI HTTP requests against an in-process application, managed image
+storage, SQLite, and one actual local GPU inference request. It did not exercise
+a browser or a separately listening Uvicorn server. Reproduce it with:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_api_inference_acceptance.py --device 1
+```
+
+The ignored `var/mission03-api-acceptance.json` records the complete request,
+raw response, parsed output, evidence history, and inventory state. The supplied
+image was the same 10,904-byte synthetic PNG used above, with SHA-256
+`cf1a8f595ff3986a947e7160cdb76d7493e9748d2d1f5a03b83d0d23343de38b`.
+The managed asset and admitted inference input retained that exact hash.
+Execution used the pinned Qwen revision on `cuda:1`, an RTX 4080 SUPER, with
+the same Python, PyTorch, CUDA, and Transformers versions as Task 1.
+
+| Measurement | Actual API request |
+| --- | ---: |
+| Model load time | 4.7128118 s |
+| Inference time | 43.5648928 s |
+| Worker elapsed time through provider return | 53.5957470 s |
+| Peak PyTorch allocated GPU bytes | 4,540,146,688 |
+| Peak PyTorch reserved GPU bytes | 4,559,208,448 |
+| Input tokens | 852 |
+| Generated tokens | 267 |
+| Observed visual-encoder forward calls | 1 |
+
+The worker elapsed measurement includes managed-input handling and provider
+execution; it is not browser latency or a throughput benchmark. The model was
+loaded for this request. Its terminal result was structurally valid and current
+(`succeeded`, `stale: false`), and an exact HTTP retry reused the stored run.
+
+**The software integration passed, but the model made an unsupported identity
+and revision claim.** It described the red triangle and blue circle, then
+proposed component type `adapter`, revision `A`, using `SYNTHETIC` as its
+`revision_marking`. Its reason incorrectly treated that heading as an adapter
+marking. The same response acknowledged that this was an illustration, that
+the revision could not be confirmed, and that `SYNTHETIC` was not a product
+marking. The image provides no support for that component identity or revision.
+These contradictions remain in the recorded raw and structured output; they
+were not repaired or presented as a correct recognition result.
+
+The authority boundary held: the original single physical-component identity
+was preserved, evidence advanced from version 2 to 5 with three unverified model
+events, and its state remained `review_required` with no human verification.
+Both inventory eligibility and availability remained `held`; no component was
+reserved or consumed and no kit was created. Compatibility was not granted.
+This run establishes actual image processing and safe workflow integration,
+not component-recognition accuracy or proof that the candidate is plausible.
+
+This historical run predates addition of the `preprocessing.prompt_sha256`
+field, so its report does not contain that digest. The prompt content was
+unchanged when the field was added; subsequent runs record the exact prompt
+hash. The synthetic illustration remains unsuitable for a product-recognition
+benchmark. Literal matching of a revision against model-quoted text would not
+establish that either string is visible or correct; human image review remains
+required.
+
 ## Limits and AMD boundary
 
 The illustration checks execution, not component-recognition accuracy, hidden
 damage, functionality, electrical safety, or compatibility. Model text remains
 unverified and can be wrong. Greedy generation improves repeatability, but it
 does not guarantee bitwise-identical GPU results or calibrated probabilities.
-Prompt instructions alone do not establish an authority boundary: later tasks
-must validate model output and preserve explicit human review before existing
-deterministic catalog, planning, approval, and inventory operations.
+Prompt instructions alone do not establish an authority boundary. The backend
+strictly validates model output and preserves explicit human review before
+deterministic catalog, planning, approval, and inventory operations. A valid
+schema still does not establish the truth of a model's visual claims.
 
 Local CUDA execution does not qualify AMD hardware, ROCm, or vLLM. Those still
 need their own exact runtime/model compatibility checks and measured execution,

@@ -95,6 +95,21 @@ class InferenceStore:
                 (component_id,),
             ).fetchall())
 
+    def replay(self, command: InspectionRequest, actor: Actor) -> InferenceRun | None:
+        """Read an actor-bound retry without admitting work while the worker is busy."""
+        command = InspectionRequest.model_validate(command.model_dump(mode="json", warnings=False))
+        actor = self._authorized(actor)
+        with self.evidence._read() as connection:
+            row = connection.execute(
+                "SELECT run_id, actor_id, command_json FROM inference_requests WHERE request_id = ?",
+                (command.request_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            if row["actor_id"] != actor.actor_id or row["command_json"] != _canonical(command):
+                raise ConflictError("Inspection request ID belongs to a different actor or request")
+            return self._get(connection, row["run_id"])
+
     def begin(self, command: InspectionRequest, actor: Actor,
               configuration: InferenceConfiguration) -> tuple[InferenceRun, bool]:
         command = InspectionRequest.model_validate(command.model_dump(mode="json", warnings=False))

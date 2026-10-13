@@ -33,8 +33,10 @@ inference is a required future integration; it has not been deployed or measured
 - An optional, qualified local Qwen3-VL-2B GPU provider with bounded image inputs,
   serialized requests, cached weights, and measured real image-to-text execution.
   [Local qualification](docs/local-inference.md) records its pinned model, license,
-  download budget, commands, actual measurements, and limits. At this stage it is
-  a standalone inference slice; evidence/API/UI integration follows separately.
+  download budget, commands, actual measurements, and limits. Authenticated API
+  inspection uses managed image bytes, saves immutable run provenance, and adds
+  only unverified evidence. [Inference contracts](docs/inference-evidence.md)
+  explain schema validation, stale results, failures, and human review.
 
 ## Run and test locally
 
@@ -114,6 +116,7 @@ reported separately.
 | `backend/src/rekit/inventory/` | Proposals, approvals, transactions, reservations, completion, audit |
 | `backend/src/rekit/workflows/` | Reserved boundary for richer review, rebuild instructions, and rework orchestration |
 | `backend/src/rekit/inference/adapters/` | Optional local Transformers GPU provider; future AMD ROCm/vLLM provider |
+| `backend/src/rekit/inference/` | Provider boundary, bounded worker, validated results, immutable run provenance |
 | `backend/src/rekit/integrations/evolus/` | Optional future integration through approved application commands |
 | `frontend/` | React, TypeScript, and Vite operator workbench and focused UI tests |
 | `tests/backend/`, `tests/fixtures/` | Automated contracts, integration tests, labeled synthetic inputs |

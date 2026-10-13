@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -12,6 +13,7 @@ from starlette.responses import Response
 from rekit.api.health import router as health_router
 from rekit.api.read import router as read_router
 from rekit.api.assets import router as assets_router
+from rekit.api.inference import router as inference_router
 from rekit.api.workflow import router as workflow_router
 from rekit.auth import AuthConfig, AuthDirectory
 from rekit.catalog.models import Catalog
@@ -21,27 +23,42 @@ from rekit.evidence.assets import (
     AssetUnavailableError, AssetUnsupportedError, ImageAssetStore,
 )
 from rekit.inventory.store import InventoryStore
+from rekit.inference.service import InferenceService
 from rekit.recovery.models import DispositionPolicy
 
 
 def create_app(
     inventory: InventoryStore | None = None, auth: AuthConfig | None = None,
     assets: ImageAssetStore | None = None,
+    inference: InferenceService | None = None,
 ) -> FastAPI:
     """Build the HTTP application without loading models or opening a database."""
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        try:
+            yield
+        finally:
+            if inference is not None:
+                inference.close()
+
     app = FastAPI(
         title="ReKit API",
         description=(
             "Local operator-confirmed recovery workflow with verified image storage. "
-            "Image identity and condition require human review; visual inference is not implemented. "
+            "AI visual observations are unverified and require human identity and condition review. "
             "Economic values are scenario estimates."
         ),
+        lifespan=lifespan,
     )
     app.state.inventory = inventory
     app.state.auth = AuthDirectory(auth) if auth is not None else None
     if assets is not None and (inventory is None or assets.evidence.path != inventory.evidence.path):
         raise ValueError("Image and inventory stores must share the same evidence database.")
     app.state.assets = assets
+    if inference is not None and (assets is None or inference.store.assets is not assets
+                                  or inventory is None or inference.store.evidence.path != inventory.evidence.path):
+        raise ValueError("Inference, images, and inventory must share the same managed evidence store.")
+    app.state.inference = inference
 
     @app.middleware("http")
     async def private_responses(
@@ -91,6 +108,7 @@ def create_app(
     app.include_router(workflow_router)
     app.include_router(read_router)
     app.include_router(assets_router)
+    app.include_router(inference_router)
     return app
 
 
@@ -109,7 +127,22 @@ def create_configured_app() -> FastAPI:
     policy = DispositionPolicy.model_validate_json(Path(values["REKIT_DISPOSITION_POLICY_PATH"]).read_text(encoding="utf-8"))
     evidence = EvidenceStore(Path(values["REKIT_DATABASE_PATH"]), catalog)
     asset_root = Path(os.environ.get("REKIT_EVIDENCE_DIR") or evidence.path.parent / "evidence")
-    return create_app(InventoryStore(evidence, policy), auth=auth, assets=ImageAssetStore(evidence, asset_root))
+    assets = ImageAssetStore(evidence, asset_root)
+    inference = None
+    provider_name = os.environ.get("REKIT_INFERENCE_PROVIDER", "disabled")
+    if provider_name == "local-transformers":
+        from rekit.inference.provider import LocalVisionProvider
+        from rekit.inference.store import InferenceStore
+
+        model_dir = os.environ.get("REKIT_MODEL_DIR", "").strip()
+        if not model_dir:
+            raise RuntimeError("REKIT_MODEL_DIR is required for local visual inference")
+        device = int(os.environ.get("REKIT_CUDA_DEVICE", "1"))
+        inference = InferenceService(InferenceStore(evidence, assets),
+                                     LocalVisionProvider(Path(model_dir), device=device, catalog=catalog))
+    elif provider_name != "disabled":
+        raise RuntimeError("REKIT_INFERENCE_PROVIDER must be disabled or local-transformers")
+    return create_app(InventoryStore(evidence, policy), auth=auth, assets=assets, inference=inference)
 
 
 app = create_app()

@@ -30,6 +30,10 @@ class LocalVisionBusy(LocalVisionError):
     """The single GPU execution slot is already occupied."""
 
 
+class LocalVisionTimeout(LocalVisionError):
+    """Generation exceeded its cooperative execution deadline."""
+
+
 def _decode_images(images: list[bytes]) -> list[Image.Image]:
     if not isinstance(images, list) or not 1 <= len(images) <= 2:
         raise LocalVisionError("Select one or two images")
@@ -185,7 +189,7 @@ class LocalTransformersVision:
                 hook.remove()
             elapsed = time.perf_counter() - started
             if elapsed >= self.timeout_seconds:
-                raise LocalVisionError("Inspection exceeded its cooperative execution deadline")
+                raise LocalVisionTimeout("Inspection exceeded its cooperative execution deadline")
             if not vision_calls:
                 raise LocalVisionError("No vision encoder execution was observed")
             generated = output[:, input_tokens:]
