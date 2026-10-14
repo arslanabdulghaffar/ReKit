@@ -177,6 +177,20 @@ route and the team's shared-model API eligibility. Do not send a credential or
 infer a route from the public site's `/radeon` routing prefix. No support message
 has been sent by ReKit.
 
+Suggested support text, for the operator to review and send if Check Usage
+also fails:
+
+> Our team key is redeemed and issued, but the dashboard does not show remaining
+> shared-model allowance, reset time or explicit API-verification status.
+> On October 15, 2026 (Asia/Seoul), the documented `/radeon/api/v1/usage`
+> request on `developer.amd.com.cn` returned HTTP 200 without a usable usage
+> response; `/api/profile/model-usage` on `radeon-global.anruicloud.com`
+> returned HTTP 404. Both included `include_recent=true`. Model catalog
+> discovery succeeded, but no generation has been attempted. Please confirm
+> the correct regional usage route, how Check Usage should be accessed, and
+> how we can verify our team's shared-model API eligibility, remaining free
+> allowance and reset time. No credential is included.
+
 The [catalog reference](https://amd-aim.github.io/radeon-cloud-docs/api/models/)
 states that the catalog is the same for every key, not account-scoped. Its
 `free` flag describes zero-cost accounting against the daily allowance.
@@ -220,6 +234,24 @@ must not be described as AMD tests. A remote runner must isolate the key to its
 backend process; frontend/browser processes and fixture manifests must never
 receive it. A persistent private attempt ledger must enforce the six-generation
 ceiling across separate qualification stages, including failed attempts.
+
+The offline-tested
+[`tokenfactory_qualification.py`](../evaluation/tokenfactory_qualification.py)
+now supplies that accounting component, with no CLI or default live transport.
+Its fixed ledger filename is `generation-attempts.sqlite3`; initial creation is
+explicit and reopening requires intact existing state. A durable reservation
+precedes each injected request, all attempts remain charged, and HTTP
+401/403/429 halt the ledger even if an unsafe body must be discarded. Admissions
+bind existing mission authority, current verified quota, approved ordered image
+hashes and the exact strict MiMo request. Uncertain attempts require explicit
+review before continuation; replaying an admission cannot retry it.
+
+It is not yet connected to a live launcher or the application. Before live use,
+the trusted caller must verify quota, preserve one private ledger location,
+record sanitized generation results/usage and inject this guard into every
+qualification request. The component cannot prove a supplied dashboard claim or
+estimate generation cost from remaining allowance. Existing failed discovery
+receipts and the current unknown dashboard values do not satisfy admission.
 
 See [Mission 05](reports/development-mission-05.md) for the accepted baseline and
 [AMD activation](amd-activation.md) for the separate owned-cloud route. The final
