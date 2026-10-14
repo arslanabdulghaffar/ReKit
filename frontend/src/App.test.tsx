@@ -419,6 +419,11 @@ describe('scenario planning and explicit execution', () => {
     expect(body).not.toHaveProperty('operator_id')
     expect(screen.getByText('Synthetic scenario review.')).toBeInTheDocument()
     expect(screen.getByText('Estimated net cash recovery')).toBeInTheDocument()
+    expect(screen.getByText('Estimated recovery value')).toBeInTheDocument()
+    expect(screen.getByText('Review the selected physical components and estimated costs below, then approve and reserve when ready.')).toBeInTheDocument()
+    const selectedActions = screen.getByRole('heading', { name: 'Selected recovery actions' })
+    const approval = screen.getByRole('heading', { name: 'Approval & reservation' })
+    expect(selectedActions.compareDocumentPosition(approval) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getAllByText('USD 87.50').length).toBeGreaterThan(0)
     expect(calls.filter(call => call.path.endsWith('/audit'))).toHaveLength(1)
     expect(calls.some(call => call.path.endsWith('/approve'))).toBe(false)
@@ -450,6 +455,7 @@ describe('scenario planning and explicit execution', () => {
     await screen.findByText('Approval recorded. Consuming actions reserved their physical components atomically.')
     expect(screen.getByText('Plan version 3')).toBeInTheDocument()
     expect(screen.getByText('Confirm kit rebuild completion')).toBeInTheDocument()
+    expect(screen.getByText('Components reserved. Confirm each completed action below. Remaining confirmations: 1.')).toBeInTheDocument()
     const writes = calls.filter(call => call.method === 'POST')
     expect(writes.map(call => JSON.parse(String(call.init.body)).expected_version)).toEqual([1, 2])
     for (const write of writes) {
@@ -497,5 +503,21 @@ describe('scenario planning and explicit execution', () => {
     expect(body).not.toHaveProperty('operator_id')
     expect(screen.queryByRole('button', { name: 'Record completion' })).not.toBeInTheDocument()
     expect(screen.getByText('Plan version 3')).toBeInTheDocument()
+    expect(screen.getByText('Recovery recorded. Open Inventory to inspect completed kits and their component history.')).toBeInTheDocument()
+  })
+
+  it('explains a cancelled plan without offering completion or approving it again', async () => {
+    const calls = transport(call => {
+      if (call.path === '/api/plans?limit=50') return json([{ ...summary, state: 'cancelled' }])
+      if (call.path === `/api/plans/${samplePlan.plan.plan_id}`) return json({ ...samplePlan, state: 'cancelled' })
+      if (call.path.endsWith('/audit')) return json(sampleAudit)
+      return undefined
+    })
+    const user = await signIn()
+    await openPlan(user)
+    expect(screen.getByText('Plan cancelled. Create a new plan from current inventory before doing any recovery work.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Approve and reserve' })).toBeDisabled()
+    expect(screen.queryByText('Confirm kit rebuild completion')).not.toBeInTheDocument()
+    expect(calls.filter(call => call.method === 'POST')).toHaveLength(0)
   })
 })

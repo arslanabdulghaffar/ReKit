@@ -59,9 +59,21 @@ async function postFromUI(page: Page, button: Locator, route: string, status: nu
   return completed
 }
 
-async function capture(page: Page, filename: string): Promise<void> {
-  await page.evaluate(() => window.scrollTo(0, 0))
-  await page.screenshot({ path: join(manifest.artifacts_dir, filename), fullPage: true, animations: 'disabled' })
+async function assertLayout(page: Page): Promise<void> {
+  await expect.poll(() => page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth),
+    { message: 'The document must fit the viewport without horizontal page scrolling.' }).toBeLessThanOrEqual(1)
+  await expect.poll(() => page.locator('img:visible').evaluateAll(images => images.every(image => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0)),
+    { message: 'Every displayed original evidence image must finish loading.' }).toBe(true)
+}
+
+async function capture(page: Page, filename: string, focus?: Locator): Promise<void> {
+  expect(await page.locator('input[type="password"]').evaluateAll(inputs => inputs.every(input => (input as HTMLInputElement).value === ''))).toBe(true)
+  const visibleText = await page.locator('body').innerText()
+  expect([manifest.operator_token, manifest.viewer_token].some(token => visibleText.includes(token))).toBe(false)
+  await assertLayout(page)
+  if (focus) await focus.evaluate(element => window.scrollTo(0, Math.max(0, window.scrollY + element.getBoundingClientRect().top - 120)))
+  else await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({ path: join(manifest.artifacts_dir, filename), fullPage: !focus, animations: 'disabled' })
 }
 
 async function held(request: APIRequestContext, componentId: string): Promise<{ history: EvidenceHistory; inventory: InventorySnapshot }> {
@@ -135,6 +147,8 @@ test('original catalog product views remain unverified through one real joint in
 
     stage = 'authenticated simulated intake'
     await page.goto('/')
+    await expect(page.getByLabel('Operator token', { exact: true })).toBeVisible()
+    await assertLayout(page)
     await page.getByLabel('Operator token', { exact: true }).fill(manifest.operator_token)
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible()
@@ -185,9 +199,21 @@ test('original catalog product views remain unverified through one real joint in
     stage = 'single actual joint inspection'
     await page.getByRole('button', { name: /02.*Component review/ }).click()
     await page.getByRole('combobox', { name: 'Component to review', exact: true }).selectOption(component.physical_component_id)
-    const previews = page.getByRole('img', { name: `Evidence for ${component.physical_component_id}`, exact: true })
+    const originalViews = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Views & provenance', exact: true }) })
+    const previews = originalViews.getByRole('img', { name: /evidence for /i })
     await expect(previews).toHaveCount(2)
     await expect.poll(() => previews.evaluateAll(items => items.every(item => item instanceof HTMLImageElement && item.complete && item.naturalWidth > 0))).toBe(true)
+    const imageHeading = page.getByRole('heading', { name: 'Views & provenance', exact: true })
+    const inferenceHeading = page.getByRole('heading', { name: 'AI-assisted inspection', exact: true })
+    expect(await imageHeading.evaluate((heading, label) => {
+      const modelHeading = Array.from(document.querySelectorAll('h2')).find(item => item.textContent === label)
+      return modelHeading !== undefined && Boolean(heading.compareDocumentPosition(modelHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
+    }, await inferenceHeading.textContent())).toBe(true)
+    screenshots.push('product-originals-desktop.png')
+    await capture(page, screenshots.at(-1)!, imageHeading)
+    await page.setViewportSize({ width: 320, height: 740 })
+    await assertLayout(page)
+    await page.setViewportSize({ width: 1440, height: 1000 })
     for (const checkbox of await page.getByRole('checkbox', { name: /^Analyze image / }).all()) await checkbox.uncheck()
     for (const asset of assets) await page.getByRole('checkbox', { name: `Analyze image ${asset.asset_id}`, exact: true }).check()
     const admitted = await postFromUI(page, page.getByRole('button', { name: 'Analyze images', exact: true }), `/components/${escaped(component.physical_component_id)}/inference`, 202)
@@ -196,6 +222,9 @@ test('original catalog product views remain unverified through one real joint in
     run = await admitted.json() as InferenceRun
     const runId = run.start.run_id
     persist()
+    await expect(page.locator('.inference-result').getByText('pending', { exact: true })).toBeVisible()
+    screenshots.push('product-analysis-in-progress.png')
+    await capture(page, screenshots.at(-1)!, inferenceHeading)
     await expect.poll(async () => {
       run = await get<InferenceRun>(request, `/inference/${escaped(runId)}`)
       persist()
@@ -240,7 +269,8 @@ test('original catalog product views remain unverified through one real joint in
       expect(entry.image_indices.every(index => Number.isInteger(index) && index >= 1 && index <= 2)).toBe(true)
     }
     await expect(page.locator('.inference-result').getByText('succeeded', { exact: true })).toBeVisible()
-    await expect(page.getByText(/Identity unknown\. No catalog identity was proposed/)).toBeVisible()
+    await expect(page.getByText(/No catalog identity was proposed by this analysis\./)).toBeVisible()
+    await expect(page.getByText('Analysis finished. Compare the suggestions with the original views before recording a human decision.', { exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Model observations', exact: true })).toBeVisible()
     for (const observation of output.observations) await expect(page.getByText(observation.text, { exact: true }).first()).toBeVisible()
     for (const uncertainty of output.uncertainties) await expect(page.getByText(uncertainty, { exact: true }).first()).toBeVisible()
@@ -248,6 +278,8 @@ test('original catalog product views remain unverified through one real joint in
     await expect(page.getByRole('combobox', { name: 'Revision', exact: true })).toHaveValue('')
     await expect(page.getByRole('combobox', { name: 'Visible condition', exact: true })).toHaveValue('unknown')
     finalState = await held(request, component.physical_component_id)
+    screenshots.push('product-ai-result-desktop.png')
+    await capture(page, screenshots.at(-1)!, page.getByRole('heading', { name: 'Model observations', exact: true }))
     screenshots.push('desktop-product-inspection.png')
     await capture(page, screenshots.at(-1)!)
     await page.setViewportSize({ width: 390, height: 844 })
@@ -305,6 +337,7 @@ test('original catalog product views remain unverified through one real joint in
       returns: 1, physical_components: 1, managed_images: 2, inference_runs: 1, vision_forward_calls: 1,
       inference_status: run.outcome!.status, identity_candidates: 0, independent_human_review: false,
       held_components: 1, reserved_components: 0, completed_kits: 0, page_errors: pageErrors, screenshots, limitations,
+      responsive_viewports: [1440, 390, 320], document_overflow_checked: true,
       demo_presentation: manifest.demo_presentation,
     }, null, 2)), 'utf8')
   } catch (error) {

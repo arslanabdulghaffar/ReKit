@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import catalogFixture from '../../tests/fixtures/synthetic_catalog.json'
@@ -183,6 +183,26 @@ describe('unverified inspection evidence', () => {
     expect(properties.onProposal).not.toHaveBeenCalled()
   })
 
+  it('does not replace a current human verification with an unknown historical AI result', async () => {
+    const run = completedRun()
+    run.outcome!.output!.candidates = []
+    const calls = transport([run])
+    const properties = props()
+    properties.history.current = {
+      ...properties.history.current, version: 8, state: 'verified', unresolved_reasons: [],
+      verification: { verification_id: 'human-reviewed-after-ai', physical_component_id: componentId,
+        identity: { component_type_id: 'body', revision: 'A' }, operator_id: actor.actor_id,
+        verified_at: '2026-10-13T00:02:00Z', evidence_observation_ids: [assets[0].observation_id],
+        visible_condition: 'acceptable', reason: 'Controlled human verification fixture.', supersedes_verification_id: null },
+    }
+    render(<InferencePanel {...properties} />)
+    expect(await screen.findByText(/The current human-verified identity remains in effect/)).toBeInTheDocument()
+    expect(screen.getByText(/Stale or historical inspection/)).toBeInTheDocument()
+    expect(screen.queryByText(/Identity unknown|Identity remains unverified/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reject unsupported proposal' })).toBeDisabled()
+    expect(calls.filter(call => call.method !== 'GET')).toEqual([])
+  })
+
   it('only prefills identity after an explicit proposal review click', async () => {
     const run = completedRun()
     const calls = transport([run])
@@ -228,6 +248,30 @@ describe('unverified inspection evidence', () => {
 })
 
 describe('inspection requests and explicit human actions', () => {
+  it('labels gallery views readably and maps reversed selected order to the recorded run inputs', async () => {
+    const run = completedRun()
+    run.start.inputs.reverse()
+    const calls = transport([], call => call.method === 'POST' ? json(run, 202) : undefined)
+    const properties = props()
+    const user = userEvent.setup()
+    render(<InferencePanel {...properties} />)
+    await chooseImage(user, 1)
+    await chooseImage(user, 0)
+    const choice = screen.getByRole('checkbox', { name: `Analyze image ${assets[1].asset_id}` }).closest('label')!
+    expect(within(choice).getByText('Image 2')).toBeInTheDocument()
+    expect(within(choice).queryByText(assets[1].asset_id)).not.toBeInTheDocument()
+    expect(screen.getByText(/Selected order: Image 2 → Image 1/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Analyze images' }))
+    expect(await screen.findByText('Controlled blue housing observation.')).toBeInTheDocument()
+    expect(screen.getAllByText('Run image 1: Image 2 in the gallery').length).toBeGreaterThan(0)
+    expect(screen.getByText('Run image 2: Image 1 in the gallery')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Suggested components — unverified' })).toBeInTheDocument()
+    const writes = calls.filter(call => call.method === 'POST')
+    expect(writes).toHaveLength(1)
+    expect(JSON.parse(String(writes[0].init.body)).asset_ids).toEqual([assets[1].asset_id, assets[0].asset_id])
+    expect(properties.onProposal).not.toHaveBeenCalled()
+  })
+
   it('submits one or two selected asset IDs with the current version and no authority overrides', async () => {
     const calls = transport([], call => call.method === 'POST' && call.path.endsWith('/inference') ? json(completedRun(), 202) : undefined)
     const properties = props()
@@ -289,7 +333,7 @@ describe('inspection requests and explicit human actions', () => {
     render(<InferencePanel {...properties} />)
     await chooseImage(user)
     await user.click(screen.getByRole('button', { name: 'Analyze images' }))
-    expect(await screen.findByText(/The inference worker is busy/)).toBeInTheDocument()
+    expect(await screen.findByText(/Analyzing the selected images/)).toBeInTheDocument()
     expect(properties.onUpdated).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Analyze images' })).toBeDisabled()
     await screen.findByText('Controlled blue housing observation.', {}, { timeout: 4000 })
@@ -302,7 +346,7 @@ describe('inspection requests and explicit human actions', () => {
     const calls = transport([], undefined, { status: 'unavailable', busy: false, provider: null, model_repository: null, model_revision: null, device: null })
     const user = userEvent.setup()
     render(<InferencePanel {...props()} />)
-    expect(await screen.findByText(/Visual inference is unavailable/)).toBeInTheDocument()
+    expect(await screen.findByText(/AI image analysis is unavailable/)).toBeInTheDocument()
     await chooseImage(user)
     expect(screen.getByRole('button', { name: 'Analyze images' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Upload another view' })).toBeEnabled()
@@ -452,7 +496,15 @@ describe('inspection requests and explicit human actions', () => {
     const user = userEvent.setup()
     render(<Review api={new ApiClient('controlled-memory-only-token')} actor={actor} data={data} componentId={componentId}
       refresh={vi.fn(async () => {})} onError={onError} onMessage={onMessage} onSelect={vi.fn()} />)
-    await user.click(await screen.findByRole('button', { name: 'Review proposal body A' }))
+    const proposal = await screen.findByRole('button', { name: 'Review proposal body A' })
+    const originals = screen.getByRole('heading', { name: 'Views & provenance' })
+    const analysis = screen.getByRole('heading', { name: 'AI-assisted inspection' })
+    const human = screen.getByRole('heading', { name: 'Human verification' })
+    expect(originals.compareDocumentPosition(analysis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(analysis.compareDocumentPosition(human) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(originals.closest('section')!).getByText('Image 1')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /Image 1.*Operator observation; observation controlled-capture-1/ })).not.toBeChecked()
+    await user.click(proposal)
     expect(screen.getByRole('combobox', { name: 'Component type' })).toHaveValue('body')
     expect(screen.getByRole('combobox', { name: 'Revision' })).toHaveValue('A')
     expect(screen.getByRole('combobox', { name: 'Visible condition' })).toHaveValue('unknown')
@@ -467,7 +519,7 @@ describe('inspection requests and explicit human actions', () => {
     await user.click(screen.getByRole('button', { name: 'Verify component' }))
     expect(calls.filter(call => call.method === 'POST')).toEqual([])
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'Select at least one observation supporting this verification.' }))
-    await user.click(screen.getByRole('checkbox', { name: /^controlled-capture-1asset:/ }))
+    await user.click(screen.getByRole('checkbox', { name: /Image 1.*Operator observation; observation controlled-capture-1/ }))
     expect(calls.filter(call => call.method === 'POST')).toEqual([])
     await user.click(screen.getByRole('button', { name: 'Verify component' }))
     await waitFor(() => expect(onMessage).toHaveBeenCalledWith('Human verification recorded with its evidence links and actor identity.'))

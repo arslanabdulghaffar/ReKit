@@ -62,9 +62,22 @@ async function postFromUI(page: Page, button: Locator, route: string, status: nu
   return response
 }
 
-async function capture(page: Page, filename: string): Promise<void> {
-  await page.evaluate(() => window.scrollTo(0, 0))
-  await page.screenshot({ path: join(manifest.artifacts_dir, filename), fullPage: true, animations: 'disabled' })
+async function assertLayout(page: Page): Promise<void> {
+  await expect.poll(() => page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth),
+    { message: 'The document must fit the viewport; wide tables may scroll inside their own container.' }).toBeLessThanOrEqual(1)
+  await expect.poll(() => page.locator('img:visible').evaluateAll(images => images.every(image => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0)),
+    { message: 'Every displayed evidence image must finish loading.' }).toBe(true)
+}
+
+async function capture(page: Page, filename: string, focus?: Locator): Promise<void> {
+  // Never capture a populated sign-in field, even when a caller chooses a new state.
+  expect(await page.locator('input[type="password"]').evaluateAll(inputs => inputs.every(input => (input as HTMLInputElement).value === ''))).toBe(true)
+  const visibleText = await page.locator('body').innerText()
+  expect([manifest.operator_token, manifest.viewer_token].some(token => visibleText.includes(token))).toBe(false)
+  await assertLayout(page)
+  if (focus) await focus.evaluate(element => window.scrollTo(0, Math.max(0, window.scrollY + element.getBoundingClientRect().top - 120)))
+  else await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({ path: join(manifest.artifacts_dir, filename), fullPage: !focus, animations: 'disabled' })
 }
 
 async function login(page: Page, credential: string): Promise<void> {
@@ -230,12 +243,13 @@ async function inspectFromUI(page: Page, request: APIRequestContext, componentId
   await expect(page.locator('.inference-result').getByText('succeeded', { exact: true })).toBeVisible({ timeout: 10_000 })
   await expect(page.locator('.inference-result').getByText(run.start.run_id, { exact: true })).toBeVisible()
   await expect(page.getByText('AI output is unverified.', { exact: false })).toBeVisible()
+  await expect(page.getByText('Analysis finished. Compare the suggestions with the original views before recording a human decision.', { exact: true })).toBeVisible()
   for (const observation of output.observations) await expect(page.getByText(observation.text, { exact: true }).first()).toBeVisible()
   await assertHeld(request, componentId)
   return run
 }
 
-async function generatePlan(page: Page, description: string): Promise<StoredPlan> {
+async function generatePlan(page: Page, description: string, beforeSubmit?: () => Promise<void>): Promise<StoredPlan> {
   const scenario = fixture.scenario
   await page.getByRole('button', { name: /03.*Recovery planning/ }).click()
   await page.getByLabel('Scenario description', { exact: true }).fill(description)
@@ -260,6 +274,7 @@ async function generatePlan(page: Page, description: string): Promise<StoredPlan
     await page.getByLabel(`Liquidation value (cents) — ${returned.return_id}`, { exact: true }).fill(String(returned.liquidation_value_cents))
     await page.getByLabel(`Liquidation labor (minutes) — ${returned.return_id}`, { exact: true }).fill(String(returned.liquidation_labor_minutes ?? 0))
   }
+  if (beforeSubmit) await beforeSubmit()
   const response = await postFromUI(page, page.getByRole('button', { name: 'Generate recovery plan', exact: true }), '/plans', 201)
   const command = response.request().postDataJSON()
   expect(Object.keys(command).sort()).toEqual(['scenario', 'settings'])
@@ -275,12 +290,25 @@ test(realInference ? 'real local vision and human review recover two synthetic k
   page.on('pageerror', error => pageErrors.push(redact(error.message)))
   const assets: Record<string, ImageAsset[]> = {}
   const inference: InferenceAcceptance = { runs: [], ambiguous_result: 'not_run' }
-  const screenshots = ['desktop-evidence.png', 'mobile-evidence.png', 'plan-overview.png', 'reserved-plan.png', 'final-inventory.png']
+  const screenshots = ['sign-in-empty-desktop.png', 'intake-empty-desktop.png', 'intake-populated-desktop.png',
+    'desktop-evidence.png', 'mobile-evidence.png', 'compatibility-denied.png', 'compatibility-approved.png',
+    'planning-form-desktop.png', 'plan-overview.png', 'reserved-plan.png', 'completion-open-desktop.png',
+    'audit-completed-desktop.png', 'final-inventory.png', 'final-inventory-mobile.png']
   try {
     expect(await get<InventorySnapshot>(request, '/inventory')).toEqual({ items: [], completed_kits: [] })
+    await page.goto('/')
+    await expect(page.getByLabel('Operator token', { exact: true })).toBeVisible()
+    await page.setViewportSize({ width: 320, height: 740 })
+    await assertLayout(page)
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await capture(page, 'sign-in-empty-desktop.png', page.getByRole('button', { name: 'Sign in', exact: true }))
     await login(page, manifest.operator_token)
     await expect(page.getByText(manifest.operator_id, { exact: true })).toBeVisible()
     expect((await request.get(`${manifest.api_url}/inventory`)).status()).toBe(401)
+    await capture(page, 'intake-empty-desktop.png')
+    await page.setViewportSize({ width: 390, height: 844 })
+    await assertLayout(page)
+    await page.setViewportSize({ width: 1440, height: 1000 })
 
     stage = 'native batch, return, and physical intake'
     await page.getByLabel('Batch ID', { exact: true }).fill(fixture.batch.batch_id)
@@ -312,13 +340,14 @@ test(realInference ? 'real local vision and human review recover two synthetic k
       expect(await input.evaluate((element: HTMLInputElement) => ({ count: element.files?.length, valid: element.checkValidity() }))).toEqual({ count: 2, valid: true })
       await page.getByRole('button', { name: 'Upload images', exact: true }).click()
       await expect(page.getByText(`Image evidence saved for ${id}. No additional physical stock was created.`, { exact: true })).toBeVisible()
-      const previews = page.getByRole('img', { name: `Evidence for ${id}`, exact: true })
+      const previews = page.getByRole('img', { name: new RegExp(`[Ee]vidence for ${id}$`) })
       await expect(previews).toHaveCount(2)
       await expect.poll(() => previews.evaluateAll(images => images.every(image => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0))).toBe(true)
       assets[id] = await get<ImageAsset[]>(request, `/components/${path(id)}/images`)
       expect(assets[id]).toHaveLength(2)
       expect(assets[id].every(asset => asset.physical_component_id === id && asset.return_id === record.component.source_return_id && asset.uploaded_by === manifest.operator_id)).toBe(true)
     }
+    await capture(page, 'intake-populated-desktop.png')
     const first = fixture.components[0].component
     await page.getByRole('combobox', { name: 'Component to photograph', exact: true }).selectOption(first.physical_component_id)
     await page.getByLabel(/^Component images/).setInputFiles(manifest.images[first.physical_component_id][0])
@@ -339,10 +368,13 @@ test(realInference ? 'real local vision and human review recover two synthetic k
     const initialHistory = await get<EvidenceHistory>(request, `/components/${path(first.physical_component_id)}/history`)
     expect(initialHistory.events).toHaveLength(2)
     await selectReview(page, first.physical_component_id, initialHistory.current.version)
-    await expect(page.getByRole('img', { name: `Evidence for ${first.physical_component_id}`, exact: true })).toHaveCount(2)
+    const originalViews = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Views & provenance', exact: true }) })
+    await expect(originalViews.getByRole('img', { name: /evidence for /i })).toHaveCount(2)
     await capture(page, 'desktop-evidence.png')
     await page.setViewportSize({ width: 390, height: 844 })
     await capture(page, 'mobile-evidence.png')
+    await page.setViewportSize({ width: 320, height: 740 })
+    await assertLayout(page)
     await page.setViewportSize({ width: 1440, height: 1000 })
 
     if (realInference) {
@@ -405,7 +437,7 @@ test(realInference ? 'real local vision and human review recover two synthetic k
         inference.rejection_event_id = command.rejection_id
       } else {
         expect(ambiguousRun.outcome!.output!.uncertainties.length).toBeGreaterThan(0)
-        await expect(page.getByText(/Identity unknown\. No catalog identity was proposed/)).toBeVisible()
+        await expect(page.getByText(/No catalog identity was proposed by this analysis\./)).toBeVisible()
         inference.ambiguous_result = 'unknown'
       }
       expect(await get<InferenceRun[]>(request, `/components/${path(firstId)}/inference`)).toHaveLength(2)
@@ -431,6 +463,7 @@ test(realInference ? 'real local vision and human review recover two synthetic k
     const unresolvedId = fixture.components[2].component.physical_component_id
     const incompatibleId = fixture.components[3].component.physical_component_id
     await verify(page, request, incompatibleId, 'adapter', 'B')
+    await capture(page, 'compatibility-denied.png', page.getByText(/Compatibility not established/))
     expect((await get<EvidenceHistory>(request, `/components/${path(unresolvedId)}/history`)).current.state).toBe('unresolved')
     const negative = await generatePlan(page, 'Synthetic negative case: unresolved adapter and incompatible revision B.')
     expect(negative.plan.status).toBe('OPTIMAL')
@@ -453,9 +486,15 @@ test(realInference ? 'real local vision and human review recover two synthetic k
     stage = 'manual correction and real CPU optimization'
     await verify(page, request, unresolvedId, 'adapter', 'A')
     await verify(page, request, incompatibleId, 'adapter', 'A')
+    await capture(page, 'compatibility-approved.png', page.getByText(/Compatible under the approved policy/))
     const corrected = await get<EvidenceHistory>(request, `/components/${path(incompatibleId)}/history`)
     expect(corrected.events.filter(event => event.kind === 'verification')).toHaveLength(2)
-    const proposal = await generatePlan(page, 'Synthetic three-return recovery: explicit costs, two operator-confirmed kits.')
+    const proposal = await generatePlan(page, 'Synthetic three-return recovery: explicit costs, two operator-confirmed kits.', async () => {
+      await capture(page, 'planning-form-desktop.png')
+      await page.setViewportSize({ width: 390, height: 844 })
+      await assertLayout(page)
+      await page.setViewportSize({ width: 1440, height: 1000 })
+    })
     expect(proposal.plan.status).toBe('OPTIMAL')
     expect(proposal.plan.solver_version).toBeTruthy()
     expect(proposal.plan.selected_actions).toHaveLength(2)
@@ -465,6 +504,10 @@ test(realInference ? 'real local vision and human review recover two synthetic k
     expect(proposal.plan.retained_value_cents).toBe(0)
     expect(proposal.plan.labor_minutes).toBe(60)
     await expect(page.getByText('USD 175.00', { exact: true }).first()).toBeVisible()
+    expect(await page.getByRole('heading', { name: 'Selected recovery actions', exact: true }).evaluate(heading => {
+      const approval = Array.from(document.querySelectorAll('h2')).find(item => item.textContent === 'Approval & reservation')
+      return approval !== undefined && Boolean(heading.compareDocumentPosition(approval) & Node.DOCUMENT_POSITION_FOLLOWING)
+    })).toBe(true)
     await capture(page, 'plan-overview.png')
     const beforeApproval = await get<InventorySnapshot>(request, '/inventory')
     expect(beforeApproval.completed_kits).toHaveLength(0)
@@ -485,6 +528,7 @@ test(realInference ? 'real local vision and human review recover two synthetic k
     expect(reserved.items).toHaveLength(4)
     expect(reserved.items.every(entry => entry.availability === 'reserved' && entry.plan_id === proposal.plan.plan_id)).toBe(true)
     await expect(page.getByText('Approval recorded. Consuming actions reserved their physical components atomically.', { exact: true })).toBeVisible()
+    await expect(page.getByText('Components reserved. Confirm each completed action below. Remaining confirmations: 2.', { exact: true })).toBeVisible()
     await expect(page.locator('.metrics > div').filter({ has: page.getByText('Reserved', { exact: true }) }).locator('strong')).toHaveText('4')
     expect(reserved.completed_kits).toHaveLength(0)
     await capture(page, 'reserved-plan.png')
@@ -496,6 +540,12 @@ test(realInference ? 'real local vision and human review recover two synthetic k
       await card.getByText('Confirm kit rebuild completion', { exact: true }).click()
       const completeButton = card.getByRole('button', { name: 'Record completion', exact: true })
       await expect(completeButton).toBeDisabled()
+      if (index === 0) {
+        await capture(page, 'completion-open-desktop.png', card.getByText('Confirm kit rebuild completion', { exact: true }))
+        await page.setViewportSize({ width: 390, height: 844 })
+        await assertLayout(page)
+        await page.setViewportSize({ width: 1440, height: 1000 })
+      }
       for (const id of action.component_ids) await card.getByRole('checkbox', { name: `I checked physical component ${id}`, exact: true }).check()
       await card.getByLabel('Completed kit ID', { exact: true }).fill(`synthetic-browser-kit-${index + 1}`)
       await card.getByLabel(/^Completion evidence references/).fill(action.component_ids.map(id => `asset:${assets[id][0].asset_id}`).join('\n'))
@@ -531,10 +581,14 @@ test(realInference ? 'real local vision and human review recover two synthetic k
     expect(audit.every(record => record.operator_id === manifest.operator_id)).toBe(true)
     expect((await get<StoredPlan>(request, `/plans/${path(proposal.plan.plan_id)}`)).state).toBe('completed')
     await expect(page.locator('.audit-list > li')).toHaveCount(4)
+    await capture(page, 'audit-completed-desktop.png', page.getByRole('heading', { name: 'Audit trail', exact: true }))
     await page.getByRole('button', { name: /05.*Inventory/ }).click()
     await expect(page.getByRole('heading', { name: 'synthetic-browser-kit-1', exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'synthetic-browser-kit-2', exact: true })).toBeVisible()
     await capture(page, 'final-inventory.png')
+    await page.setViewportSize({ width: 390, height: 844 })
+    await capture(page, 'final-inventory-mobile.png')
+    await page.setViewportSize({ width: 1440, height: 1000 })
 
     stage = 'viewer authority and final browser checks'
     const viewer = await browser.newPage({ baseURL: manifest.base_url })
@@ -559,6 +613,7 @@ test(realInference ? 'real local vision and human review recover two synthetic k
       retained_value_cents: proposal.plan.retained_value_cents, reserved_before_completion: 4,
       completed_kits: 2, consumed_components: 4, audit_events: audit.length, completion_retry_status: 200,
       screenshots,
+      responsive_viewports: [1440, 390, 320], document_overflow_checked: true,
       demo_presentation: manifest.demo_presentation,
       ...(realInference ? { real_inference: true, inference_artifact: 'inference-results.json',
         inference_run_ids: inference.runs.map(run => run.start.run_id), ambiguous_result: inference.ambiguous_result,

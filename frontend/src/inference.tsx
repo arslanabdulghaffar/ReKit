@@ -150,7 +150,7 @@ export function InferencePanel({ api, actor, componentId, history, assets, locke
       await api.post<CurrentEvidence>(`/inference/${idPath(run.start.run_id)}/reject`, rejection.current.body);
       if (scope.current !== current) return;
       await updated.current();
-      if (scope.current === current) { setMessage('Rejection recorded. The original model output remains in history; identity is still unverified.'); setReason(''); rejection.current = null; }
+      if (scope.current === current) { setMessage('Rejection recorded. The original model output remains in history. Review the current evidence before making a new human decision.'); setReason(''); rejection.current = null; }
     } catch (failure) {
       if (scope.current !== current) return;
       setError(errorText(failure));
@@ -182,13 +182,20 @@ export function InferencePanel({ api, actor, componentId, history, assets, locke
     } finally { if (scope.current === current) setBusy(false); }
   }
 
-  const sources = (indices: number[]) => <small className="inference-sources">{indices.map(index => `Image ${index}: ${run?.start.inputs[index - 1]?.asset_id ?? 'unavailable reference'}`).join(' · ')}</small>;
+  const imageLabel = (assetId: string) => {
+    const index = assets.findIndex(asset => asset.asset_id === assetId);
+    return index >= 0 ? `Image ${index + 1}` : 'Unavailable view';
+  };
+  const sources = (indices: number[]) => <small className="inference-sources">{indices.map(index => {
+    const input = run?.start.inputs[index - 1];
+    return `Run image ${index}: ${input ? imageLabel(input.asset_id) : 'unavailable reference'} in the gallery`;
+  }).join(' · ')}</small>;
   const canAnalyze = reviewer && !locked && !busy && !loading && !status?.busy && !pending && !!status?.provider && selected.length >= 1 && selected.length <= 2 && !retry;
-  return <Section eyebrow="VISUAL EVIDENCE · HUMAN AUTHORITY" title="AI-assisted inspection" aside={<Badge value={loading ? 'checking' : status?.status ?? 'unknown'} />}>
+  return <Section eyebrow="2 · UNVERIFIED AI SUGGESTIONS" title="AI-assisted inspection" aside={<Badge value={loading ? 'checking' : status?.status ?? 'unknown'} />}>
     <p>AI output is unverified. Compare each claim with its images and uncertainty. Only explicit human verification can establish an eligible identity.</p>
     {status?.model_repository && <div className="context-line"><strong>{status.model_repository}</strong><span>{status.provider} · {status.device}</span><code>{remoteStatus ? 'Configured revision' : 'Revision'} {status.model_revision}</code></div>}
     {(remoteStatus || remoteRun) && <Notice>Remote responses are checked for the configured model ID. The response does not verify deployed weights, runtime, or AMD hardware.</Notice>}
-    {status?.status === 'unavailable' && <Notice>Visual inference is unavailable. Continue manual inspection and human verification below; no AI fallback is used.</Notice>}
+    {status?.status === 'unavailable' && <Notice>AI image analysis is unavailable. Continue manual inspection and human verification below; no AI fallback is used.</Notice>}
     {status?.status === 'unavailable' && status.provider !== null && <Notice>A provider is configured. You may select images and choose Analyze images to attempt inspection again. The request can still fail; no result is assumed.</Notice>}
     {!reviewer && <Notice>A human reviewer role is required to analyze images, review proposals, or reject them.</Notice>}
     {locked && <Notice>AI and image changes are disabled while this component is reserved, consumed, or another review action is being saved. Cancel and replan before changing reserved evidence.</Notice>}
@@ -197,15 +204,16 @@ export function InferencePanel({ api, actor, componentId, history, assets, locke
       <legend>Select one or two existing views</legend>
       {available.length ? available.map(asset => <label className="checkbox" key={asset.asset_id}>
         <input type="checkbox" aria-label={`Analyze image ${asset.asset_id}`} checked={selected.includes(asset.asset_id)} disabled={selected.length >= 2 && !selected.includes(asset.asset_id)} onChange={event => setSelected(items => event.target.checked ? [...items, asset.asset_id] : items.filter(id => id !== asset.asset_id))} />
-        <span><strong>{asset.asset_id}</strong><small>{asset.width} × {asset.height} · Observation {asset.observation_id}</small></span>
+        <span><strong>{imageLabel(asset.asset_id)}</strong><small>{asset.width} × {asset.height} · Uploaded {dateTime(asset.received_at)}</small></span>
       </label>) : <p className="muted">Upload managed image evidence for this physical component to begin.</p>}
     </fieldset>
+    <p className="muted">{selected.length ? `Selected order: ${selected.map(imageLabel).join(' → ')}. ` : ''}Model references follow the selected order, which can differ from the gallery. Each saved run records its own image mapping.</p>
     <div className="inference-controls"><button className="primary" disabled={!canAnalyze} onClick={() => { void analyze(); }}>Analyze images</button>
       {retry && <button className="secondary" disabled={busy || locked || !reviewer} onClick={() => { void analyze(retry); }}>Retry same request</button>}
-      <button className="text-button" disabled={busy || loading} onClick={() => { const current = scope.current; void api.get<InferenceStatus>('/inference/status').then(next => { if (scope.current === current) setStatus(next); }).catch(failure => { if (scope.current === current) setError(errorText(failure)); }); }}>Refresh inference status</button>
+      <button className="text-button" disabled={busy || loading} onClick={() => { const current = scope.current; void api.get<InferenceStatus>('/inference/status').then(next => { if (scope.current === current) setStatus(next); }).catch(failure => { if (scope.current === current) setError(errorText(failure)); }); }}>Refresh analysis status</button>
     </div>
     {retry && <Notice>The server response was lost. Retry the same request to recover its recorded result without starting a duplicate. The original images and evidence version are retained.</Notice>}
-    {(pending || status?.busy) && <Notice>The inference worker is busy{status?.status === 'loading' ? ' loading the model' : ''}. Results remain unverified. Manual inspection can continue; a new human decision or image will make an earlier result stale.</Notice>}
+    {(pending || status?.busy) && <Notice>{status?.status === 'loading' ? 'Loading the image-analysis model.' : pending ? 'Analyzing the selected images.' : 'Image analysis is busy with another request.'} Results remain unverified. You can inspect the original views while waiting; new images or a human decision will make an earlier result historical.</Notice>}
     {idlePending && <Notice>This pending record has no active worker. Its result is unknown, not a success. You may start a new request when the provider is available.</Notice>}
     {runs.length > 1 && <Field label="Inspection run"><select value={runId} disabled={busy} onChange={event => { setRunId(event.target.value); setReason(''); setIdlePending(!runs.find(item => item.start.run_id === event.target.value)?.outcome && !status?.busy); }}>{runs.map(item => <option key={item.start.run_id} value={item.start.run_id}>{dateTime(item.start.started_at)} · {item.outcome?.status ?? 'pending'} · {item.start.run_id}</option>)}</select></Field>}
     {run && <div className="inference-result">
@@ -214,16 +222,17 @@ export function InferencePanel({ api, actor, componentId, history, assets, locke
       {historical && <Notice danger>Stale or historical inspection. {outcome?.stale_reason ?? 'Newer component evidence exists.'} This output cannot prefill or replace the current human decision.</Notice>}
       {rejected.map(event => <Notice key={event.event_id}>{String(event.payload.reason)}</Notice>)}
       {outcome?.failure_reason && <Notice danger>{outcome.failure_reason} Continue manual inspection, or retry with a new request when the provider is ready.</Notice>}
-      <details><summary>Source images & run provenance</summary><div className="asset-grid">{run.start.inputs.map((input, index) => {
+      {outcome?.status === 'succeeded' && <Notice>Analysis finished. Compare the suggestions with the original views before recording a human decision.</Notice>}
+      <details><summary>Source images & run provenance</summary><p>Run image numbers below follow this request’s recorded input order, not the current gallery order.</p><div className="asset-grid">{run.start.inputs.map((input, index) => {
         const asset = assets.find(item => item.asset_id === input.asset_id);
-        return <div key={input.asset_id}><h3>Image {index + 1}</h3><code>{input.asset_id}</code><p><code>SHA-256 {input.sha256}</code></p><small>Observation {input.observation_id}</small>{asset && <AssetPreview api={api} asset={asset} />}</div>;
+        return <div key={input.asset_id}><h3>Run image {index + 1} · Gallery {imageLabel(input.asset_id)}</h3><code>{input.asset_id}</code><p><code>SHA-256 {input.sha256}</code></p><small>Observation {input.observation_id}</small>{asset ? <AssetPreview api={api} asset={asset} label={`Run image ${index + 1}`} /> : <Notice danger>The original view is unavailable in this component’s current image list. Check the recorded asset and hash before relying on this claim.</Notice>}</div>;
       })}</div><pre>{JSON.stringify({ start: run.start, completed_at: outcome?.completed_at ?? null, metrics: outcome?.metrics ?? null, applied_event_ids: outcome?.applied_event_ids ?? [] }, null, 2)}</pre></details>
       {outcome?.output && <>
         <div className="inference-output-grid"><div><h3>Model observations</h3>{outcome.output.observations.length ? outcome.output.observations.map((observation, index) => <article className="inference-claim" key={index}><Badge value={observation.kind} /><p>{observation.text}</p>{sources(observation.image_indices)}</article>) : <p className="muted">No visual observations were returned.</p>}</div>
           <div><h3>Uncertainty & missing evidence</h3>{outcome.output.uncertainties.length ? <ul>{outcome.output.uncertainties.map((uncertainty, index) => <li key={index}>{uncertainty}</li>)}</ul> : <p className="muted">The model supplied no uncertainty statement. This does not establish confidence or correctness.</p>}
             <h3>Suggested additional photographs</h3>{outcome.output.additional_views.length ? outcome.output.additional_views.map((view, index) => <article className="inference-claim" key={index}><strong>{view.view}</strong><p>{view.reason}</p>{sources(view.image_indices)}</article>) : <p className="muted">No additional view was requested by the model.</p>}
           </div></div>
-        <h3>Unverified identity hypotheses</h3>{!outcome.output.candidates.length && <Notice>Identity unknown. No catalog identity was proposed. Use additional views or manual review.</Notice>}
+        <h3>Suggested components — unverified</h3>{!outcome.output.candidates.length && <Notice>No catalog identity was proposed by this analysis. {history.current.state === 'verified' && history.current.verification ? 'The current human-verified identity remains in effect; this analysis does not replace it.' : history.current.verification ? 'An earlier human verification remains in history, but fresh review is required. Inspect the views and resolve the missing evidence before verifying again.' : 'Identity remains unverified. Inspect the original views, add a readable close-up if needed, and record a human decision.'}</Notice>}
         {outcome.output.candidates.map((candidate, index) => {
           const known = catalog.component_types.some(type => type.component_type_id === candidate.component_type_id) && candidate.revision !== null && catalog.revisions.some(revision => revision.component_type_id === candidate.component_type_id && revision.revision === candidate.revision);
           return <article className="inference-claim" key={index}><strong>{candidate.component_type_id} · Revision {candidate.revision ?? 'unknown'}</strong><p>{candidate.reason}</p><p>Claimed revision marking: <q>{candidate.revision_marking ?? 'Not supplied'}</q></p>{sources(candidate.image_indices)}

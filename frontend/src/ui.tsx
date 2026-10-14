@@ -16,12 +16,13 @@ export function Empty({ children }: { children: ReactNode }) { return <div class
 export function Section({ title, eyebrow, children, aside }: { title: string; eyebrow?: string; children: ReactNode; aside?: ReactNode }) {
   return <section className="panel"><div className="section-heading"><div>{eyebrow && <p className="eyebrow">{eyebrow}</p>}<h2>{title}</h2></div>{aside}</div>{children}</section>;
 }
-export function AssetPreview({ asset, api }: { asset: ImageAsset; api: ApiClient }) {
+export function AssetPreview({ asset, api, label }: { asset: ImageAsset; api: ApiClient; label?: string }) {
   const [url, setUrl] = useState<string>();
   const [error, setError] = useState('');
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     let disposed = false; let objectUrl: string | undefined;
-    setUrl(undefined); setError('');
+    setUrl(undefined); setError(''); setLoaded(false);
     if (asset.availability === 'available') {
       void api.image(`/assets/${encodeURIComponent(asset.asset_id)}/content`).then(blob => {
         if (!disposed) { objectUrl = URL.createObjectURL(blob); setUrl(objectUrl); }
@@ -30,8 +31,8 @@ export function AssetPreview({ asset, api }: { asset: ImageAsset; api: ApiClient
     return () => { disposed = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [asset.asset_id, asset.availability, api]);
   return <figure className="asset-card">
-    <div className="asset-image">{url ? <img src={url} alt={`Evidence for ${asset.physical_component_id}`} /> : <span>{error || (asset.availability === 'available' ? 'Loading image…' : `Image ${asset.availability}`)}</span>}</div>
-    <figcaption><Badge value={asset.availability} /><span>{asset.width} × {asset.height} · {(asset.byte_size / 1024).toFixed(1)} KiB</span><code>{asset.asset_id}</code><small>Uploaded by {asset.uploaded_by} · {dateTime(asset.received_at)}</small><details><summary>Integrity & provenance</summary><code>SHA-256 {asset.sha256}</code><code>Observation {asset.observation_id}</code></details></figcaption>
+    <div className="asset-image" aria-busy={asset.availability === 'available' && !loaded && !error}>{url && !error ? <img src={url} alt={label ? `${label}: evidence for ${asset.physical_component_id}` : `Evidence for ${asset.physical_component_id}`} onLoad={() => setLoaded(true)} onError={() => { setError('This image could not be displayed. Reload the component or request another view.'); setLoaded(false); }} /> : <span role={error ? 'alert' : 'status'}>{error || (asset.availability === 'available' ? 'Loading original image…' : `Image ${asset.availability}. Restore the original evidence before reviewing this view.`)}</span>}</div>
+    <figcaption>{label && <strong>{label}</strong>}<Badge value={asset.availability} /><span>{asset.width} × {asset.height} · {(asset.byte_size / 1024).toFixed(1)} KiB</span><small>Uploaded by {asset.uploaded_by} · {dateTime(asset.received_at)}</small><details><summary>Integrity & provenance</summary><code>{asset.asset_id}</code><code>SHA-256 {asset.sha256}</code><code>Observation {asset.observation_id}</code><small>Physical component {asset.physical_component_id} · Source return {asset.return_id}</small></details></figcaption>
   </figure>;
 }
 export function parseInteger(value: FormDataEntryValue | null, name: string, optional = false): number | null {
