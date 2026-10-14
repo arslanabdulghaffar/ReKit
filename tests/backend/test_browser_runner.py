@@ -613,4 +613,36 @@ def test_product_cli_passes_explicit_flags_and_check_without_running_model(monke
     monkeypatch.setattr(runner, "run", lambda **options: calls.append(options) or 0)
     assert runner.main() == 0
     assert calls == [{"check_only": True, "real_inference": True, "real_product_images": True,
-                      "model_dir": None, "device": 1}]
+                      "model_dir": None, "device": 1, "headed": False, "slow_mo_ms": 0, "hold_seconds": 0}]
+
+
+@pytest.mark.parametrize("options", [
+    {"headed": 1}, {"slow_mo_ms": True}, {"headed": True, "slow_mo_ms": -1},
+    {"headed": True, "slow_mo_ms": 501}, {"headed": True, "hold_seconds": 121},
+    {"headed": True, "hold_seconds": 1.5}, {"hold_seconds": 1}, {"slow_mo_ms": 1},
+])
+def test_invalid_presentation_fails_before_creating_credentials(prepared_root, monkeypatch, options):
+    monkeypatch.setattr(runner, "_prepare", lambda **kwargs: pytest.fail("Invalid presentation created state"))
+    with pytest.raises(RuntimeError, match="Demo"):
+        runner.run(**options)
+    assert not runner.OUTPUT.exists()
+
+
+def test_headed_presentation_is_explicit_in_owned_manifest(prepared_root, optional_imports_blocked):
+    manifest_path, manifest = runner._prepare(headed=True, slow_mo_ms=100, hold_seconds=60)
+    assert manifest["demo_presentation"] == {"headed": True, "slow_mo_ms": 100, "hold_seconds": 60}
+    assert json.loads(manifest_path.read_text(encoding="utf-8"))["demo_presentation"] == manifest["demo_presentation"]
+    assert manifest["real_inference"] is False
+
+
+def test_headed_deadline_includes_bounded_pacing_and_hold_and_keeps_cleanup(sandbox):
+    timeouts = []
+
+    def communicate(*, timeout):
+        timeouts.append(timeout)
+        return sandbox.output, None
+
+    sandbox.processes[2].communicate = communicate
+    assert runner.run(headed=True, slow_mo_ms=500, hold_seconds=120) == 0
+    assert timeouts == [920]
+    assert_cleaned(sandbox, read_result(sandbox))

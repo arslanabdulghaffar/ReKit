@@ -35,6 +35,15 @@ PRODUCT_IMAGE_IDS = ("71rr7OjqWqL", "812Xgtrv0EL")
 PRODUCT_COMPONENT_ID = "photo-demo-unit"
 
 
+def _presentation(*, headed: bool = False, slow_mo_ms: int = 0, hold_seconds: int = 0) -> dict:
+    if (type(headed) is not bool or type(slow_mo_ms) is not int or not 0 <= slow_mo_ms <= 500
+            or type(hold_seconds) is not int or not 0 <= hold_seconds <= 120):
+        raise RuntimeError("Demo presentation needs a boolean headed flag, 0..500 ms pacing and 0..120 seconds hold")
+    if not headed and (slow_mo_ms or hold_seconds):
+        raise RuntimeError("Demo pacing and final inspection require --headed")
+    return {"headed": headed, "slow_mo_ms": slow_mo_ms, "hold_seconds": hold_seconds}
+
+
 def _console(text: str, *, stream=None) -> None:
     """Best-effort console output; durable UTF-8 diagnostics are written separately."""
     stream = sys.stdout if stream is None else stream
@@ -99,7 +108,9 @@ def _load_product_sources() -> dict:
 
 
 def _prepare(*, real_inference: bool = False, real_product_images: bool = False, model_dir: Path | None = None,
-             device: int = 1) -> tuple[Path, dict]:
+             device: int = 1, headed: bool = False, slow_mo_ms: int = 0,
+             hold_seconds: int = 0) -> tuple[Path, dict]:
+    presentation = _presentation(headed=headed, slow_mo_ms=slow_mo_ms, hold_seconds=hold_seconds)
     if type(real_inference) is not bool or type(real_product_images) is not bool:
         raise RuntimeError("Inference and real-product options must be explicit booleans")
     if real_product_images and not real_inference:
@@ -161,6 +172,7 @@ def _prepare(*, real_inference: bool = False, real_product_images: bool = False,
             "state_dir": str(state),
             "real_inference": real_inference,
             "real_product_images": real_product_images, "simulated_intake": True,
+            "demo_presentation": presentation,
         }
         if product_sources is not None:
             manifest.update(product_sources)
@@ -326,6 +338,7 @@ def _finish(manifest_path: Path, manifest: dict, processes: list, logs: list,
         "browser_run": len(processes) == 3, "synthetic": True,
         "real_inference_enabled": manifest.get("real_inference", False),
         "real_product_images": manifest.get("real_product_images", False), "simulated_intake": True,
+        "demo_presentation": manifest.get("demo_presentation", _presentation()),
         "finished_at": datetime.now(UTC).isoformat(),
         "temporary_state_removed": state_removed, "credentials_removed": credentials_removed,
         "error": _redact(error, manifest) if error else None,
@@ -344,7 +357,11 @@ def _finish(manifest_path: Path, manifest: dict, processes: list, logs: list,
 
 
 def run(*, check_only: bool = False, real_inference: bool = False, real_product_images: bool = False,
-        model_dir: Path | None = None, device: int = 1) -> int:
+        model_dir: Path | None = None, device: int = 1, headed: bool = False,
+        slow_mo_ms: int = 0, hold_seconds: int = 0) -> int:
+    _presentation(headed=headed, slow_mo_ms=slow_mo_ms, hold_seconds=hold_seconds)
+    # Budget pacing for up to 1,000 browser actions plus the bounded final hold.
+    browser_timeout = (900 if real_inference else 300) + slow_mo_ms + hold_seconds
     if type(real_inference) is not bool or type(real_product_images) is not bool:
         raise RuntimeError("Inference and real-product options must be explicit booleans")
     if real_product_images and not real_inference:
@@ -362,7 +379,8 @@ def run(*, check_only: bool = False, real_inference: bool = False, real_product_
         for port in (8000, 5173):
             _port_free(port)
     manifest_path, manifest = _prepare(real_inference=real_inference, real_product_images=real_product_images,
-                                       model_dir=model_dir, device=device)
+                                       model_dir=model_dir, device=device, headed=headed,
+                                       slow_mo_ms=slow_mo_ms, hold_seconds=hold_seconds)
     run_dir, state = Path(manifest["artifacts_dir"]), Path(manifest["state_dir"])
     processes, logs = [], []
     status = "error"
@@ -413,13 +431,13 @@ def run(*, check_only: bool = False, real_inference: bool = False, real_product_
                          output=subprocess.PIPE, environment=environment)
         processes.append(browser)
         try:
-            browser_output, _ = browser.communicate(timeout=900 if real_inference else 300)
+            browser_output, _ = browser.communicate(timeout=browser_timeout)
         except subprocess.TimeoutExpired as failure:
             status = "timed_out"
             browser_output = failure.output or b""
             _stop(browser)
             browser_output, _ = browser.communicate(timeout=5)
-            raise RuntimeError(f"Browser acceptance exceeded its {900 if real_inference else 300} second limit") from None
+            raise RuntimeError(f"Browser acceptance exceeded its {browser_timeout} second limit") from None
         browser_exit_code = browser.returncode
         status = "passed" if browser.returncode == 0 else "failed"
         return browser.returncode
@@ -442,6 +460,9 @@ def main() -> int:
     parser.add_argument("--real-product-images", action="store_true", help="Use a verified original ABO pair with simulated intake; requires --real-inference")
     parser.add_argument("--model-dir", type=Path, help="Server-controlled verified local checkpoint directory; never downloaded by this runner")
     parser.add_argument("--device", type=int, default=1, help="Single CUDA GPU index for the optional real inference scenario")
+    parser.add_argument("--headed", action="store_true", help="Show the owned browser for a local demonstration")
+    parser.add_argument("--slow-mo-ms", type=int, default=0, help="Pace visible browser actions by 0..500 ms; requires --headed")
+    parser.add_argument("--hold-seconds", type=int, default=0, help="Keep the successful final page open for 0..120 seconds; requires --headed")
     parser.add_argument("--serve-state", type=Path, help=argparse.SUPPRESS)
     arguments = parser.parse_args()
     if arguments.serve_state:
@@ -453,7 +474,8 @@ def main() -> int:
     try:
         return run(check_only=arguments.check, real_inference=arguments.real_inference,
                    real_product_images=arguments.real_product_images,
-                   model_dir=arguments.model_dir, device=arguments.device)
+                   model_dir=arguments.model_dir, device=arguments.device, headed=arguments.headed,
+                   slow_mo_ms=arguments.slow_mo_ms, hold_seconds=arguments.hold_seconds)
     except (RuntimeError, OSError) as error:
         _console(f"Acceptance runner failed: {error}", stream=sys.stderr)
         return 1

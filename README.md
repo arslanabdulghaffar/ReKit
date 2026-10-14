@@ -58,6 +58,20 @@ actual AMD deployment and inference remain required, uncompleted gates.
 From `A:\hackathon\ReKit` in PowerShell, use the existing Python 3.12 `.venv`.
 Do not recreate it or reinstall its working PyTorch/CUDA packages.
 
+For an isolated demonstration with a visible browser, follow the
+[local demo guide](docs/local-demo.md) and run its prerequisite checks first.
+Choose the real-image inspection or separate synthetic recovery replay:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/run_demo.py --mode product-ai --headed --slow-mo-ms 100 --hold-seconds 60 --device 1
+.\.venv\Scripts\python.exe evaluation/run_demo.py --mode synthetic-recovery --headed --slow-mo-ms 100 --hold-seconds 60
+```
+
+Run one at a time. The launcher uses existing software, temporary loopback-only
+state and automatic cleanup; it downloads nothing. The guide also covers
+headless acceptance and the difference between real image inspection and the
+USD 175 synthetic recovery estimate.
+
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e '.[dev]'
 .\.venv\Scripts\python.exe -m pytest -q -W error

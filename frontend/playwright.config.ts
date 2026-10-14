@@ -1,10 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { defineConfig } from '@playwright/test'
+import { demoPresentation } from './e2e/demo-presentation'
 
 const fixturePath = process.env.REKIT_BROWSER_FIXTURE
 if (!fixturePath) throw new Error('Run evaluation/run_browser_acceptance.py to create isolated browser fixtures.')
-const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')) as { base_url: string; artifacts_dir: string; synthetic: boolean; real_inference?: boolean; real_product_images?: boolean }
+const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')) as { base_url: string; artifacts_dir: string; synthetic: boolean; real_inference?: boolean; real_product_images?: boolean; demo_presentation?: unknown }
 if (fixture.synthetic !== true || fixture.base_url !== 'http://127.0.0.1:5173') {
   throw new Error('Browser acceptance requires the local synthetic runner.')
 }
@@ -14,6 +15,7 @@ const executablePath = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 ].find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)))
 if (!executablePath) throw new Error('An installed Chrome or Edge browser is required; no browser is downloaded.')
+const presentation = demoPresentation(fixture.demo_presentation)
 
 export default defineConfig({
   testDir: './e2e',
@@ -21,7 +23,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  timeout: fixture.real_inference === true ? 600_000 : 180_000,
+  timeout: (fixture.real_inference === true ? 600_000 : 180_000) + (presentation.slow_mo_ms + presentation.hold_seconds) * 1000,
   expect: { timeout: 10_000 },
   reporter: 'line',
   outputDir: join(fixture.artifacts_dir, 'playwright-output'),
@@ -30,8 +32,8 @@ export default defineConfig({
     browserName: 'chromium',
     baseURL: fixture.base_url,
     viewport: { width: 1440, height: 1000 },
-    headless: true,
-    launchOptions: { executablePath },
+    headless: !presentation.headed,
+    launchOptions: { executablePath, slowMo: presentation.slow_mo_ms },
     trace: 'off',
     video: 'off',
     screenshot: 'off',

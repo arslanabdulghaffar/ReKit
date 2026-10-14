@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import type { APIRequestContext, Locator, Page, Response } from '@playwright/test'
+import { holdFinalPage } from './demo-presentation'
 import type { EvidenceHistory, ImageAsset, InferenceRun, InventorySnapshot, PhysicalComponent, ReturnBatch, ReturnRecord } from '../src/types'
 
 interface ProductSource {
@@ -17,6 +18,7 @@ interface ProductFixture {
   operator_id: string; viewer_id: string; model_dir: string; model_revision: string; device: number
   images: Record<string, string[]>; product_sources: ProductSource[]
   dataset: string; dataset_manifest_sha256: string; dataset_attribution: unknown; dataset_source: unknown; dataset_license: unknown
+  demo_presentation?: unknown
   fixture: { batch: ReturnBatch; returns: ReturnRecord[]; components: { component: PhysicalComponent }[] }
 }
 
@@ -293,6 +295,7 @@ test('original catalog product views remain unverified through one real joint in
     apiChecks.unverified_held_without_reservation_or_completion = true
     screenshots.push('product-review-held.png')
     await capture(page, screenshots.at(-1)!)
+    await holdFinalPage(page, manifest.demo_presentation)
     passed = true
     stage = 'completed'
     persist()
@@ -302,6 +305,7 @@ test('original catalog product views remain unverified through one real joint in
       returns: 1, physical_components: 1, managed_images: 2, inference_runs: 1, vision_forward_calls: 1,
       inference_status: run.outcome!.status, identity_candidates: 0, independent_human_review: false,
       held_components: 1, reserved_components: 0, completed_kits: 0, page_errors: pageErrors, screenshots, limitations,
+      demo_presentation: manifest.demo_presentation,
     }, null, 2)), 'utf8')
   } catch (error) {
     persist()

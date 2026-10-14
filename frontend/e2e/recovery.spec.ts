@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import type { APIRequestContext, Locator, Page, Response } from '@playwright/test'
+import { holdFinalPage } from './demo-presentation'
 import type {
   AuditRecord, EconomicScenario, EvidenceHistory, ImageAsset, InferenceRun, InventorySnapshot,
   PhysicalComponent, ReturnBatch, ReturnRecord, StoredPlan, Verification,
@@ -22,6 +23,7 @@ interface BrowserFixture {
   model_dir?: string
   model_revision?: string
   device?: number
+  demo_presentation?: unknown
   images: Record<string, string[]>
   fixture: {
     synthetic: true
@@ -545,6 +547,7 @@ test(realInference ? 'real local vision and human review recover two synthetic k
       await expect(viewer.getByRole('button', { name: 'Generate recovery plan', exact: true })).toBeDisabled()
     } finally { await viewer.close() }
     expect(pageErrors).toEqual([])
+    await holdFinalPage(page, manifest.demo_presentation)
     const result = {
       synthetic: true, passed: true, browser_version: browser.version(), page_errors: pageErrors,
       returns: 3, physical_components: 4, managed_images: Object.values(assets).flat().length,
@@ -556,6 +559,7 @@ test(realInference ? 'real local vision and human review recover two synthetic k
       retained_value_cents: proposal.plan.retained_value_cents, reserved_before_completion: 4,
       completed_kits: 2, consumed_components: 4, audit_events: audit.length, completion_retry_status: 200,
       screenshots,
+      demo_presentation: manifest.demo_presentation,
       ...(realInference ? { real_inference: true, inference_artifact: 'inference-results.json',
         inference_run_ids: inference.runs.map(run => run.start.run_id), ambiguous_result: inference.ambiguous_result,
         human_review: inference.human_review, model_verified_identity: false } : {}),
