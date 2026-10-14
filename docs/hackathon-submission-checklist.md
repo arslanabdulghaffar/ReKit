@@ -1,107 +1,125 @@
 # ACT III submission checklist
 
-Public sources checked October 14, 2026. This is a preparation checklist, not a
-submission receipt or eligibility claim. ReKit remains private. No publication,
-hosting, cloud spending or submission is authorized by this document.
+Public information checked October 14, 2026. Team: **NeuralFoundry**. This is a
+preparation checklist, not a submission receipt or eligibility claim. ReKit
+remains private. This document authorizes no publication, hosting, licensing
+change, spending or authenticated AMD call.
 
-## Confirm the deadline and current form
-
-- [ ] Confirm the submission cutoff and timezone in the authenticated event portal.
-  The [event page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii)
-  lists October 12–18, 2026. Observed
-  [live-page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii/live)
-  data has `endAt=2026-10-18T15:00:00.000Z`: October 19, 00:00 Korea time.
-  This is the event end, **not a confirmed submission cutoff**.
-- [ ] Verify enrollment, team details and the actual form's required fields before
-  preparing final uploads. Account-specific form requirements have not been inspected.
-
-## Event-listed deliverables and remaining gates
+## Public requirements and unresolved deadline
 
 The [official event page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii)
-lists title, short/long descriptions, challenge/tags, working prototype, cover,
-demo video, pitch slides, public GitHub, demo platform and application URL.
+lists October 12–18, 2026, and requires meaningful AMD execution in the working
+product for prize eligibility. Deliverables include title, descriptions,
+challenge, technology tags, prototype, cover, video, slides, public GitHub,
+demo platform and application URL. It also states originality and MIT compliance.
 
-- [ ] Prepare those fields and assets; verify every external link as a judge would.
-  The local loopback workbench is not a publicly accessible application URL.
-- [ ] Complete actual, meaningful AMD execution in the demonstrated product; the
-  event makes AMD use an eligibility requirement. ReKit's remote adapter has only
-  offline qualification. Local NVIDIA results do not satisfy this gate. Follow
-  [activation](../deploy/amd/README.md#activation-checklist) and preserve real
-  endpoint, hardware/runtime, revision and image-execution evidence.
-- [ ] Prepare a reviewed release and obtain **explicit user approval before changing
-  repository visibility or publishing**. The event lists public GitHub; the current
-  private repository must remain private until approved. Check staged content and
-  history for credentials, personal data, operational images and generated artifacts.
-- [ ] Verify applicable originality and licensing rules against the
-  [event notice and linked rule book](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii).
-  Resolve the stated MIT-compliance requirement without changing third-party
-  dataset/model licenses or assuming a code license has already been chosen.
+- [ ] Confirm the submission cutoff **and timezone** in the portal or with the
+  organizer. The public [live page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii/live)
+  currently describes online building as October 12–17, conflicting with the
+  landing page. Neither inspected page establishes the submission cutoff.
+  Earlier live-page metadata recorded `endAt=2026-10-18T15:00:00.000Z`, equivalent
+  to October 19 at 00:00 in Korea. That was **event-end metadata, not a submission
+  deadline**. The timestamp was not freshly reverified: the unauthenticated raw
+  page request returned HTTP 403.
+- [ ] Confirm enrollment, team membership, challenge and required fields in the
+  authenticated form. No account-specific form was inspected. Proposed challenge:
+  Reinvent Commerce; confirm its fit before submission.
+- [ ] Read the current [rule book](https://lablab.ai/hackathon-rules) and
+  [terms](https://lablab.ai/terms-of-use) before release. The public text extractor
+  returned no substantive body for these links. Do not treat them as reviewed or
+  automatically add an MIT license.
 
-## General lablab guidance: recheck against the actual portal
+## Copy and media preparation
 
-The linked [submission guidelines](https://lablab.ai/ai-articles/hackathon-guidelines)
-give a title limit of 50 characters, summary limit of 255, long description of at
-least 100 words, recommended 16:9 cover, and video within five minutes and below
-300 MB. These are general guidance, not a verified reading of this event's form.
+The [general submission guide](https://lablab.ai/ai-articles/hackathon-guidelines)
+states a 50-character title maximum, 255-character summary maximum and 100-word
+long-description minimum. It recommends a 16:9 cover and specifies a video within
+five minutes and below 300 MB. These are general guidance; verify the event
+form's actual limits, required fields and file formats before uploading.
 
-- [ ] Fit the final copy and media to the live form's limits; prepare the
-  [demo script](demo-script.md) as an actual screen recording, not fabricated output.
-- [ ] Prepare concise slides covering user/problem, evidence workflow, deterministic
-  decisions, measured results and limitations. An architecture diagram is recommended
-  for clarity; no inspected source explicitly makes a separate diagram mandatory.
-- [ ] Confirm accepted media formats, hosting permissions and access settings in
-  the submission form. A generated screenshot set is not a submitted video or deck.
+- [x] Draft the title, team/tagline, short/full descriptions, problem, solution,
+  AI, deterministic optimization, human authority, AMD status, novelty, business
+  potential and limits in [submission content](submission-content.md). The exact
+  requested title is 48 characters; the summary is 224 characters.
+- [ ] Review final copy against the form. Keep **AMD planned / not yet executed**
+  prominent until actual execution evidence changes that status.
+- [x] Prepare and inspect the seven-slide editable PowerPoint and its seven PNG
+  renders at `var/mission05-submission/deck-20261014-152027-67d97c/`. The first
+  slide is a candidate 16:9 cover. Text bounds, editability, original embedded
+  image hashes and native crop coordinates passed checks. See the
+  [deck guide](pitch-deck.md) and editable [architecture SVG](assets/rekit-architecture.svg).
+- [ ] Approve the deck and cover for release against the actual form; these
+  private assets have not been uploaded. Follow the [recording script](demo-script.md).
+- [ ] Record and inspect the final video. **No final video has been recorded or
+  uploaded.** Screenshots, scripts and browser runs are not a video.
+- [ ] Retain [ABO attribution](real-product-evaluation.md#source-license-and-attribution)
+  and [Qwen provenance](local-inference.md), identifying presentation crops or
+  overlays. Do not relicense their source material.
 
-## Evidence and honest claims
+## Current implementation evidence
 
-- [x] Real-product browser/API gate passed on its first attempt: 49.8 seconds,
-  Chrome 154.0.8037.98, one actual joint request. The component stayed held with
-  zero verification, plans or kits; auth, byte integrity, duplicate-upload and
-  cleanup checks passed. Evidence: `var/mission02-acceptance/run-ai-_hto37ic/`;
-  see [demo results](demo-script.md#completed-real-product-acceptance).
-- [x] Corrective Task 3 CPU CI passed both jobs in
-  [run 38453167659](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38453167659)
-  at `6dd805ee44b132c83a24e7471a187a2e9c512e25`. This is not a future Task 4
-  commit/CI result.
-- [x] Task 4 synthetic regressions passed: actual-AI `run-ai-n2j7_p4b` in about
-  1.2 minutes and default `run-qz_ybush` in 4.4 seconds. Their 13 screenshots were
-  inspected; all three browser runs passed cleanup. Final local checks passed
-  1,007 backend tests, 51 frontend tests, typecheck, build and dependency checks.
-  Exact commands and artifacts are in the
-  [Mission 04 report](reports/development-mission-04.md); final Task 4 commit/push
-  and post-push CI are separate release evidence.
-- [ ] Label ABO image intake as a simulated, unverified physical-unit workspace.
-  Catalog/listing membership does not establish a returned unit, BOM, revision,
-  functional condition or safety. Preserve actual model outputs and source hashes.
-  The completed one-request photo demonstration left its single component
-  held, with no verification, reservation or kit. Reuploading the originals is a
-  deduplication check, not newly captured evidence.
-- [ ] Keep synthetic recovery separate: three returns, four unique components,
-  two kits and USD 175 modeled net value. Do not call this real recovery revenue,
-  customer savings or a recognition benchmark.
-- [ ] State zero independently human-reviewed semantic labels. Accuracy and
-  unsupported-claim rates are unmeasurable, not 0% error. Task 2's 26 local requests
-  and 9/13-to-0/13 no-catalog candidate change establish constraint compliance only.
-  The separate real-product browser/API run adds one request, counted once:
-  27 real-catalog-image requests total. The clipped uncertainty and appearance
-  claims remain unverified despite the software gate passing.
-- [ ] Retain [ABO source/license attribution](real-product-evaluation.md#source-license-and-attribution)
-  and [Qwen model attribution](local-inference.md); identify image modifications.
-  Do not publish image bytes, weights or private execution records accidentally.
-- [ ] Review screenshots/video for tokens and private data, preserve actual
-  unverified/held states, and distinguish CPU tests, local GPU execution and any
-  later AMD measurements. Model confidence wording is not a calibrated probability.
+These are Mission 05 Task 3 observations, separate from historical results in the
+[Mission 01](reports/overnight-mission-01.md),
+[Mission 02](reports/development-mission-02.md),
+[Mission 03](reports/development-mission-03.md) and
+[Mission 04](reports/development-mission-04.md) reports.
 
-## Optional Evolus award
+- [x] Local checks: **1,121 backend tests and 57 frontend tests passed**, plus
+  TypeScript/build/dependency checks. They test software behavior, not visual
+  accuracy, business savings or AMD performance.
+- [x] Real-product browser/API: `var/mission02-acceptance/run-ai-5p7lbguu/` passed
+  in 49.8 seconds; its one joint two-image local inference took 38.568 seconds.
+  One simulated physical unit stayed held, with zero identity verifications,
+  reservations or kits. Six actual captures include originals, pending analysis,
+  the unverified result and the held state.
+- [x] Separate synthetic recovery: `var/mission02-acceptance/run-g563yhm_/` passed
+  in 5.4 seconds, with three returns, four unique components, four reservations
+  and two confirmed kit records. **USD 175 is modeled scenario value**, not a
+  sale, actual recovered merchandise or measured customer savings. Fourteen
+  captures cover the workflow and responsive layouts.
+- [x] Synthetic AI regression `run-ai-kny95rau` made two actual local requests and
+  passed. It preserved and rejected an unsupported `body/A` hypothesis on a
+  shapes illustration before separate fixture-based human verification. Keep
+  this model limitation visible alongside the successful workflow.
+- [x] The verified cache has 52 catalog images across 48 listing groups. The
+  selected review gallery has 19 images from 18 groups, all pending. Independent
+  human semantic reviews remain **zero**. Accuracy and unsupported-claim rates
+  are **not measurable**, rather than zero error.
+- [x] Mission 04's fixed-sample before/after test used 26 local requests.
+  No-catalog candidate violations changed from 9/13 to 0/13 after an explicit
+  restriction: protocol enforcement, not recognition improvement.
+
+Recheck final artifact paths and counts before release. Do not merge historical
+and current runs into an unlabeled benchmark or count a browser/API request twice.
+
+## Remaining release and eligibility gates
+
+- [ ] Qualify AMD execution. **Completed AMD requests: zero.** The remote adapter
+  has offline tests only. Local NVIDIA execution does not verify ROCm/vLLM or
+  AMD eligibility. Follow the [activation gate](../deploy/amd/README.md#activation-checklist)
+  and preserve actual model, hardware/runtime, input, execution and failure
+  evidence. Obtain authorization before authenticated access or cloud spending.
+- [ ] Obtain explicit approval before publishing a reviewed release or changing
+  repository visibility. Preserve the private repository until then. Audit
+  release content/history for secrets and private assets; resolve code licensing
+  and third-party notices separately.
+- [ ] Arrange an approved judge-accessible demo and test its URL from a fresh
+  session. The loopback launcher is not public hosting. Do not expose a local
+  operator token or development server to satisfy this field.
+- [ ] Review every capture for tokens and private data. Keep synthetic examples
+  separate from original catalog imagery. Such imagery cannot establish an
+  actual returned unit, approved BOM, revision, hidden function or safety.
+  Model confidence statements are not calibrated probabilities.
+- [ ] Submit only after the owner approves the concrete release, media and portal
+  content. Preserve its receipt, timestamp and submitted URLs. These documents
+  do not submit, host or publish anything.
+
+## Optional Evolus track
 
 The [Evolus track](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii)
-requires an event workspace, an open model through the team's own vLLM endpoint on
-AMD Developer Cloud, at least two Evolus building blocks, application API
-integration, a containerized app and runnable public repository. ReKit has not
-implemented this integration; shared TokenFactory access alone does not meet it.
+adds an event workspace, an owned open-model vLLM endpoint on AMD Developer Cloud,
+two or more Evolus building blocks, application API integration, a containerized
+app and runnable public repository. ReKit has not implemented Evolus.
 
-- [ ] Claim this award only after implementing and demonstrating its actual
-  requirements. It remains optional and separate from the core AMD gate.
-- [ ] After release, media and submission actions receive approval, submit through
-  the portal and preserve the receipt, timestamp and exact submitted URLs. Until
-  then, report the project as prepared or incomplete, never submitted.
+- [ ] Claim this optional track only after demonstrating its requirements. A
+  generic remote adapter or shared endpoint does not establish completion.

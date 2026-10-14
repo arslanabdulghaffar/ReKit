@@ -18,6 +18,11 @@ Mission 04 adds an ignored ABO catalog-image collection and separate pending hum
 
 ## Repository boundaries
 
+The editable [presentation architecture figure](assets/rekit-architecture.svg)
+shows the implemented logical decision flow and the pending AMD deployment path.
+It distinguishes checked output structure/provenance from unverified visual
+claims. It is a module/workflow view, not a claim that each box is a microservice.
+
 | Location | Responsibility |
 | --- | --- |
 | `frontend/` | React, TypeScript, and Vite operator workbench for image intake, human review, scenario planning, approval, execution, and lineage. |

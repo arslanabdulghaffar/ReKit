@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960" role="img" aria-labelledby="title description">
+  <title id="title">ReKit evidence and recovery architecture</title>
+  <desc id="description">Logical steps in one modular FastAPI application, used by an authenticated React workspace. Managed images enter either the measured local NVIDIA provider or the prepared, unqualified AMD remote path. Schema-validated output remains unverified until explicit human review. Approved compatibility rules and CPU CP-SAT produce proposals; human approval atomically reserves components, and separate completion records kits and lineage.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#315c4f"/></marker>
+    <style>
+      text{font-family:Arial,sans-serif;fill:#173e34}.title{font-size:40px;font-weight:700}.subtitle{font-size:23px;fill:#4e635b}.label{font-size:26px;font-weight:700}.body{font-size:21px}.small{font-size:19px}.number{font-size:20px;font-weight:700;fill:#54713e}.node{fill:#fff;stroke:#b8ccc1;stroke-width:2}.edge{fill:none;stroke:#315c4f;stroke-width:3;marker-end:url(#arrow)}.pending{fill:#805516}.rule{fill:#f0f4e6}
+    </style>
+  </defs>
+  <rect width="1600" height="960" fill="#f5f7f1"/>
+  <text class="title" x="60" y="70">ReKit · Evidence before recovery</text>
+  <text class="subtitle" x="60" y="113">NeuralFoundry · Forging Intelligent Systems.</text>
+  <path d="M60 143H1540" stroke="#b8ccc1"/>
+  <text class="body" x="60" y="189">Authenticated React workspace → FastAPI application with explicit operator roles</text>
+  <text class="small" x="60" y="218">Logical steps below are module boundaries, not separate microservices. Inference is optional for manual review.</text>
+
+  <g id="managed-images"><rect class="node" x="60" y="260" width="300" height="155" rx="8"/><text class="number" x="80" y="291">01</text><text class="label" x="80" y="329">Managed images</text><text class="body" x="80" y="362">Original bytes + hashes</text><text class="body" x="80" y="392">One physical component ID</text></g>
+  <g id="inference-provider"><rect class="node" x="440" y="260" width="300" height="155" rx="8"/><text class="number" x="460" y="291">02 · PROVIDER CHOICE</text><text class="label" x="460" y="329">AI inference</text><text class="body" x="460" y="362">Local NVIDIA: measured</text><text class="small pending" x="460" y="392">AMD remote: offline tests only</text></g>
+  <g id="validated-evidence"><rect class="node" x="820" y="260" width="300" height="155" rx="8"/><text class="number" x="840" y="291">03</text><text class="label" x="840" y="329">Validated evidence</text><text class="body" x="840" y="362">Structure + provenance</text><text class="body" x="840" y="392">Claims remain unverified</text></g>
+  <g id="human-review"><rect class="node" x="1200" y="260" width="340" height="155" rx="8"/><text class="number" x="1220" y="291">04 · HUMAN DECISION</text><text class="label" x="1220" y="329">Review the evidence</text><text class="body" x="1220" y="362">Correct, verify or reject</text><text class="body" x="1220" y="392">Hold or request another view</text></g>
+  <path class="edge" d="M360 337H433"/><path class="edge" d="M740 337H813"/><path class="edge" d="M1120 337H1193"/>
+  <path class="edge" d="M1370 415V470H210V513"/>
+  <text class="small" x="530" y="458">Human-confirmed identity and visible condition, linked to original evidence</text>
+
+  <g id="compatibility"><rect class="node" x="60" y="520" width="300" height="180" rx="8"/><text class="number" x="80" y="551">05 · DETERMINISTIC</text><text class="label" x="80" y="589">Compatibility</text><text class="body" x="80" y="623">Approved BOM + revisions</text><text class="body" x="80" y="654">Visible-condition policy</text><text class="small" x="80" y="682">Unknowns stay ineligible</text></g>
+  <g id="optimizer"><rect class="node" x="440" y="520" width="300" height="180" rx="8"/><text class="number" x="460" y="551">06 · CPU</text><text class="label" x="460" y="589">CP-SAT optimizer</text><text class="body" x="460" y="623">Unique parts, full BOMs</text><text class="body" x="460" y="654">Labor + demand + costs</text><text class="small" x="460" y="682">Costs and exclusions</text></g>
+  <g id="approval"><rect class="node" x="820" y="520" width="300" height="180" rx="8"/><text class="number" x="840" y="551">07 · HUMAN DECISION</text><text class="label" x="840" y="589">Approve and reserve</text><text class="body" x="840" y="623">Recheck current eligibility</text><text class="body" x="840" y="654">Reserve all required parts</text><text class="small" x="840" y="682">One atomic transaction</text></g>
+  <g id="inventory-execution"><rect class="node" x="1200" y="520" width="340" height="180" rx="8"/><text class="number" x="1220" y="551">08 · EXPLICIT COMPLETION</text><text class="label" x="1220" y="589">Inventory execution</text><text class="body" x="1220" y="623">Check reserved component IDs</text><text class="body" x="1220" y="654">Consume parts; record kits</text><text class="small" x="1220" y="682">Inventory and audit commit together</text></g>
+  <path class="edge" d="M360 610H433"/><path class="edge" d="M740 610H813"/><path class="edge" d="M1120 610H1193"/>
+
+  <rect class="rule" x="60" y="735" width="1480" height="90" rx="8"/>
+  <text class="body" x="80" y="770">SQLite preserves evidence versions, original run provenance, decisions, reservations and completed-kit lineage.</text>
+  <text class="body" x="80" y="802">Model and solver work run outside write transactions. An LLM cannot approve compatibility or allocate stock.</text>
+  <text class="small pending" x="60" y="863">AMD activation pending: authorized Linux ROCm/vLLM or qualified TokenFactory vision endpoint, real revisions and hardware evidence.</text>
+  <text class="small" x="60" y="897">Visual inspection does not establish hidden functionality or safety. Model confidence wording is not a calibrated probability.</text>
+  <text class="small" x="60" y="931">Future work: camera capture, separate localization/OCR/matching, richer rebuild instructions and optional Evolus integration.</text>
+</svg>

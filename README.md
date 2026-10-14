@@ -254,6 +254,13 @@ source files for embedded secrets as well.
 
 ## Design and next priorities
 
+Mission 05 presentation materials include [submission copy](docs/submission-content.md),
+a [seven-slide pitch outline](docs/pitch-deck.md), the [four-minute recording script](docs/demo-script.md)
+and an [editable architecture figure](docs/assets/rekit-architecture.svg).
+The deck guide identifies locally generated private assets and how to recreate
+them. These materials are prepared for review; the repository remains private,
+no video or submission is claimed, and actual AMD qualification remains pending.
+
 Read [architecture](docs/architecture.md), [domain contracts](docs/domain-contracts.md),
 [evidence persistence](docs/evidence-provenance.md), [recovery planning](docs/recovery-planning.md),
 [inventory execution](docs/inventory-workflow.md), and the [roadmap](docs/roadmap.md).
