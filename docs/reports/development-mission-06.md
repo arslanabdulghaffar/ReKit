@@ -5,13 +5,17 @@ Repository: `A:\hackathon\ReKit`, private GitHub `arslanabdulghaffar/ReKit`.
 Missions 01–05 remain accepted. The starting commit was
 `c88e7f6271e75df776b593af4364b564e9989089`.
 
-Task 1 and the first Task 2 checkpoint are committed, pushed and CI-verified.
-Task 2 has made **three authenticated discovery GET attempts** and remains
-blocked on usable quota evidence and conflicting
-capability declarations. **Generation attempts: 0 of the authorized maximum 6.**
-No image has been transmitted to AMD, and no AMD visual inference or browser
-acceptance has run during this mission. One local NVIDIA API regression has now
-passed. Tasks 3–5 and the AMD-dependent parts of Task 6 remain pending.
+The completed software checkpoints are committed, pushed and CI-verified.
+Actual service activity totals **five authenticated calls: three GETs and two
+single-image POSTs**. Both POSTs returned **HTTP 400**; **2 of the authorized
+maximum 6 generation attempts remain charged**. They presented one unique
+approved synthetic image twice. No ABO image was sent.
+
+Mission 06 is blocked on the unresolved request/access failure; no third replay
+is being attempted. There is no successful AMD visual or schema qualification,
+joint-image result, AMD application/browser acceptance or paired comparison.
+One local NVIDIA API regression passed. Tasks 3–5 and the AMD-dependent parts
+of Task 6 remain incomplete.
 
 ## Authorization and credential handling
 
@@ -35,14 +39,20 @@ names a different host from the original approved API host. The user separately
 authorized **one GET** to this exact destination:
 `https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true`.
 That authorized attempt returned HTTP 404 and has been consumed. No retry,
-redirect or alternate route was attempted. The operator subsequently reported
-that allowance and reset time were not displayed or confirmed, sign-in and team
-key redemption/issuance succeeded, and API-verification status was not explicit.
-These are operator-reported facts, not quota measurements. The user explicitly
-requires quota verification before generation and requested inspection of
-**Check Usage**. No browser is connected to this agent session, so the signed-in
-panel cannot be inspected directly. Only sanitized panel values or error text
-have been requested; no key, account IDs or screenshot.
+redirect or alternate quota route was attempted. After an initially incomplete
+dashboard report, the user supplied **Check Usage** values: 1 pt daily allowance,
+0 spent, 1 remaining, 20 RPM and reset displayed as 01:00 Asia/Shanghai.
+The report was received at `2026-10-14T16:43:27Z`; admission expiry was
+`16:58:00Z`, before its interpreted `17:00:00Z` reset. API verification was not
+shown and remained null. The user explicitly authorized one small synthetic
+probe on this evidence, with a stop if subsequent quota remained uncertain.
+Positive response headers then supported one reviewed identical diagnostic
+replay under the existing bounded mission authority. This was not an automatic
+retry or permission for further unknown-status requests.
+
+The local `CheckCredential` operation passed without network access. It proves
+only protected local credential setup, not service eligibility. No key, account
+IDs or dashboard screenshot was placed in this report.
 See [TokenFactory setup and gates](../tokenfactory.md).
 
 ## Stage status
@@ -50,8 +60,8 @@ See [TokenFactory setup and gates](../tokenfactory.md).
 | Task | Current evidence |
 | --- | --- |
 | 1. Capability and code audit | Complete. Added the exact TokenFactory endpoint profile, narrowly scoped unattested revisions, honest UI provenance, credential setup and offline regression coverage. |
-| 2. Safe discovery | First checkpoint committed and CI-verified; exact official-quota follow-up implemented and attempted once. Three actual GET attempts; valid catalog obtained, usable quota unavailable after official-route HTTP 404. The initial operator dashboard check exposed no quota/reset or explicit API verification; Check Usage inspection remains pending. |
-| 3. AMD visual qualification | Pending. No generation, image upload to the service or schema-execution result. The persistent six-attempt guard passes offline tests; verified quota and explicit wiring into the qualification caller must precede generation. |
+| 2. Safe discovery | Three GETs recorded; catalog obtained, both usage routes unusable. Subsequent Check Usage report and POST quota headers supply allowance evidence with conflicting reset/unit labels. API access remains unverified. |
+| 3. AMD visual qualification | Blocked. Two identical single-image POSTs returned HTTP 400; 2/6 attempts charged. Persistent guard and direct qualification runner are wired and tested, but no model/schema success occurred. |
 | 4. AMD application integration | Pending live acceptance. Existing managed evidence, roles, strict parsing, human decisions and deterministic inventory boundaries remain. |
 | 5. AMD/NVIDIA comparison | Pending AMD evidence. One new local NVIDIA API regression is recorded below; it is not a paired comparison. No recognition-accuracy or hardware-throughput comparison is claimed. |
 | 6. Final demonstration and reporting | Partial offline validation, including a local NVIDIA API regression. No AMD browser demonstration or Mission 06 completion receipt yet. |
@@ -76,7 +86,8 @@ Catalog response SHA-256:
 Sanitized private receipts are `discovery.json`, `catalog-discovery.json` and
 `quota-discovery.json`
 under `.secrets/tokenfactory/qualification/`; account data and credentials are
-not copied into Git. **Remaining quota is unknown, not zero or unlimited.**
+not copied into Git. At that discovery-only checkpoint remaining quota was
+unknown; later operator reports and POST headers are recorded separately below.
 
 This is an actual catalog response, not account qualification. The official
 catalog documentation says the catalog is identical for every key and is not
@@ -100,9 +111,55 @@ The [shared Model API terms](https://amd-aim.github.io/radeon-cloud-docs/api/ter
 describe a free development service whose quotas are capacity controls, not
 currency; the [Model APIs guide](https://amd-aim.github.io/radeon-cloud-docs/guides/model-apis/)
 distinguishes it from credit-consuming dedicated endpoints. No credits were
-purchased and no billable infrastructure was created. Actual usable allowance
-remains unknown. A future bounded strict-schema qualification would test the
-documented capability without treating the conflicting catalog flag as resolved.
+purchased and no billable infrastructure was created. Later allowance evidence
+admitted bounded requests, not a claim that the catalog/schema conflict was
+resolved or that all six calls could be afforded.
+
+## Actual synthetic POST attempts and current blocker
+
+Both requests targeted the exact TokenFactory chat endpoint with
+`MiMo-V2.6-Flash`, one 10,904-byte synthetic PNG, strict JSON Schema,
+`max_tokens=512` and `reasoning_effort: "none"`. No schema downgrade, alternative
+model, changed image, local fallback or paid resource was used.
+
+| Attempt | Actual result |
+| --- | --- |
+| Initial probe, `2026-10-14T16:49:19Z` | HTTP 400; 142 response bytes; recorded latency 0.562 seconds. Ledger attempt 1 charged. The first receipt did not retain a diagnostic reason. |
+| Deliberate identical diagnostic, `2026-10-14T16:56:19Z` | HTTP 400; 142 response bytes; recorded latency 0.547 seconds. Ledger attempt 2 charged. Bounded diagnostics: `type=invalid_request_error`, `message_mentions=[model]`, no recognized message flags. |
+
+Both response bodies had SHA-256
+`6aad1a77b10692dafe38cabea0adde38986dd61b5bb42de83d8b7e3364860c8b`.
+The diagnostic categories do **not** establish an exact cause. In particular,
+the local provider's `unsupported` rejection category is a broad HTTP-error
+classification, not proof that this model, the schema or image input is
+unsupported. API eligibility is also unverified. Stop before a third replay.
+
+The input SHA-256 was
+`cf1a8f595ff3986a947e7160cdb76d7493e9748d2d1f5a03b83d0d23343de38b`:
+two image presentations, one unique approved synthetic illustration. HTTP 400
+does not establish that the model or visual encoder ran. No ABO image was sent.
+The private receipts are `.secrets/tokenfactory/qualification/synthetic-first.json`
+and `synthetic-diagnostic.json`, alongside the persistent
+`generation-attempts.sqlite3` ledger. The original attempt remains unchanged.
+
+Read-only verification found two terminal `http_response` ledger rows, both
+HTTP 400, with identical request-byte SHA-256
+`ed360c24ecc2e25d8a6183625d416b78b2b4daf97e48326cec56dfa5f60160fb`.
+The requested schema digest was
+`31f7eb7e775cc2d59d4db0d50316773c3adcaf96a512704679fa3232fbe28e92`.
+The unchanged first receipt has SHA-256
+`0e0011cdb63e0052ada1e978ae62805bb384708d3d1bfbfc4c0fe6421b5d2614`,
+matching the diagnostic's prior-receipt binding; the diagnostic receipt is
+`3340db9aec574f1b43bd6449f8fa4485e74278475580a4961c91cfeaf591fc4d`.
+These latencies are rejected HTTP request measurements, not inference throughput.
+
+POST headers reported a USD-labelled daily limit of 1, used 0, remaining 1,
+20 RPM and 19 requests remaining. The reported reset, `1792080000`, is
+**October 15, 16:00 UTC / October 16, 00:00 Asia/Shanghai**, conflicting with the
+operator's 01:00 display. The dashboard's **pt** and provider **USD-labelled**
+counters are preserved without conversion; no cost or point consumption is
+inferred. Positive headers justified only the narrow diagnostic admission.
+They do not prove successful API access or authorize continuing without review.
 
 ## Implemented software and preserved boundaries
 
@@ -110,7 +167,7 @@ The explicit provider is `amd-tokenfactory`, with exactly
 `https://developer.amd.com.cn/radeon/api/v1/chat/completions` in its trusted
 singleton allowlist. Generic `/v1` endpoints retain their original restrictions.
 No operator request can override destination, provider or credentials; redirects,
-proxy inheritance, retries and local NVIDIA fallback remain disabled.
+proxy inheritance, automatic retries and local NVIDIA fallback remain disabled.
 
 Only this shared-service profile permits null model/processor revisions, paired
 with `device=remote` and `revision_verification=shared_service_unattested`.
@@ -133,14 +190,14 @@ zero quota. The wrapper checks Git exclusion for each private path separately
 and validates credential/receipt ACLs. Cancellation cleanup is implemented;
 its interruption path has **not** been empirically qualified.
 
-The offline-only qualification guard in
+The qualification guard in
 [`evaluation/tokenfactory_qualification.py`](../../evaluation/tokenfactory_qualification.py)
 adds an explicit one-time SQLite ledger initialization and existing-file-only
 reopening. It refuses missing/corrupt state instead of silently starting a new
-budget. An immutable admission binds existing mission authorization, verified
+budget. An immutable admission binds existing mission authorization, current
 quota evidence, catalog digest, exact endpoint/model, ordered image hashes,
 prompt and current schema. Quota evidence expires within fifteen minutes and
-before its actual reset; a positive allowance is not a request-cost estimate.
+before its recorded reset; a positive allowance is not a request-cost estimate.
 
 An immediate SQLite transaction durably charges an attempt before the injected
 transport runs, then releases the transaction before network work. Six is the
@@ -148,16 +205,33 @@ fixed ceiling across admissions/restarts using that one ledger. Failed and
 uncertain attempts remain charged; an uncertain attempt blocks continuation
 until explicit trusted review. Known 401/403/429 statuses halt that ledger even
 when the response body is discarded as unsafe. Admission replay never retries.
-Receipts contain bounded metadata and digests, not raw prompts, images, outputs
-or credentials. Missing safeguards and unsuccessful recording fail closed.
+Ledger receipts contain bounded metadata and digests, not raw prompts, images,
+outputs or credentials. Missing safeguards and unsuccessful recording fail closed.
 
-This module has **no executable CLI, default live transport or application
-wiring**. No real mission generation ledger/admission has been initialized.
-The private caller must preserve one protected ledger location, substantiate
-quota/authorization and inject the guarded transport into every qualification
-request. It cannot authenticate a caller or verify dashboard evidence itself.
-It does not yet replace the needed sanitized generation-output/usage recorder,
-nor does an HTTP receipt establish valid schema or correct visual reasoning.
+The guard module has no standalone CLI or default live transport. It is now
+injected by `evaluation/run_tokenfactory_qualification.py`, invoked through the
+private launcher's `Qualify` and `Diagnose` actions. Its live ledger contains
+the two charged attempts. This direct provider path is not application/browser
+acceptance. The runner caches failures, retains bounded diagnostics, and could
+retain bounded model text/usage if a valid response supplied them; neither HTTP
+400 produced accepted model output.
+
+The initial exception preserves unknown API status and permits exactly one
+image on the first ledger attempt from explicitly authorized dashboard evidence.
+The diagnostic exception requires fresh response-header evidence, one prior
+terminal HTTP 400 and matching prior/admitted/outgoing request-byte digests; it
+permits attempt 2 only. No third diagnostic, generic second unknown-status call,
+schema relaxation or automatic retry is enabled. The trusted caller must keep
+one protected ledger and substantiate the evidence; the code cannot verify a
+dashboard claim or predict request cost.
+
+Offline review after the two requests added receipt-to-ledger response
+status/hash/size checks and anchored quota age to the immutable outcome time.
+Read-only verification confirmed the actual first receipt matches its outcome;
+both original receipts stayed unchanged. The recorder now caps escaped raw-text
+diagnostics and handles invalid Unicode so malformed model text cannot make a
+terminal receipt unreadable on restart. These fixes used controlled test
+responses and caused no further service requests.
 
 ## Validation recorded so far
 
@@ -181,10 +255,19 @@ remains CPU-only.
 | Latest official-quota discovery tests | 48 passed in 0.55 seconds. |
 | Latest transport tests | 173 passed in 1.82 seconds. |
 | Latest provider/inference API tests | 228 passed in 10.48 seconds. |
-| Latest isolated wrapper checks | 75 offline assertions; 28 files and 6 ACLs checked. No real key used in wrapper checks; dynamic cancellation not exercised. |
+| Official-quota isolated wrapper checks | 75 offline assertions; 28 files and 6 ACLs checked. No real key used in wrapper checks; dynamic cancellation not exercised. |
+| Current isolated wrapper checks | 128 assertions across all six actions; 11 independent ignored paths, 13 ACL objects and 36 temporary files checked. No network or real-key access; temporary state removed. Forced cancellation remains untested. |
 | Local NVIDIA authenticated API regression | Passed; one actual local GPU request, exact retry reused the existing run, evidence stayed unverified and inventory stayed held. |
-| Qualification guard tests | 55 passed in 1.49 seconds; controlled transports only, including independent SQLite connections, simulated interrupted reservations/reopening, strict payload binding and unsafe-body halt preservation. |
-| Latest full backend with qualification guard, warnings as errors | 1,397 passed in 40.72 seconds. |
+| Initial offline qualification guard tests | 55 passed in 1.49 seconds; controlled transports only, including independent SQLite connections, simulated interrupted reservations/reopening, strict payload binding and unsafe-body halt preservation. |
+| Initial offline continuation full backend, warnings as errors | 1,397 passed in 40.72 seconds. |
+| Guard and direct-runner CPU tests before live attempts | 90 passed in 2.80 seconds; explicit initial/diagnostic bounds, strict provider validation, failure caching, redaction and unit separation. |
+| Final guard and direct-runner CPU tests | 107 passed in 2.74 seconds; adds ledger-response binding, immutable quota timing and Unicode/cache regressions. |
+| Full backend before final review fixes, warnings as errors | 1,432 passed in 39.29 seconds. |
+| Final full backend after review fixes, warnings as errors | 1,449 passed in 39.35 seconds. |
+| Latest frontend suite and production build | 61 passed in 28.84 seconds; build passed, including TypeScript `--noEmit`. |
+| Latest synthetic recovery evaluation | OPTIMAL; 2 kits, 4 components, 17,500 cents modeled value. |
+| Latest safe source scan | 157 files; 0 findings and 0 forbidden paths. |
+| Final local documentation links and diff checks | 64 relative links across 7 documents resolve; no whitespace errors. |
 
 Task 2 validation commands, from the repository root. The combined focused
 command was used for the first checkpoint; the two separate focused commands
@@ -192,20 +275,28 @@ were used for the official-quota follow-up:
 
 ```powershell
 .venv\Scripts\python.exe -W error -m pytest -q
+.venv\Scripts\python.exe -B -W error -m pytest -q
 .venv\Scripts\python.exe -B -W error -m pytest tests/backend/test_remote_transport.py tests/backend/test_remote_provider.py tests/backend/test_inference_api.py -q
 .venv\Scripts\python.exe -B -W error -m pytest tests/backend/test_remote_transport.py -q
 .venv\Scripts\python.exe -B -W error -m pytest tests/backend/test_remote_provider.py tests/backend/test_inference_api.py -q
 .venv\Scripts\python.exe -W error -m pytest -q tests/backend/test_tokenfactory_discovery.py
 .venv\Scripts\python.exe -B -W error var/mission06-offline/check_tokenfactory_wrapper.py
 .venv\Scripts\python.exe -B -W error -m pytest tests/backend/test_tokenfactory_qualification.py -q --tb=short
+.venv\Scripts\python.exe -B -W error -m pytest tests/backend/test_tokenfactory_qualification.py tests/backend/test_tokenfactory_live_runner.py -q --tb=short
 ```
 
 The isolated wrapper harness and receipts are private local validation artifacts,
-not requirements for running the tracked test suite. The latest 75-assertion
+not requirements for running the tracked test suite. The earlier 75-assertion
 receipt was preserved without overwrite at
 `var/mission06-offline/wrapper-quota-check.json`, with SHA-256
 `2d36d216ac919efb9ef4f25ab788e601e1d25f693e4ab5f56f7e5a040757e23b`;
-the harness's generic `wrapper-check.json` filename is overwritten between runs.
+that historical receipt and the generic `wrapper-check.json` were preserved.
+The current 128-assertion receipt is
+`var/mission06-offline/wrapper-live-check.json`, with SHA-256
+`441edacbc506dc1f760dc1078eae5c85f5d03a04f17c4ce71dc34f0a3397fe09`.
+It exercised the exact current wrapper, including local credential checks
+without a Python child, fixed qualification arguments, output draining and
+private-path validation, using a fresh fake repository and encrypted fake key.
 
 Task 1 also used these commands from the repository root:
 
@@ -225,7 +316,7 @@ npm.cmd ls --all
 
 Task 1's private receipt is `var/mission06-offline/task1-validation.json`.
 It is a historical stage snapshot: its zero authenticated-call count and absent
-key-file state describe that earlier point, before the setup and three GETs above.
+key-file state describe that earlier point, before the setup and five service calls above.
 No local dependencies, models, datasets, containers, browsers or global software
 were installed/downloaded. CI installed the existing locked CPU dependencies
 in its isolated runners. The working NVIDIA PyTorch/CUDA environment was preserved.
@@ -281,8 +372,12 @@ verified. Both jobs in
 [Actions run 38597834070](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38597834070)
 succeeded. Its separate checkpoint receipt is
 `var/mission06-offline/quota-final-verification.json`.
-This report also records subsequent local-only regression work; no final
-Mission 06 completion is inferred from those checks.
+The offline continuation commit,
+**`1549793db8ca09a81fc74741e7b6bbad73b28c3a`**, was pushed and both jobs in
+[Actions run 38599311173](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38599311173)
+succeeded. Its separate receipt is
+`var/mission06-offline/offline-final-verification.json`.
+No final Mission 06 completion is inferred from these checkpoints.
 
 Task 1 added `docs/tokenfactory.md` and `scripts/configure_tokenfactory.ps1`.
 It modified `.env.example`, `README.md`,
@@ -314,33 +409,39 @@ The official-quota follow-up changes eight existing files:
 `docs/reports/development-mission-06.md`. No credential or private receipt is
 part of that inventory.
 
-The subsequent offline continuation adds
+That offline continuation added
 `evaluation/tokenfactory_qualification.py` and
-`tests/backend/test_tokenfactory_qualification.py`, and updates this report and
+`tests/backend/test_tokenfactory_qualification.py`, and updated this report and
 `docs/tokenfactory.md`. It adds no dependency or operational inventory schema.
-Its post-push heads/CI verification will be retained separately in
-`var/mission06-offline/offline-final-verification.json` and the handoff.
+
+The current bounded-probe follow-up adds two files:
+`evaluation/run_tokenfactory_qualification.py` and
+`tests/backend/test_tokenfactory_live_runner.py`. It modifies ten:
+`evaluation/tokenfactory_qualification.py`, `scripts/run_tokenfactory.ps1`,
+`tests/backend/test_tokenfactory_qualification.py`, `docs/tokenfactory.md` and
+`docs/reports/development-mission-06.md`, plus current-status notes in
+`docs/architecture.md`, `docs/pitch-deck.md` and `docs/submission-content.md`,
+and shared-service pointers in `docs/amd-activation.md` and `deploy/amd/README.md`.
+Submission field counts and the private PowerPoint remain unchanged. This
+follow-up's post-push local/tracking/remote heads, private visibility and CPU CI
+verification are retained separately in
+`var/mission06-offline/live-first-verification.json` and the final handoff.
 
 ## Next gate and remaining work
 
-Inspect Check Usage for remaining free allowance, reset time and account
-API-verification status; the operator's initial dashboard check did not expose
-these values. Browser inventory was empty and browser selection returned
-"No browser is available", so direct signed-in inspection is blocked in this
-session. Public official documentation did not establish this panel's input
-requirements or a replacement quota route; public path-prefix behavior alone
-does not justify probing an inferred route. The separately authorized
-official-quota GET has already failed; no further authenticated request or
-alternate route is authorized by repeating that one-attempt permission.
-If Check Usage also supplies no usable evidence, the safest next step is to ask
-the provider/hackathon support for the correct regional usage route and team API
-eligibility, without including a key. No support message has been sent.
+Stop after the two HTTP 400 outcomes. Ask the provider/hackathon support to
+clarify the enabled MiMo model ID/account eligibility and accepted strict-schema
+PNG request contract, the
+unusable usage routes, and conflicting quota/reset labels. Include only sanitized
+request times, endpoint/model names, schema digest, HTTP status and bounded categories; never a
+key or account ID. No support message has been sent. The existing six-attempt
+ceiling is not a direction to spend the remaining four attempts speculatively.
 
-Only after usable quota is established, admit a bounded strict-schema experiment
-that records the catalog/documentation discrepancy without inventing support.
-Qualify one synthetic image before a joint pair, using a persistent attempt
-record written before each generation and never refunding failed/unknown
-attempts. Do not automatically downgrade the schema, switch models or retry.
+A successful single-image result must precede joint-image qualification. Neither
+has occurred. Any resumed work must preserve the original receipts and two
+charged attempts, establish fresh usable quota evidence and explicitly review
+the concrete request change. Do not automatically downgrade the schema, switch
+models, replay again, guess another route or fall back to local inference.
 
 Actual API/browser integration, evidence-linked comparison, final software/local
 acceptance checks and the final mission report remain to be completed; the local

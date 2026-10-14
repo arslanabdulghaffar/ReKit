@@ -404,3 +404,142 @@ def test_invalid_transport_bounds_never_reserve_or_send(qualification, tmp_path,
         invoke(q.GuardedQualificationTransport(ledger, admission(q, images),
                transport=lambda *a, **k: pytest.fail("Invalid bounds")), payload(images), timeout=timeout)
     assert ledger.records() == ()
+
+
+def initial_probe_quota(q, images, **changes):
+    values = admission(q, images).quota.model_dump() | {
+        "api_access_verified": None, "initial_probe_authorized": True,
+        "key_issued_reported": True, "allowance_unit": "pt",
+    }
+    return q.VerifiedQuotaEvidence(**(values | changes))
+
+
+def test_authorized_dashboard_initial_probe_preserves_unknown_status_points_and_single_attempt(qualification, tmp_path, images):
+    q = qualification
+    images = images[:1]
+    quota = initial_probe_quota(q, images)
+    assert quota.api_access_verified is None and quota.allowance_unit == "pt" and quota.remaining_allowance == 1.0
+    ledger = q.QualificationLedger.initialize(tmp_path)
+    calls = []
+    def transport(*a, **k):
+        calls.append(1)
+        return HttpResponse(200, b"{}", "application/json")
+    invoke(q.GuardedQualificationTransport(ledger, admission(q, images, quota=quota), transport=transport), payload(images))
+    with sqlite3.connect(ledger.path) as connection:
+        stored = json.loads(connection.execute("SELECT payload FROM admissions").fetchone()[0])
+    assert stored["quota"]["api_access_verified"] is None and stored["quota"]["allowance_unit"] == "pt"
+    with pytest.raises(q.QualificationError, match="only the first ledger attempt"):
+        invoke(q.GuardedQualificationTransport(q.QualificationLedger(tmp_path),
+               admission(q, images, "second-probe", quota=quota), transport=transport), payload(images))
+    assert calls == [1] and len(ledger.records()) == 1
+
+
+@pytest.mark.parametrize("changes", [
+    {"initial_probe_authorized": False}, {"key_issued_reported": False},
+    {"source": "official_usage"}, {"api_access_verified": False},
+    {"free_shared_service_confirmed": False}, {"allowance_unit": "USD"},
+])
+def test_unknown_api_status_requires_specific_dashboard_authorization(qualification, images, changes):
+    with pytest.raises(ValidationError):
+        initial_probe_quota(qualification, images, **changes)
+
+
+def test_unknown_initial_probe_cannot_admit_joint_images_or_bypass_with_model_copy(qualification, tmp_path, images):
+    q = qualification
+    quota = initial_probe_quota(q, images)
+    with pytest.raises(ValidationError, match="exactly one"):
+        admission(q, images, quota=quota)
+    forged = admission(q, images).model_copy(update={"quota": quota})
+    with pytest.raises(q.QualificationError, match="Invalid qualification"):
+        q.GuardedQualificationTransport(q.QualificationLedger.initialize(tmp_path), forged,
+                                         transport=lambda *a, **k: pytest.fail("No joint initial probe"))
+
+
+def test_reviewed_failed_initial_probe_stays_charged_and_cannot_be_repeated(qualification, tmp_path, images):
+    q = qualification
+    images = images[:1]
+    quota = initial_probe_quota(q, images)
+    ledger = q.QualificationLedger.initialize(tmp_path)
+    attempt = ledger.reserve(admission(q, images, quota=quota), "f" * 64)
+    ledger.review_uncertain(attempt, reviewed_by="authorized_operator")
+    with pytest.raises(q.QualificationError, match="only the first ledger attempt"):
+        invoke(q.GuardedQualificationTransport(ledger, admission(q, images, "retry-with-new-id", quota=quota),
+               transport=lambda *a, **k: pytest.fail("No uncertain repeated initial probe")), payload(images))
+    assert len(ledger.records()) == 1
+
+
+def diagnostic_admission(q, images, prior_digest, identifier="diagnostic", **quota_changes):
+    quota = initial_probe_quota(q, images, source="response_headers", initial_probe_authorized=False,
+                                diagnostic_replay_authorized=True, allowance_unit="provider_capacity", **quota_changes)
+    return admission(q, images, identifier, quota=quota, diagnostic_prior_request_sha256=prior_digest)
+
+
+def test_exact_diagnostic_replay_consumes_only_attempt_two_and_preserves_first_receipt(qualification, tmp_path, images):
+    q = qualification
+    images = images[:1]
+    body = payload(images)
+    digest = hashlib.sha256(json.dumps(body).encode()).hexdigest()
+    ledger = q.QualificationLedger.initialize(tmp_path)
+    invoke(q.GuardedQualificationTransport(ledger, admission(q, images, quota=initial_probe_quota(q, images)),
+           transport=lambda *a, **k: HttpResponse(400, b'{}', "application/json")), body)
+    first = ledger.records()[0].copy()
+    calls = []
+    def diagnostic(*a, **k):
+        calls.append(1)
+        return HttpResponse(400, b'{"error":"controlled diagnostic"}', "application/json")
+    invoke(q.GuardedQualificationTransport(ledger, diagnostic_admission(q, images, digest), transport=diagnostic), body)
+    assert ledger.records()[0] == first and len(ledger.records()) == 2 and calls == [1]
+    with pytest.raises(q.QualificationError, match="sole prior HTTP 400"):
+        invoke(q.GuardedQualificationTransport(q.QualificationLedger(tmp_path),
+               diagnostic_admission(q, images, digest, "another-diagnostic"), transport=diagnostic), body)
+    assert calls == [1]
+
+
+@pytest.mark.parametrize("prior_status", [None, 200, 404, 500])
+def test_diagnostic_requires_one_terminal_http_400(qualification, tmp_path, images, prior_status):
+    q = qualification
+    images = images[:1]
+    body = payload(images)
+    digest = hashlib.sha256(json.dumps(body).encode()).hexdigest()
+    ledger = q.QualificationLedger.initialize(tmp_path)
+    if prior_status is not None:
+        invoke(q.GuardedQualificationTransport(ledger, admission(q, images),
+               transport=lambda *a, **k: HttpResponse(prior_status, b"{}", "application/json")), body)
+    with pytest.raises(q.QualificationError, match="sole prior HTTP 400"):
+        invoke(q.GuardedQualificationTransport(ledger, diagnostic_admission(q, images, digest),
+               transport=lambda *a, **k: pytest.fail("No diagnostic without exact prior 400")), body)
+    assert len(ledger.records()) == (0 if prior_status is None else 1)
+
+
+@pytest.mark.parametrize("change", ["admitted-prior-hash", "outgoing-bytes", "prior-kind"])
+def test_diagnostic_rejects_mismatched_binding_or_protocol_failure(qualification, tmp_path, images, change):
+    q = qualification
+    images = images[:1]
+    body = payload(images)
+    digest = hashlib.sha256(json.dumps(body).encode()).hexdigest()
+    ledger = q.QualificationLedger.initialize(tmp_path)
+    attempt = ledger.reserve(admission(q, images), digest)
+    if change == "prior-kind":
+        ledger._finish(attempt, error_code="protocol", http_status=400)
+        ledger.review_uncertain(attempt, reviewed_by="authorized_operator")
+    else:
+        ledger._finish(attempt, response=HttpResponse(400, b"{}", "application/json"))
+    approved = diagnostic_admission(q, images, "0" * 64 if change == "admitted-prior-hash" else digest)
+    extra = {"payload": json.dumps(body, separators=(",", ":")).encode()} if change == "outgoing-bytes" else {}
+    with pytest.raises(q.QualificationError, match="identical request bytes"):
+        invoke(q.GuardedQualificationTransport(ledger, approved,
+               transport=lambda *a, **k: pytest.fail("No changed diagnostic request")), body, **extra)
+    assert len(ledger.records()) == 1
+
+
+def test_diagnostic_marker_source_joint_images_and_missing_prior_hash_rejected(qualification, images):
+    q = qualification
+    quota = initial_probe_quota(q, images, source="response_headers", initial_probe_authorized=False,
+                                diagnostic_replay_authorized=True)
+    for changed in ({"diagnostic_replay_authorized": False}, {"source": "dashboard"}, {"api_access_verified": True}):
+        with pytest.raises(ValidationError):
+            q.VerifiedQuotaEvidence(**(quota.model_dump() | changed))
+    with pytest.raises(ValidationError, match="exactly one"):
+        admission(q, images, quota=quota, diagnostic_prior_request_sha256="d" * 64)
+    with pytest.raises(ValidationError, match="prior request digest"):
+        admission(q, images[:1], quota=quota)

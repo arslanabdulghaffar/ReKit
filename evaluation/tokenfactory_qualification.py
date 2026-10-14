@@ -44,23 +44,35 @@ class _Frozen(BaseModel):
 
 
 class VerifiedQuotaEvidence(_Frozen):
-    """A trusted operator attestation, never a substitute for obtaining evidence."""
+    """Trusted quota evidence; an authorized initial probe may retain unknown API status."""
 
-    source: Literal["official_usage", "dashboard"]
+    source: Literal["official_usage", "dashboard", "response_headers"]
     evidence_sha256: Digest
     verified_by: Literal["trusted_qualification_caller"]
     status: Literal["ok"]
-    api_access_verified: bool
+    api_access_verified: bool | None
+    initial_probe_authorized: bool = False
+    diagnostic_replay_authorized: bool = False
+    key_issued_reported: bool = False
     free_shared_service_confirmed: bool
     remaining_allowance: float = Field(gt=0, le=2**53 - 1, allow_inf_nan=False)
+    allowance_unit: Literal["pt", "provider_capacity"] = "provider_capacity"
     observed_at: datetime
     expires_at: datetime
     reset_at: datetime
 
     @model_validator(mode="after")
     def verified_window(self):
-        if not self.api_access_verified or not self.free_shared_service_confirmed:
-            raise ValueError("Verified API access and free shared-service allowance are required")
+        initial_probe = (self.api_access_verified is None and self.source == "dashboard"
+                         and self.initial_probe_authorized and self.key_issued_reported
+                         and not self.diagnostic_replay_authorized)
+        diagnostic = (self.api_access_verified is None and self.source == "response_headers"
+                      and self.diagnostic_replay_authorized and self.key_issued_reported
+                      and not self.initial_probe_authorized)
+        if self.diagnostic_replay_authorized and not diagnostic:
+            raise ValueError("Diagnostic replay requires unknown API status and fresh response-header evidence")
+        if not self.free_shared_service_confirmed or (self.api_access_verified is not True and not initial_probe and not diagnostic):
+            raise ValueError("Verified API access or an explicitly authorized bounded probe is required")
         dates = (self.observed_at, self.expires_at, self.reset_at)
         if any(value.tzinfo is None or value.utcoffset() is None for value in dates):
             raise ValueError("Quota timestamps must include a timezone")
@@ -85,9 +97,14 @@ class QualificationAdmission(_Frozen):
     schema_sha256: Digest
     allow_candidates: bool
     quota: VerifiedQuotaEvidence
+    diagnostic_prior_request_sha256: Digest | None = None
 
     @model_validator(mode="after")
     def exact_schema(self):
+        if self.quota.api_access_verified is None and len(self.input_sha256) != 1:
+            raise ValueError("An unverified probe requires exactly one approved image")
+        if self.quota.diagnostic_replay_authorized != (self.diagnostic_prior_request_sha256 is not None):
+            raise ValueError("Only a diagnostic admission must bind the prior request digest")
         if len(set(self.input_sha256)) != len(self.input_sha256):
             raise ValueError("Distinct approved image bytes are required")
         expected = schema_digest(inspection_schema(len(self.input_sha256), allow_candidates=self.allow_candidates))
@@ -245,7 +262,17 @@ class QualificationLedger:
                 LEFT JOIN reviews r ON r.attempt_id=a.id
                 WHERE r.attempt_id IS NULL AND (o.attempt_id IS NULL OR o.kind != 'http_response')""").fetchone():
                 raise QualificationError("An uncertain prior attempt requires explicit review")
-            if connection.execute("SELECT COUNT(*) FROM attempts").fetchone()[0] >= MAX_ATTEMPTS:
+            count = connection.execute("SELECT COUNT(*) FROM attempts").fetchone()[0]
+            if admission.quota.diagnostic_replay_authorized:
+                first = connection.execute("""SELECT a.request_sha256, o.kind, o.http_status FROM attempts a
+                    JOIN outcomes o ON o.attempt_id=a.id WHERE a.id=1""").fetchone()
+                if (count != 1 or first is None or first["kind"] != "http_response" or first["http_status"] != 400
+                        or request_sha256 != first["request_sha256"]
+                        or request_sha256 != admission.diagnostic_prior_request_sha256):
+                    raise QualificationError("Diagnostic replay requires the sole prior HTTP 400 and identical request bytes")
+            elif admission.quota.api_access_verified is None and count != 0:
+                raise QualificationError("Unverified dashboard evidence authorizes only the first ledger attempt")
+            if count >= MAX_ATTEMPTS:
                 raise QualificationError("The six-generation mission budget is exhausted")
             connection.execute("INSERT OR IGNORE INTO admissions VALUES (?,?)", (admission.admission_id, _canonical(admission)))
             cursor = connection.execute("INSERT INTO attempts(admission_id,request_sha256,started_at) VALUES (?,?,?)",
@@ -280,7 +307,7 @@ class QualificationLedger:
         connection = self._connect()
         try:
             return tuple(dict(row) for row in connection.execute("""SELECT a.*, o.kind, o.http_status,
-                o.response_sha256, o.response_bytes, o.error_code, r.reviewed_by
+                o.response_sha256, o.response_bytes, o.error_code, o.finished_at AS finished_at, r.reviewed_by
                 FROM attempts a LEFT JOIN outcomes o ON o.attempt_id=a.id
                 LEFT JOIN reviews r ON r.attempt_id=a.id ORDER BY a.id"""))
         finally:

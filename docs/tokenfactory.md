@@ -4,20 +4,16 @@ Mission 06, October 15, 2026. This is a shared-service integration, separate fro
 an owned AMD Developer Cloud allocation. Successful generation requests would
 establish TokenFactory inference usage, not a specific GPU, ROCm release or
 immutable deployed weights.
-Read-only model discovery has returned a real catalog. Quota and image execution
-remain unqualified: the supplied usage alias was unusable, and the separately
-authorized one-time official quota GET returned HTTP 404. Neither route nor the
-catalog returned quota headers. There have been **three authenticated GET
-attempts, zero generation POSTs and zero transmitted images**. The live MiMo
-catalog advertises `structured_outputs: false` and
-`free: false` despite the documentation's strict-schema description. The free
-flag describes allowance accounting; it alone does not establish billable use
-or free account entitlement. The operator checked the dashboard: allowance and
-reset time were not displayed or confirmed, sign-in and team-key issuance
-succeeded, and API-verification status was not explicit. These are operator
-reports, not measured quota. The **Check Usage** panel still needs inspection;
-no browser is connected to the agent's session. Do not infer missing values or
-make generation requests until usable quota is verified. See the current
+Read-only model discovery returned a real catalog. After the user supplied
+**Check Usage** values and explicitly authorized the initial synthetic probe,
+two deliberate, identical single-image POST attempts returned **HTTP 400**.
+The second request collected bounded diagnostics; it was not an automatic retry.
+The cause remains inconclusive and API access remains unverified. **Five
+authenticated calls have occurred: three GETs and two POSTs, with 2 of 6
+generation attempts charged.** The POSTs presented the same approved synthetic
+image twice; no ABO image was sent. No AMD visual/schema success, joint-image
+qualification, application/browser acceptance or paired comparison is claimed.
+Stop before a third replay. See the current
 [Mission 06 checkpoint](reports/development-mission-06.md).
 
 ## Mandatory credential and image-transfer gate
@@ -61,7 +57,8 @@ Before any authenticated request, the user must separately confirm:
 Configuration alone is not consent. Keep the gate closed while any required
 confirmation is missing. Never ask the user to disclose the key in Codex chat.
 For this mission, all three confirmations and local replacement-key setup are
-complete. They do not remove the remaining quota-evidence gate.
+complete. The local `CheckCredential` action also passed: it validates protected
+local setup without a network call and does not establish account eligibility.
 
 ## Cached, read-only discovery
 
@@ -121,7 +118,8 @@ It returned HTTP 404 (`request_rejected`, `application/json`, 22 response bytes,
 `.secrets/tokenfactory/qualification/quota-discovery.json`. This was the third
 authenticated GET attempt overall. The single authorized attempt is consumed;
 the result is cached and must not be deleted to trigger a retry. No guessed
-host/path, redirect or further authenticated request followed this failure.
+host/path or redirect was used. The later POSTs below followed separate review
+of operator-reported allowance and an explicit bounded probe authorization.
 
 The transport retains only parsed, bounded Retry-After seconds and documented
 numeric quota headers. Missing or invalid values remain unknown. No 429 is
@@ -157,39 +155,36 @@ input order, unverified evidence and human decision boundary.
 
 ## Staged acceptance
 
-The `/models` response is cached, but usable quota remains unknown after both
-usage routes failed. The official host was explicitly authorized and attempted;
-host authorization is no longer the missing step. Obtain only a sanitized
-current Check Usage reading of remaining free allowance, reset time and account
-API-verification status. The operator's initial dashboard check did not expose
-these values. Successful sign-in and a redeemed/issued team key do not establish
-allowance or API verification. Stop on rejected access or incomplete verification.
-Do not infer allowance from documentation examples, an HTTP 200 catalog or the
-absence of quota headers. Save no keys, account IDs or sensitive headers.
+The operator's subsequent Check Usage report showed **1 pt daily allowance,
+0 spent, 1 remaining, 20 RPM**, with reset displayed as **01:00 Asia/Shanghai**.
+It was received at `2026-10-14T16:43:27Z`; the first admission expired at
+`16:58:00Z`, before its interpreted `17:00:00Z` reset. API-verification status
+was not shown and remains null, not true. Successful sign-in/key issuance and
+the explicit initial-probe authorization were recorded separately.
 
-Public documentation inspected on October 15 did not establish the Check Usage
-UI's input requirements or a replacement quota route. The official usage API
-documents session or API-key authentication, but this is not proof of the UI's
-behavior. Inspect that panel in the existing signed-in session and retain only
-quota/reset/status values or sanitized error text. If it remains unavailable,
-ask the provider or hackathon support to confirm the correct regional usage
-route and the team's shared-model API eligibility. Do not send a credential or
-infer a route from the public site's `/radeon` routing prefix. No support message
-has been sent by ReKit.
+The first POST at `16:49:19Z` and diagnostic POST at `16:56:19Z` on October 14 UTC
+both returned HTTP 400 with the same 142-byte response digest:
+`6aad1a77b10692dafe38cabea0adde38986dd61b5bb42de83d8b7e3364860c8b`.
+Bounded diagnostics retained `type=invalid_request_error`,
+`message_mentions=[model]` and no recognized message flags. These categories
+do not identify an exact rejection reason; no unsupported-model, schema or
+credential conclusion is justified. The original arbitrary error text was not
+copied into tracked documentation.
 
-Suggested support text, for the operator to review and send if Check Usage
-also fails:
+POST response headers reported `daily_usd_limit=1`, `daily_usd_used=0`,
+`daily_usd_remaining=1`, a 20 RPM limit and 19 remaining requests. Their
+`daily_reset_unix=1792080000` represents October 15 at 16:00 UTC / October 16 at
+00:00 Asia/Shanghai. This conflicts with the operator's reset display. The
+provider's USD-labelled counters are retained as such; **no pt-to-USD conversion
+or consumption in points is inferred**. Positive headers admitted only the
+reviewed identical diagnostic, not general continuation.
 
-> Our team key is redeemed and issued, but the dashboard does not show remaining
-> shared-model allowance, reset time or explicit API-verification status.
-> On October 15, 2026 (Asia/Seoul), the documented `/radeon/api/v1/usage`
-> request on `developer.amd.com.cn` returned HTTP 200 without a usable usage
-> response; `/api/profile/model-usage` on `radeon-global.anruicloud.com`
-> returned HTTP 404. Both included `include_recent=true`. Model catalog
-> discovery succeeded, but no generation has been attempted. Please confirm
-> the correct regional usage route, how Check Usage should be accessed, and
-> how we can verify our team's shared-model API eligibility, remaining free
-> allowance and reset time. No credential is included.
+Stop now: request provider/hackathon clarification of this exact model's API
+eligibility and accepted request contract, and the quota/reset discrepancy.
+No third replay, automatic model switch, schema downgrade, guessed route or
+silent local fallback is authorized by these receipts. No support message has
+been sent. A support inquiry should contain only model/endpoint names, request
+times, HTTP status and the bounded categories above, never the key or account IDs.
 
 The [catalog reference](https://amd-aim.github.io/radeon-cloud-docs/api/models/)
 states that the catalog is the same for every key, not account-scoped. Its
@@ -210,16 +205,15 @@ it is not permission to expose shared API access to third parties. Terms describ
 AMD accelerators at the service level, not per-request hardware attestation.
 They also describe shared-service quotas as capacity controls, not currency.
 
-Once quota is established, a bounded qualification attempt may test the
-documented MiMo capability while retaining the contradictory catalog flags as
-unresolved evidence. Admission to that experiment is not capability confirmation.
-Start with one small synthetic image, review its actual result, then attempt
-two images only when justified. Keep strict JSON Schema, independent validation
-and `reasoning_effort: "none"`; do not automatically downgrade to `json_object`,
-switch models or increase generation limits after failure. Record actual output,
-model ID, ordered
-hashes, timing, bounded provider usage and quota. Respect rate limiting and
-Retry-After; never automatically retry or fall back to NVIDIA.
+Both attempted requests retained strict JSON Schema, `max_tokens=512`,
+`reasoning_effort: "none"` and the exact `MiMo-V2.6-Flash` model/endpoint.
+The catalog still advertises `structured_outputs=false` and `free=false`;
+these unresolved declarations were retained in the receipts. The synthetic
+input SHA-256 was
+`cf1a8f595ff3986a947e7160cdb76d7493e9748d2d1f5a03b83d0d23343de38b`.
+Only after the access/contract blocker is resolved should the mission consider
+further bounded qualification under its remaining budget. Keep strict parsing,
+rate-limit handling and the human decision boundary unchanged.
 A schema-conforming response establishes conformance for that response, not
 general server-side schema enforcement or correct understanding of the images.
 
@@ -235,23 +229,37 @@ backend process; frontend/browser processes and fixture manifests must never
 receive it. A persistent private attempt ledger must enforce the six-generation
 ceiling across separate qualification stages, including failed attempts.
 
-The offline-tested
+The tested
 [`tokenfactory_qualification.py`](../evaluation/tokenfactory_qualification.py)
 now supplies that accounting component, with no CLI or default live transport.
 Its fixed ledger filename is `generation-attempts.sqlite3`; initial creation is
 explicit and reopening requires intact existing state. A durable reservation
 precedes each injected request, all attempts remain charged, and HTTP
 401/403/429 halt the ledger even if an unsafe body must be discarded. Admissions
-bind existing mission authority, current verified quota, approved ordered image
+bind existing mission authority, current quota evidence, approved ordered image
 hashes and the exact strict MiMo request. Uncertain attempts require explicit
 review before continuation; replaying an admission cannot retry it.
 
-It is not yet connected to a live launcher or the application. Before live use,
-the trusted caller must verify quota, preserve one private ledger location,
-record sanitized generation results/usage and inject this guard into every
-qualification request. The component cannot prove a supplied dashboard claim or
-estimate generation cost from remaining allowance. Existing failed discovery
-receipts and the current unknown dashboard values do not satisfy admission.
+The guard is now connected to the direct qualification runner
+[`run_tokenfactory_qualification.py`](../evaluation/run_tokenfactory_qualification.py)
+through the private PowerShell launcher's `Qualify` and `Diagnose` actions.
+It is not application/browser acceptance. The initial exception allowed one
+image on ledger attempt 1 with unknown API status, positive operator-reported
+points and explicit initial-probe authorization. The diagnostic exception
+allowed only attempt 2 after the sole prior terminal HTTP 400, fresh response
+headers and matching prior/admitted/outgoing request-byte digests. It cannot
+repeat as attempt 3 or relax the request contract.
+Post-request offline hardening also binds receipt status/hash/size and timing
+to the immutable outcome, and bounds escaped raw-model diagnostics so terminal
+receipts remain readable. The actual two receipts were preserved unchanged.
+
+Private `synthetic-first.json`, `synthetic-diagnostic.json` and
+`generation-attempts.sqlite3` preserve the two charged attempts. The runner
+caches failed results and retains bounded diagnostics without arbitrary error
+text or credentials. The caller must keep this one protected ledger; neither
+the component nor its evidence types authenticate dashboard claims or predict
+request cost. A later success would still require independent schema/domain
+validation and would not automatically qualify image understanding.
 
 See [Mission 05](reports/development-mission-05.md) for the accepted baseline and
 [AMD activation](amd-activation.md) for the separate owned-cloud route. The final

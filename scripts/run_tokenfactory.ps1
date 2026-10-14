@@ -1,8 +1,8 @@
-# Explicit authorized discovery. Decrypt only into the isolated Python process.
+# Explicit authorized operations. Decrypt only for a local check or owned child.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet('Discover', 'Catalog', 'Quota')]
+    [ValidateSet('Discover', 'Catalog', 'Quota', 'Qualify', 'Diagnose', 'CheckCredential')]
     [string]$Action,
     [switch]$Authorized
 )
@@ -33,7 +33,7 @@ function Assert-PrivateAccess([string]$Path, [bool]$RequireProtected = $false) {
 }
 
 try {
-    if (-not $Authorized) { throw 'Explicit prior authorization is required.' }
+    if ($Action -ne 'CheckCredential' -and -not $Authorized) { throw 'Explicit prior authorization is required.' }
     if ($env:OS -ne 'Windows_NT') { throw 'Windows DPAPI is required.' }
     $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
     $privateDirectory = Join-Path $repository '.secrets\tokenfactory'
@@ -55,7 +55,14 @@ try {
     foreach ($ignoredPath in @('.secrets/tokenfactory/api-key.clixml',
                                '.secrets/tokenfactory/qualification/discovery.json',
                                '.secrets/tokenfactory/qualification/catalog-discovery.json',
-                               '.secrets/tokenfactory/qualification/quota-discovery.json')) {
+                               '.secrets/tokenfactory/qualification/quota-discovery.json',
+                               '.secrets/tokenfactory/qualification/synthetic-first.json',
+                               '.secrets/tokenfactory/qualification/synthetic-diagnostic.json',
+                               '.secrets/tokenfactory/qualification/dashboard-evidence.json',
+                               '.secrets/tokenfactory/qualification/generation-attempts.sqlite3',
+                               '.secrets/tokenfactory/qualification/generation-attempts.sqlite3-journal',
+                               '.secrets/tokenfactory/qualification/generation-attempts.sqlite3-wal',
+                               '.secrets/tokenfactory/qualification/generation-attempts.sqlite3-shm')) {
         & git -C $repository check-ignore --quiet -- $ignoredPath
         if ($LASTEXITCODE -ne 0) { throw 'Each private file must be ignored by Git.' }
     }
@@ -63,14 +70,17 @@ try {
     # existing descriptor, which can require privileges absent from this session.
     Assert-PrivateAccess $privateDirectory $true
     Assert-PrivateAccess $keyPath
-    [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
-    Assert-PrivateAccess $outputDirectory
-    foreach ($receiptName in @('discovery.json', 'catalog-discovery.json', 'quota-discovery.json')) {
+    if ($Action -ne 'CheckCredential') { [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null }
+    if (Test-Path -LiteralPath $outputDirectory) { Assert-PrivateAccess $outputDirectory }
+    foreach ($receiptName in @('discovery.json', 'catalog-discovery.json', 'quota-discovery.json',
+                               'synthetic-first.json', 'synthetic-diagnostic.json', 'dashboard-evidence.json', 'generation-attempts.sqlite3',
+                               'generation-attempts.sqlite3-journal', 'generation-attempts.sqlite3-wal',
+                               'generation-attempts.sqlite3-shm')) {
         $receiptPath = Join-Path $outputDirectory $receiptName
         if (Test-Path -LiteralPath $receiptPath) {
             $receiptItem = Get-Item -LiteralPath $receiptPath -Force
             if ($receiptItem.PSIsContainer -or ($receiptItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-                throw 'Invalid discovery receipt.'
+                throw 'Invalid private artifact.'
             }
             Assert-PrivateAccess $receiptPath
         }
@@ -79,40 +89,57 @@ try {
     if ($secureKey -isnot [Security.SecureString] -or $secureKey.Length -lt 1 -or $secureKey.Length -gt 4096) {
         throw 'Invalid private credential.'
     }
-    $startInfo = [Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = Join-Path $repository '.venv\Scripts\python.exe'
-    if ($Action -eq 'Quota') {
-        $startInfo.Arguments = 'evaluation/tokenfactory_discovery.py --authorized-official-quota'
-        $receiptRelativePath = '.secrets/tokenfactory/qualification/quota-discovery.json'
-    } elseif ($Action -eq 'Catalog') {
-        $startInfo.Arguments = 'evaluation/tokenfactory_discovery.py --catalog-after-unusable-usage'
-        $receiptRelativePath = '.secrets/tokenfactory/qualification/catalog-discovery.json'
-    } else {
-        $startInfo.Arguments = 'evaluation/tokenfactory_discovery.py --authorized-discovery'
-        $receiptRelativePath = '.secrets/tokenfactory/qualification/discovery.json'
-    }
-    $startInfo.WorkingDirectory = $repository
-    $startInfo.UseShellExecute = $false
-    $startInfo.CreateNoWindow = $true
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    # Never modify the parent PowerShell environment or put the key in argv.
     $keyPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKey)
-    $startInfo.EnvironmentVariables['REKIT_INFERENCE_API_KEY'] = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($keyPointer)
-    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($keyPointer)
-    $keyPointer = [IntPtr]::Zero
-    $child = [Diagnostics.Process]::Start($startInfo)
-    $startInfo.EnvironmentVariables.Remove('REKIT_INFERENCE_API_KEY')
-    # Hidden children still need valid output handles. Drain both streams
-    # concurrently without decoding, retaining, or echoing untrusted output.
-    $stdoutDrain = $child.StandardOutput.BaseStream.CopyToAsync([IO.Stream]::Null)
-    $stderrDrain = $child.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
-    $child.WaitForExit()
-    [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdoutDrain, $stderrDrain))
-    $result = $child.ExitCode
-    Write-Output ('TokenFactory ' + $Action + ' finished with exit code ' + $result + '. Receipt path: ' + $receiptRelativePath)
+    for ($index = 0; $index -lt $secureKey.Length; $index++) {
+        $character = [Runtime.InteropServices.Marshal]::ReadInt16($keyPointer, $index * 2)
+        if ($character -lt 33 -or $character -gt 126) { throw 'Invalid private credential characters.' }
+    }
+    if ($Action -eq 'CheckCredential') {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($keyPointer)
+        $keyPointer = [IntPtr]::Zero
+        $result = 0
+        Write-Output 'TokenFactory local credential setup verified. No inference process or network request was started; account access and quota remain unverified.'
+    } else {
+        $startInfo = [Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = Join-Path $repository '.venv\Scripts\python.exe'
+        if ($Action -eq 'Diagnose') {
+            $startInfo.Arguments = 'evaluation/run_tokenfactory_qualification.py --authorized-diagnostic'
+            $receiptRelativePath = '.secrets/tokenfactory/qualification/synthetic-diagnostic.json'
+        } elseif ($Action -eq 'Qualify') {
+            $startInfo.Arguments = 'evaluation/run_tokenfactory_qualification.py --authorized-synthetic'
+            $receiptRelativePath = '.secrets/tokenfactory/qualification/synthetic-first.json'
+        } elseif ($Action -eq 'Quota') {
+            $startInfo.Arguments = 'evaluation/tokenfactory_discovery.py --authorized-official-quota'
+            $receiptRelativePath = '.secrets/tokenfactory/qualification/quota-discovery.json'
+        } elseif ($Action -eq 'Catalog') {
+            $startInfo.Arguments = 'evaluation/tokenfactory_discovery.py --catalog-after-unusable-usage'
+            $receiptRelativePath = '.secrets/tokenfactory/qualification/catalog-discovery.json'
+        } else {
+            $startInfo.Arguments = 'evaluation/tokenfactory_discovery.py --authorized-discovery'
+            $receiptRelativePath = '.secrets/tokenfactory/qualification/discovery.json'
+        }
+        $startInfo.WorkingDirectory = $repository
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        # Never modify the parent PowerShell environment or put the key in argv.
+        $startInfo.EnvironmentVariables['REKIT_INFERENCE_API_KEY'] = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($keyPointer)
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($keyPointer)
+        $keyPointer = [IntPtr]::Zero
+        $child = [Diagnostics.Process]::Start($startInfo)
+        $startInfo.EnvironmentVariables.Remove('REKIT_INFERENCE_API_KEY')
+        # Hidden children still need valid output handles. Drain both streams
+        # concurrently without decoding, retaining, or echoing untrusted output.
+        $stdoutDrain = $child.StandardOutput.BaseStream.CopyToAsync([IO.Stream]::Null)
+        $stderrDrain = $child.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
+        $child.WaitForExit()
+        [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdoutDrain, $stderrDrain))
+        $result = $child.ExitCode
+        Write-Output ('TokenFactory ' + $Action + ' finished with exit code ' + $result + '. Receipt path: ' + $receiptRelativePath)
+    }
 } catch {
-    [Console]::Error.WriteLine('TokenFactory discovery did not complete. Check the encrypted local setup and sanitized receipt. No credential details are logged.')
+    [Console]::Error.WriteLine('TokenFactory operation did not complete. Check the encrypted local setup and sanitized receipt. No credential details are logged.')
 } finally {
     if ($keyPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($keyPointer) }
     if ($null -ne $startInfo) { $startInfo.EnvironmentVariables.Remove('REKIT_INFERENCE_API_KEY') }

@@ -5,11 +5,17 @@ not a submission receipt. **Actual AMD execution is pending.** The requested
 title describes the intended deployment; retain this qualification wherever it
 is presented until the AMD gate passes.
 
-Mission 06 checkpoint, October 15: TokenFactory's exact remote profile and
-read-only discovery are implemented. An actual catalog response lists MiMo as
-image-capable, but quota and strict-schema execution remain unqualified. No
-image has been sent to the service. This does not change the pending-inference
-claims in the submission fields below; see the
+Mission 06 checkpoint, October 15: three authenticated GETs and two single-image
+synthetic POST attempts have run through TokenFactory's exact remote profile.
+Both POSTs returned HTTP 400. The diagnostic replay reported
+`invalid_request_error` mentioning the model, without establishing the cause.
+The operator initially reported 1 pt remaining; response headers separately
+reported limit 1, used 0 and remaining 1 in provider-labelled units. No conversion
+is established, and reset reports remain inconsistent. HTTP 400 does not
+establish that an AMD model ran. Successful AMD visual inference and
+strict-schema execution remain unconfirmed. No ABO, joint-image,
+AMD browser or paired comparison request followed. The submission field copy
+and its counts below are unchanged; see the
 [Mission 06 report](reports/development-mission-06.md). Nothing was submitted.
 
 ## Identity and form limits
@@ -96,12 +102,14 @@ The intended production path is AMD Developer Cloud, ROCm and a compatible vLLM
 vision endpoint behind the existing provider contract. The implemented remote
 adapter uses an exact HTTPS allowlist, bounded original-image transport and strict
 response validation, with no automatic retry or fallback. Its qualification uses
-controlled offline endpoints only.
+controlled offline tests and separately recorded live TokenFactory attempts.
 
-**Actual AMD requests: 0.** No AMD performance, deployed model revision or remote
-hardware claim is supported yet. A configured remote model ID is not hardware
-attestation. Follow the [activation gate](../deploy/amd/README.md#activation-checklist)
-before claiming completion of the event's AMD workload.
+**Actual TokenFactory traffic: 3 GETs and 2 single-image POST attempts; both POSTs
+returned HTTP 400. Successful AMD visual inference: unconfirmed.** No AMD
+performance, deployed model revision or remote hardware claim is supported yet.
+A configured remote model ID is not hardware attestation. Follow the
+[activation gate](../deploy/amd/README.md#activation-checklist) before claiming
+completion of the event's AMD workload.
 
 ## Technical novelty
 

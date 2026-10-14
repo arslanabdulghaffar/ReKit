@@ -1,5 +1,13 @@
 # Activate ReKit on an authorized AMD endpoint
 
+**Mission 06 update, 2026-10-15:** the shared TokenFactory profile now has real
+catalog discovery and two single-image POST attempts, both HTTP 400. Successful
+AMD inference remains unqualified. Use the [TokenFactory procedure](tokenfactory.md)
+and [current report](reports/development-mission-06.md) for its exact endpoint,
+explicitly unattested revisions, quota evidence and blocked qualification.
+The pinned owned-deployment procedure below is a separate path; no allocation
+or billable infrastructure has been authorized or created.
+
 **Status, 2026-10-14:** the remote adapter exists and has offline qualification.
 Actual AMD requests, an allocation and a qualified AMD serving image remain
 **unverified**. Execute this handoff only after the owner authorizes access,

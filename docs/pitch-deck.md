@@ -6,12 +6,18 @@ Every use must retain **AMD deployment planned; qualification pending** until
 actual AMD execution is qualified. This deck is prepared locally, not published
 or submitted.
 
-Mission 06 checkpoint: the explicit TokenFactory adapter and private discovery
-launcher are implemented, and a real model-catalog response was obtained.
-Quota remains unknown and MiMo's live schema/free flags conflict with the docs.
-This establishes discovery, not AMD visual inference or a successful AMD demo.
-Retain the qualification-pending narrative below. The private PowerPoint has
-not been edited; see the [Mission 06 report](reports/development-mission-06.md).
+Mission 06 checkpoint: three authenticated GETs and two single-image synthetic
+POST attempts have run through the explicit TokenFactory profile. Both POSTs
+returned HTTP 400. The diagnostic replay reported `invalid_request_error`
+mentioning the model; its cause remains unresolved. The operator initially
+reported 1 pt remaining, while response headers independently reported limit 1,
+used 0 and remaining 1 in provider-labelled units. No conversion is established;
+reset reports remain inconsistent, and the catalog's strict-schema flag conflicts
+with the model reference. HTTP 400 does not establish that an AMD model ran.
+Successful AMD visual inference is unconfirmed. No ABO, joint-image, AMD browser or paired
+comparison run followed. Retain the qualification-pending narrative below.
+The private PowerPoint and its Mission 05 evidence snapshot have not been edited;
+see the [Mission 06 report](reports/development-mission-06.md).
 
 ## Slide content and design
 
@@ -23,7 +29,7 @@ not been edited; see the [Mission 06 report](reports/development-mission-06.md).
 | 4. Real images. Unverified AI. | Pinned Qwen3-VL-2B, RTX 4080 SUPER, one joint two-image request. One component held, zero kits. Repeated appearance text and an uncertainty statement ending mid-thought are preserved. No catalog candidates are allowed in this mode; that is a contract constraint, not recognition accuracy. | Actual result screenshot with unverified labels and original wording. Do not replace claims with improved copy. Explain that scripted rejection requests more evidence; it supplies no independent truth label. |
 | 5. A separate, controlled recovery example | Three returns → four unique components → two kit records. USD 175 modeled net disposition value. Approved BOMs and real CPU CP-SAT produce a proposal; human approval reserves four components. Two explicit confirmations consume those four components and record kits. | Actual synthetic completed-kit inventory and lineage. Keep “synthetic” visible in slide text. These are software records from fixture-based decisions, not real rebuilt merchandise, sales or customer savings. |
 | 6. Measured execution, honest limits | Task 3 snapshot: 1,121 backend and 57 frontend tests passed. Product inference 38.568 s, provider request 47.187 s, peak allocated CUDA memory 4.902 decimal GB. One joint request; provider time includes cold load. Independent human semantic labels: zero. Accuracy is not measurable. | Native editable table. Distinguish inference from request and browser timings. Do not infer p95, throughput, total GPU memory use, safety or business performance from this single observation. |
-| 7. AMD is the next execution gate | Qualify authorized hardware, actual VLM/revisions and image/schema support. Connect the existing HTTPS provider with server-only credentials. Measure real images, errors, memory, latency and human-review behavior. Business potential: compatible stock recovery with traceable decisions. | Dark green close. State that actual AMD execution is still zero. Next gates are AMD qualification and independent human review before a measured customer pilot. Evolus remains optional and unimplemented. |
+| 7. AMD is the next execution gate | Qualify authorized hardware, actual VLM/revisions and image/schema support. Connect the existing HTTPS provider with server-only credentials. Measure real images, errors, memory, latency and human-review behavior. Business potential: compatible stock recovery with traceable decisions. | Dark green close. State that successful AMD visual inference remains unconfirmed. Next gates are AMD qualification and independent human review before a measured customer pilot. Evolus remains optional and unimplemented. |
 
 Use Arial, the existing dark green/cream/lime palette, large titles and generous
 spacing. Tables, text and the architecture remain editable. Screenshot crops are

@@ -1,5 +1,13 @@
 # AMD inference deployment handoff
 
+For Mission 06's shared-service path, see the
+[TokenFactory procedure](../../docs/tokenfactory.md) and
+[current report](../../docs/reports/development-mission-06.md).
+Three discovery GETs and two single-image POST attempts are recorded; both POSTs
+returned HTTP 400. No successful AMD inference is established. Its explicitly
+unattested shared-service profile is separate from the pinned owned-deployment
+contract below. Historical request counts below remain stage-specific.
+
 AMD remains a required part of ReKit's hackathon delivery. Local NVIDIA inference,
 immutable run provenance and operator review are implemented. Mission 04 adds the
 `openai-remote` transport behind the same provider boundary; its offline tests
