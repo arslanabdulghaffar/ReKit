@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet('Discover', 'Catalog')]
+    [ValidateSet('Discover', 'Catalog', 'Quota')]
     [string]$Action,
     [switch]$Authorized
 )
@@ -54,7 +54,8 @@ try {
     }
     foreach ($ignoredPath in @('.secrets/tokenfactory/api-key.clixml',
                                '.secrets/tokenfactory/qualification/discovery.json',
-                               '.secrets/tokenfactory/qualification/catalog-discovery.json')) {
+                               '.secrets/tokenfactory/qualification/catalog-discovery.json',
+                               '.secrets/tokenfactory/qualification/quota-discovery.json')) {
         & git -C $repository check-ignore --quiet -- $ignoredPath
         if ($LASTEXITCODE -ne 0) { throw 'Each private file must be ignored by Git.' }
     }
@@ -64,7 +65,7 @@ try {
     Assert-PrivateAccess $keyPath
     [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
     Assert-PrivateAccess $outputDirectory
-    foreach ($receiptName in @('discovery.json', 'catalog-discovery.json')) {
+    foreach ($receiptName in @('discovery.json', 'catalog-discovery.json', 'quota-discovery.json')) {
         $receiptPath = Join-Path $outputDirectory $receiptName
         if (Test-Path -LiteralPath $receiptPath) {
             $receiptItem = Get-Item -LiteralPath $receiptPath -Force
@@ -80,7 +81,10 @@ try {
     }
     $startInfo = [Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = Join-Path $repository '.venv\Scripts\python.exe'
-    if ($Action -eq 'Catalog') {
+    if ($Action -eq 'Quota') {
+        $startInfo.Arguments = 'evaluation/tokenfactory_discovery.py --authorized-official-quota'
+        $receiptRelativePath = '.secrets/tokenfactory/qualification/quota-discovery.json'
+    } elseif ($Action -eq 'Catalog') {
         $startInfo.Arguments = 'evaluation/tokenfactory_discovery.py --catalog-after-unusable-usage'
         $receiptRelativePath = '.secrets/tokenfactory/qualification/catalog-discovery.json'
     } else {

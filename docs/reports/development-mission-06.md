@@ -5,8 +5,9 @@ Repository: `A:\hackathon\ReKit`, private GitHub `arslanabdulghaffar/ReKit`.
 Missions 01–05 remain accepted. The starting commit was
 `c88e7f6271e75df776b593af4364b564e9989089`.
 
-Task 1 is committed, pushed and CI-verified. Task 2 has made **two authenticated
-discovery GETs** and remains blocked on usable quota evidence and conflicting
+Task 1 and the first Task 2 checkpoint are committed, pushed and CI-verified.
+Task 2 has made **three authenticated discovery GET attempts** and remains
+blocked on usable quota evidence and conflicting
 capability declarations. **Generation attempts: 0 of the authorized maximum 6.**
 No image has been transmitted to AMD, and no AMD visual inference, local GPU
 regression or browser acceptance has run during this mission. Tasks 3–6 are pending.
@@ -29,18 +30,26 @@ Python child's environment, removes its temporary environment entry, disposes
 the SecureString and drains child output without echoing it.
 
 The [official usage documentation](https://amd-aim.github.io/radeon-cloud-docs/api/usage/)
-names a different host from the approved API host.
-**Explicit authorization for that additional destination is pending:**
+names a different host from the original approved API host. The user separately
+authorized **one GET** to this exact destination:
 `https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true`.
-It has not been contacted. Neither a redirect nor a guessed alternate route is
-used to forward credentials. See [TokenFactory setup and gates](../tokenfactory.md).
+That authorized attempt returned HTTP 404 and has been consumed. No retry,
+redirect or alternate route was attempted. The operator subsequently reported
+that allowance and reset time were not displayed or confirmed, sign-in and team
+key redemption/issuance succeeded, and API-verification status was not explicit.
+These are operator-reported facts, not quota measurements. The user explicitly
+requires quota verification before generation and requested inspection of
+**Check Usage**. No browser is connected to this agent session, so the signed-in
+panel cannot be inspected directly. Only sanitized panel values or error text
+have been requested; no key, account IDs or screenshot.
+See [TokenFactory setup and gates](../tokenfactory.md).
 
 ## Stage status
 
 | Task | Current evidence |
 | --- | --- |
 | 1. Capability and code audit | Complete. Added the exact TokenFactory endpoint profile, narrowly scoped unattested revisions, honest UI provenance, credential setup and offline regression coverage. |
-| 2. Safe discovery | Validated implementation and live-discovery checkpoint. Two actual GETs; valid catalog obtained, usable quota unavailable. The account/allowance gate remains open. |
+| 2. Safe discovery | First checkpoint committed and CI-verified; exact official-quota follow-up implemented and attempted once. Three actual GET attempts; valid catalog obtained, usable quota unavailable after official-route HTTP 404. The initial operator dashboard check exposed no quota/reset or explicit API verification; Check Usage inspection remains pending. |
 | 3. AMD visual qualification | Pending. No generation, image upload to the service or schema-execution result. A persistent six-attempt gate must precede generation. |
 | 4. AMD application integration | Pending live acceptance. Existing managed evidence, roles, strict parsing, human decisions and deterministic inventory boundaries remain. |
 | 5. AMD/NVIDIA comparison | Pending. No recognition-accuracy or hardware-throughput comparison is claimed. Existing local measurements are historical evidence, not new mission runs. |
@@ -48,8 +57,9 @@ used to forward credentials. See [TokenFactory setup and gates](../tokenfactory.
 
 ## Actual authenticated discovery
 
-Both requests used the exact host `developer.amd.com.cn`, verified HTTPS and
-the rotated credential. These were metadata requests, not model generations.
+The first two requests used the exact host `developer.amd.com.cn`; the third
+used only the separately authorized official quota URL. All used verified HTTPS
+and the rotated credential. These were metadata requests, not model generations.
 Failed or interrupted discovery receipts are cached; repeating the command does
 not silently retry. The separate catalog request followed explicit review of
 the unusable usage response and retained the prior receipt's digest.
@@ -58,10 +68,12 @@ the unusable usage response and retained the prior receipt's digest.
 | --- | --- |
 | `GET https://developer.amd.com.cn/radeon/api/v1/usage?include_recent=true` | HTTP 200, **invalid_response**, 0.531 seconds. No usable quota or quota headers. Raw response was not stored. HTTP success did not establish a usable usage contract. |
 | `GET https://developer.amd.com.cn/radeon/api/v1/models` | HTTP 200, valid sanitized catalog of **12 models**, 0.406 seconds, 11,572 response bytes. No quota headers. |
+| `GET https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true` | HTTP 404, **request_rejected**, 0.688 seconds, `application/json`, 22 response bytes. No quota headers or Retry-After. Exactly one authorized attempt; no usable quota and no retry. |
 
 Catalog response SHA-256:
 `f8cb716534d7b1c42c43b2718d594405af840291f38706c5f19c5482099964a0`.
-Sanitized private receipts are `discovery.json` and `catalog-discovery.json`
+Sanitized private receipts are `discovery.json`, `catalog-discovery.json` and
+`quota-discovery.json`
 under `.secrets/tokenfactory/qualification/`; account data and credentials are
 not copied into Git. **Remaining quota is unknown, not zero or unlimited.**
 
@@ -83,9 +95,13 @@ is proof that ReKit's actual schema or joint two-image request works. The
 catalog's `free=false` flag must not be equated with paid billing: the documented
 flag concerns whether calls consume the daily allowance at zero cost.
 [Catalog field definitions](https://amd-aim.github.io/radeon-cloud-docs/api/models/).
-No credits were
-purchased and no billable infrastructure was created. Usable allowance and
-schema support still require confirmation before generation.
+The [shared Model API terms](https://amd-aim.github.io/radeon-cloud-docs/api/terms/)
+describe a free development service whose quotas are capacity controls, not
+currency; the [Model APIs guide](https://amd-aim.github.io/radeon-cloud-docs/guides/model-apis/)
+distinguishes it from credit-consuming dedicated endpoints. No credits were
+purchased and no billable infrastructure was created. Actual usable allowance
+remains unknown. A future bounded strict-schema qualification would test the
+documented capability without treating the conflicting catalog flag as resolved.
 
 ## Implemented software and preserved boundaries
 
@@ -129,23 +145,34 @@ execution. GitHub Actions remains CPU-only.
 | Task 1 focused inference UI | 32 passed in 6.53 seconds. |
 | Task 1 TypeScript, build, `pip check`, `npm ls --all`, local Markdown links | Passed. |
 | Task 1 synthetic recovery | OPTIMAL; 2 kits, 4 consumed physical components, 17,500 cents modeled value. This is a synthetic scenario estimate, not realized savings. |
-| Current Task 2 full backend | 1,306 passed in 38.86 seconds, including 33 discovery tests. |
-| Current transport/provider/inference API checks | 380 passed in 11.18 seconds. |
-| Isolated wrapper checks | 67 offline assertions; 27 files and 5 ACLs checked, including controlled output-drain failure. No real key used in these checks; dynamic cancellation not exercised. |
+| First Task 2 checkpoint full backend | 1,306 passed in 38.86 seconds, including 33 discovery tests. |
+| First checkpoint transport/provider/inference API checks | 380 passed in 11.18 seconds. |
+| First checkpoint wrapper checks | 67 offline assertions; 27 files and 5 ACLs checked, including controlled output-drain failure. |
+| Latest full backend, warnings as errors | 1,342 passed in 38.83 seconds. |
+| Latest official-quota discovery tests | 48 passed in 0.55 seconds. |
+| Latest transport tests | 173 passed in 1.82 seconds. |
+| Latest provider/inference API tests | 228 passed in 10.48 seconds. |
+| Latest isolated wrapper checks | 75 offline assertions; 28 files and 6 ACLs checked. No real key used in wrapper checks; dynamic cancellation not exercised. |
 
-Task 2 validation commands, from the repository root:
+Task 2 validation commands, from the repository root. The combined focused
+command was used for the first checkpoint; the two separate focused commands
+were used for the official-quota follow-up:
 
 ```powershell
 .venv\Scripts\python.exe -W error -m pytest -q
 .venv\Scripts\python.exe -B -W error -m pytest tests/backend/test_remote_transport.py tests/backend/test_remote_provider.py tests/backend/test_inference_api.py -q
+.venv\Scripts\python.exe -B -W error -m pytest tests/backend/test_remote_transport.py -q
+.venv\Scripts\python.exe -B -W error -m pytest tests/backend/test_remote_provider.py tests/backend/test_inference_api.py -q
 .venv\Scripts\python.exe -W error -m pytest -q tests/backend/test_tokenfactory_discovery.py
 .venv\Scripts\python.exe -B -W error var/mission06-offline/check_tokenfactory_wrapper.py
 ```
 
-The isolated wrapper harness and `wrapper-check.json` receipt are private local
-validation artifacts, not requirements for running the tracked test suite.
-The receipt SHA-256 is
-`129d284b2a56d6d8520ff2a4ae2b8cec1e0369b07a8f582abfc57d588fcf4581`.
+The isolated wrapper harness and receipts are private local validation artifacts,
+not requirements for running the tracked test suite. The latest 75-assertion
+receipt was preserved without overwrite at
+`var/mission06-offline/wrapper-quota-check.json`, with SHA-256
+`2d36d216ac919efb9ef4f25ab788e601e1d25f693e4ab5f56f7e5a040757e23b`;
+the harness's generic `wrapper-check.json` filename is overwritten between runs.
 
 Task 1 also used these commands from the repository root:
 
@@ -165,7 +192,7 @@ npm.cmd ls --all
 
 Task 1's private receipt is `var/mission06-offline/task1-validation.json`.
 It is a historical stage snapshot: its zero authenticated-call count and absent
-key-file state describe that earlier point, before the setup and two GETs above.
+key-file state describe that earlier point, before the setup and three GETs above.
 No dependencies, models, datasets, containers, browsers or global software were
 installed/downloaded. The working NVIDIA PyTorch/CUDA environment was preserved.
 
@@ -174,12 +201,17 @@ installed/downloaded. The working NVIDIA PyTorch/CUDA environment was preserved.
 Task 1 commit **`dff7dcd432fcf6ab041bde717053445b2b82e93f`** was pushed to
 private `main`, with matching heads verified. Both jobs in
 [Actions run 38591287189](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38591287189)
-succeeded. This report accompanies the subsequent Task 2 checkpoint; it does
-not embed its own commit SHA. Its post-push head verification and CI outcome
-are to be recorded separately in the private
-`var/mission06-offline/task2-final-verification.json` receipt and checkpoint
-handoff. No final Mission 06 completion SHA or successful Task 2 CI is inferred
-from the local test results.
+succeeded.
+
+The first Task 2 checkpoint, **`248c5056a938e410883f8719e831a00bef7d7007`**,
+was pushed with matching private heads verified. Both jobs in
+[Actions run 38595333838](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38595333838)
+succeeded. Its private receipt is
+`var/mission06-offline/task2-final-verification.json`.
+This report now accompanies the official-quota follow-up; that follow-up's
+post-push verification is to be recorded separately in
+`var/mission06-offline/quota-final-verification.json` and its handoff.
+No final Mission 06 completion or follow-up CI success is inferred from local tests.
 
 Task 1 added `docs/tokenfactory.md` and `scripts/configure_tokenfactory.ps1`.
 It modified `.env.example`, `README.md`,
@@ -190,25 +222,47 @@ It modified `.env.example`, `README.md`,
 `frontend/src/types.ts`, `tests/backend/test_inference_api.py`,
 `tests/backend/test_inference_models.py` and `tests/backend/test_remote_provider.py`.
 
-The Task 2 checkpoint modifies these seven existing files:
+The first Task 2 checkpoint modified these seven existing files:
 `backend/src/rekit/inference/adapters/https_worker.py`,
 `backend/src/rekit/inference/adapters/remote_transport.py`,
 `docs/tokenfactory.md`, `docs/architecture.md`, `docs/pitch-deck.md`,
 `docs/submission-content.md` and `tests/backend/test_remote_transport.py`.
-It adds four files: `evaluation/tokenfactory_discovery.py`,
+It added four files: `evaluation/tokenfactory_discovery.py`,
 `scripts/run_tokenfactory.ps1`, `tests/backend/test_tokenfactory_discovery.py`
 and this report. These are source/docs/tests; encrypted credentials and private
 receipts remain ignored. The PowerPoint generator, private PowerPoint and
 submission field counts were not changed; documentation notes distinguish
 catalog discovery from pending quota and vision qualification.
 
+The official-quota follow-up changes eight existing files:
+`backend/src/rekit/inference/adapters/https_worker.py`,
+`backend/src/rekit/inference/adapters/remote_transport.py`,
+`tests/backend/test_remote_transport.py`, `scripts/run_tokenfactory.ps1`,
+`evaluation/tokenfactory_discovery.py`,
+`tests/backend/test_tokenfactory_discovery.py`, `docs/tokenfactory.md` and
+`docs/reports/development-mission-06.md`. No credential or private receipt is
+part of that inventory.
+
 ## Next gate and remaining work
 
-Obtain explicit approval for the documented alternate usage host or a permitted
-sanitized current quota reading. Resolve the catalog/documentation discrepancy
-without inventing supported capabilities. Then qualify the single synthetic
-image before attempting a joint pair, using a persistent attempt record written
-before each network generation and never refunding failed/unknown attempts.
+Inspect Check Usage for remaining free allowance, reset time and account
+API-verification status; the operator's initial dashboard check did not expose
+these values. Browser inventory was empty and browser selection returned
+"No browser is available", so direct signed-in inspection is blocked in this
+session. Public official documentation did not establish this panel's input
+requirements or a replacement quota route; public path-prefix behavior alone
+does not justify probing an inferred route. The separately authorized
+official-quota GET has already failed; no further authenticated request or
+alternate route is authorized by repeating that one-attempt permission.
+If Check Usage also supplies no usable evidence, the safest next step is to ask
+the provider/hackathon support for the correct regional usage route and team API
+eligibility, without including a key. No support message has been sent.
+
+Only after usable quota is established, admit a bounded strict-schema experiment
+that records the catalog/documentation discrepancy without inventing support.
+Qualify one synthetic image before a joint pair, using a persistent attempt
+record written before each generation and never refunding failed/unknown
+attempts. Do not automatically downgrade the schema, switch models or retry.
 
 Actual API/browser integration, evidence-linked comparison, final software/local
 regressions and the final mission report remain to be completed. Independent

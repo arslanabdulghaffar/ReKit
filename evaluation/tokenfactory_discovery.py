@@ -17,7 +17,10 @@ import time
 from rekit.inference.adapters.openai_remote import (
     TOKENFACTORY_BASE, TOKENFACTORY_MIMO_MODEL, _contains_secret,
 )
-from rekit.inference.adapters.remote_transport import RemoteTransportError, get_tokenfactory
+from rekit.inference.adapters.remote_transport import (
+    RemoteTransportError, get_tokenfactory, get_tokenfactory_quota,
+)
+from rekit.inference.adapters.https_worker import TOKENFACTORY_QUOTA_URL
 from rekit.inference.parsing import _invalid_constant, _unique_object
 
 
@@ -269,19 +272,110 @@ def discover(directory, token, *, transport=get_tokenfactory, catalog_after_unus
     return record
 
 
+def discover_quota(directory, token, *, transport=get_tokenfactory_quota):
+    """One separately authorized official-host GET; never an automatic fallback.
+
+    Its durable receipt charges an interrupted attempt too. An existing receipt
+    is read without sending anything again, including after an error or timeout.
+    Positive quota is not proof of schema support or model correctness.
+    """
+    path = directory / "quota-discovery.json"
+    if path.exists():
+        if path.is_symlink() or path.stat().st_size > 256 * 1024:
+            raise ValueError("Invalid quota receipt")
+        return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
+    if not token or len(token) > 4096 or any(ord(c) < 33 or ord(c) > 126 for c in token):
+        raise ValueError("Missing private credential")
+    if not directory.is_dir() or directory.is_symlink():
+        raise ValueError("A protected output directory must already exist")
+    catalog_path = directory / "catalog-discovery.json"
+    if catalog_path.is_symlink() or catalog_path.stat().st_size > 256 * 1024:
+        raise ValueError("Invalid catalog receipt")
+    prior_raw = catalog_path.read_bytes()
+    prior = json.loads(prior_raw, object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
+    calls = prior.get("calls", [])
+    if (len(calls) != 1 or calls[0].get("endpoint") != RESOURCES["models"]
+            or calls[0].get("status") != "succeeded" or calls[0].get("http_status") != 200):
+        raise ValueError("Quota discovery requires the reviewed successful catalog receipt")
+    call = {"method": "GET", "endpoint": TOKENFACTORY_QUOTA_URL, "started_at": _now(), "status": "pending"}
+    record = {"format_version": 1, "started_at": _now(), "status": "incomplete", "calls": [call],
+              "generation_attempts": 0, "maximum_generation_attempts": 6,
+              "maximum_official_quota_attempts": 1, "separately_authorized_official_host": True,
+              "reviewed_catalog_receipt_sha256": hashlib.sha256(prior_raw).hexdigest(),
+              "schema_execution": "not_tested", "quota": None}
+    _save(path, record, initial=True)
+    started = time.monotonic()
+    try:
+        response = transport(token, timeout=30, max_response_bytes=MAX_BYTES)
+        content_type = response.content_type.split(";", 1)[0].strip().lower()
+        headers = response.quota_headers or {}
+        call.update(http_status=response.status, retry_after_seconds=response.retry_after_seconds,
+                    quota_headers=headers, response_bytes=len(response.body),
+                    content_kind=content_type if content_type in ("application/json", "text/html") else "other")
+        if response.status in (401, 403):
+            call["status"] = "authentication_rejected"
+        elif response.status == 429:
+            call["status"] = "rate_limited"
+        elif response.status != 200:
+            call["status"] = "request_rejected"
+        else:
+            call["validation_stage"] = "size_or_content_type"
+            if content_type != "application/json" or len(response.body) > MAX_BYTES:
+                raise ValueError("Invalid quota response")
+            call["validation_stage"] = "json_decoding"
+            decoded = response.body.decode("utf-8")
+            if _contains_secret(decoded, token):
+                call["validation_stage"] = "credential_echo"
+                raise ValueError("Credential echo")
+            data = json.loads(decoded, object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
+            if _contains_secret(data, token):
+                call["validation_stage"] = "credential_echo"
+                raise ValueError("Credential echo")
+            call["validation_stage"] = "usage_schema"
+            usage = sanitize_usage(data)
+            call.update(data=usage, response_sha256=hashlib.sha256(response.body).hexdigest())
+            call.pop("validation_stage", None)
+            if usage["status"] != "ok":
+                call["status"] = "account_or_quota_unavailable"
+            elif usage.get("daily_cost_remaining_usd") == 0 or headers.get("daily_usd_remaining") == 0:
+                call["status"] = "quota_exhausted"
+            elif headers.get("user_rpm_remaining") == 0 or usage.get("rpm_limit") == 0:
+                call["status"] = "minute_capacity_exhausted"
+            elif usage.get("daily_cost_remaining_usd", 0) > 0 and usage.get("rpm_limit", 0) > 0:
+                call["status"] = "succeeded"
+                record["quota"] = usage
+            else:
+                call["status"] = "quota_unknown"
+    except RemoteTransportError as error:
+        call.update(status="transport_failed", transport_code=error.code)
+    except (ValueError, TypeError, UnicodeError, KeyError, RecursionError, AttributeError):
+        call["status"] = "invalid_response"
+    call["duration_seconds"] = round(time.monotonic() - started, 6)
+    call["finished_at"] = _now()
+    record["status"] = "quota_available" if call["status"] == "succeeded" else "blocked"
+    record["finished_at"] = _now()
+    _save(path, record)
+    return record
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--authorized-discovery", action="store_true")
     mode.add_argument("--catalog-after-unusable-usage", action="store_true")
+    mode.add_argument("--authorized-official-quota", action="store_true")
     arguments = parser.parse_args()
     try:
         token = os.environ.pop("REKIT_INFERENCE_API_KEY", "")
-        result = discover(DIRECTORY, token, catalog_after_unusable_usage=arguments.catalog_after_unusable_usage)
-        receipt = "catalog-discovery.json" if arguments.catalog_after_unusable_usage else "discovery.json"
+        if arguments.authorized_official_quota:
+            result = discover_quota(DIRECTORY, token)
+            receipt = "quota-discovery.json"
+        else:
+            result = discover(DIRECTORY, token, catalog_after_unusable_usage=arguments.catalog_after_unusable_usage)
+            receipt = "catalog-discovery.json" if arguments.catalog_after_unusable_usage else "discovery.json"
         print(json.dumps({"status": result["status"], "authenticated_get_attempts": len(result["calls"]),
                           "generation_attempts": 0, "receipt": str(DIRECTORY / receipt)}))
-        return 0 if result["status"] == "ready_for_single_image_qualification" else 2
+        return 0 if result["status"] in ("ready_for_single_image_qualification", "quota_available") else 2
     except Exception:
         print('{"status":"discovery_failed","detail":"Inspect sanitized local receipt; no automatic retry."}')
         return 2

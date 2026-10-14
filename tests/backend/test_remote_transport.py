@@ -209,7 +209,7 @@ def test_private_worker_input_is_bounded_and_validated_without_network(monkeypat
     assert json.loads(output.getvalue())["error"] in {"protocol", "oversized"}
 
 
-@pytest.mark.parametrize("resource", [None, "models", "usage"])
+@pytest.mark.parametrize("resource", [None, "models", "usage", "official-quota"])
 def test_parent_passes_token_and_payload_only_in_stdin(monkeypatch, resource):
     captured = {}
 
@@ -234,6 +234,8 @@ def test_parent_passes_token_and_payload_only_in_stdin(monkeypatch, resource):
     monkeypatch.setattr(transport.subprocess, "Popen", Process)
     if resource is None:
         result = transport.post_https(URL, TOKEN, PAYLOAD, timeout=1.0, max_response_bytes=1024)
+    elif resource == "official-quota":
+        result = transport.get_tokenfactory_quota(TOKEN, timeout=1.0, max_response_bytes=1024)
     else:
         result = transport.get_tokenfactory(resource, TOKEN, timeout=1.0, max_response_bytes=1024)
     assert result == transport.HttpResponse(200, b"{}", "application/json")
@@ -249,7 +251,8 @@ def test_parent_passes_token_and_payload_only_in_stdin(monkeypatch, resource):
         assert body == PAYLOAD and "method" not in fields
     else:
         assert body == b"" and fields["payload_size"] == 0 and fields["method"] == "GET"
-        assert fields["url"] == worker.TOKENFACTORY_RESOURCES[resource]
+        expected_url = worker.TOKENFACTORY_QUOTA_URL if resource == "official-quota" else worker.TOKENFACTORY_RESOURCES[resource]
+        assert fields["url"] == expected_url
     assert 0 < captured["timeout"] <= 1.0
     assert all(pipe.closed for pipe in captured["pipes"])
 
@@ -271,7 +274,7 @@ def test_parent_validates_child_protocol_without_echoing_untrusted_output(raw, c
     assert "private-secret" not in str(error.value)
 
 
-@pytest.mark.parametrize("read_only", [False, True])
+@pytest.mark.parametrize("read_only", [False, "models", "quota"])
 def test_absolute_deadline_kills_and_reaps_worker_even_if_it_never_reads_stdin(monkeypatch, tmp_path, read_only):
     blocked = tmp_path / "blocked_worker.py"
     blocked.write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
@@ -287,7 +290,9 @@ def test_absolute_deadline_kills_and_reaps_worker_even_if_it_never_reads_stdin(m
     monkeypatch.setattr(transport.subprocess, "Popen", launch)
     started = time.monotonic()
     with pytest.raises(transport.RemoteTransportError) as error:
-        if read_only:
+        if read_only == "quota":
+            transport.get_tokenfactory_quota(TOKEN, timeout=0.3, max_response_bytes=1024)
+        elif read_only:
             transport.get_tokenfactory("models", TOKEN, timeout=0.3, max_response_bytes=1024)
         else:
             transport.post_https(URL, TOKEN, b"x" * (2 * 1024 * 1024), timeout=0.3, max_response_bytes=1024)
@@ -433,7 +438,7 @@ def test_get_discovery_uses_only_exact_same_host_with_no_body_or_proxy(monkeypat
     assert connection.closed
 
 
-@pytest.mark.parametrize("resource", ["", "Models", "../models", "chat/completions", "usage?include_recent=true",
+@pytest.mark.parametrize("resource", ["", "Models", "../models", "chat/completions", "usage?include_recent=true", "quota",
                                       "https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true",
                                       None, [], True])
 def test_get_resource_cannot_be_an_arbitrary_url_or_path(monkeypatch, resource):
@@ -455,7 +460,7 @@ def test_get_resource_cannot_be_an_arbitrary_url_or_path(monkeypatch, resource):
     "https://developer.amd.com.cn/radeon/api/v1/usage?include_recent=false",
     "https://developer.amd.com.cn/radeon/api/v1/usage?include_recent=true&extra=1",
     "https://developer.amd.com.cn.evil.invalid/radeon/api/v1/models",
-    "https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true",
+    "https://radeon-global.anruicloud.com/api/profile/model-usage/?include_recent=true",
     URL,
 ])
 def test_worker_get_revalidates_exact_destinations_before_network(monkeypatch, url):
@@ -487,6 +492,71 @@ def test_get_redirect_never_forwards_credentials_to_official_other_host(monkeypa
     assert output.getvalue() == b'{"error":"protocol"}\n'
     assert len(connections) == 1 and len(connections[0].calls) == 1 and connections[0].closed
     assert connections[0].host == "developer.amd.com.cn"
+
+
+def test_official_quota_has_separate_fixed_get_with_verified_tls_and_no_body(monkeypatch):
+    monkeypatch.setenv("HTTPS_PROXY", "http://must-not-be-used.invalid:8080")
+    connections = install_connection(monkeypatch, wire_response())
+    output = BytesIO()
+    worker.main(BytesIO(request_header(url=worker.TOKENFACTORY_QUOTA_URL, method="GET", payload_size=0)), output)
+    metadata, _, body = output.getvalue().partition(b"\n")
+    assert json.loads(metadata)["status"] == 200 and body == b'{"ok":true}'
+    assert len(connections) == 1
+    connection = connections[0]
+    assert (connection.host, connection.port) == ("radeon-global.anruicloud.com", 443)
+    assert connection.context.check_hostname is True and connection.context.verify_mode == ssl.CERT_REQUIRED
+    assert connection.calls == [("GET", "/api/profile/model-usage?include_recent=true", {
+        "body": None,
+        "headers": {"Authorization": "Bearer " + TOKEN, "Accept": "application/json",
+                    "Accept-Encoding": "identity", "Connection": "close"},
+    })]
+    assert connection.closed
+
+
+def test_official_quota_api_accepts_no_destination_or_resource_override(monkeypatch):
+    monkeypatch.setattr(transport.subprocess, "Popen", lambda *args, **kwargs: pytest.fail("worker started"))
+    for overrides in ({"url": worker.TOKENFACTORY_RESOURCES["models"]}, {"resource": "models"}):
+        with pytest.raises(TypeError):
+            transport.get_tokenfactory_quota(TOKEN, timeout=1, max_response_bytes=1024, **overrides)
+    assert worker.TOKENFACTORY_RESOURCES == {
+        "models": "https://developer.amd.com.cn/radeon/api/v1/models",
+        "usage": "https://developer.amd.com.cn/radeon/api/v1/usage?include_recent=true",
+    }
+
+
+@pytest.mark.parametrize("url", [
+    "http://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true",
+    "https://radeon-global.anruicloud.com:443/api/profile/model-usage?include_recent=true",
+    "https://radeon-global.anruicloud.com:8443/api/profile/model-usage?include_recent=true",
+    "https://RADEON-GLOBAL.anruicloud.com/api/profile/model-usage?include_recent=true",
+    "https://radeon-global.anruicloud.com.evil.invalid/api/profile/model-usage?include_recent=true",
+    "https://name@radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true",
+    "https://radeon-global.anruicloud.com/api/profile/model-usage",
+    "https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=false",
+    "https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true&extra=1",
+    "https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=%74rue",
+    "https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true#fragment",
+    "https://radeon-global.anruicloud.com/api/profile/%6dodel-usage?include_recent=true",
+    "https://radeon-global.anruicloud.com/api/profile/x/../model-usage?include_recent=true",
+])
+def test_official_quota_worker_rejects_every_destination_variant_before_network(monkeypatch, url):
+    monkeypatch.setattr(worker, "request", lambda *args, **kwargs: pytest.fail("network invoked"))
+    output = BytesIO()
+    worker.main(BytesIO(request_header(url=url, method="GET", payload_size=0)), output)
+    assert output.getvalue() == b'{"error":"protocol"}\n'
+
+
+@pytest.mark.parametrize("raw,code", [
+    (wire_response(status=302, headers=[("Location", "https://developer.amd.com.cn/radeon/api/v1/models")]), "protocol"),
+    (wire_response(body=b"x" * 1025, headers=[]), "oversized"),
+    (wire_response(headers=[("Content-Encoding", "gzip")]), "protocol"),
+])
+def test_official_quota_preserves_redirect_encoding_and_actual_byte_limits(monkeypatch, raw, code):
+    connections = install_connection(monkeypatch, raw)
+    output = BytesIO()
+    worker.main(BytesIO(request_header(url=worker.TOKENFACTORY_QUOTA_URL, method="GET", payload_size=0)), output)
+    assert json.loads(output.getvalue()) == {"error": code}
+    assert len(connections) == 1 and len(connections[0].calls) == 1 and connections[0].closed
 
 
 def test_numeric_quota_and_retry_metadata_survive_parent_boundary_without_other_headers(monkeypatch):

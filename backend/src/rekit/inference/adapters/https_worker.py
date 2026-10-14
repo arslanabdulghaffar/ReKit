@@ -25,6 +25,8 @@ TOKENFACTORY_RESOURCES = {
     # This mission-supplied alias is unverified; never fall back to another host.
     "usage": "https://developer.amd.com.cn/radeon/api/v1/usage?include_recent=true",
 }
+# A separately authorized, deliberate call. Never use this as alias fallback.
+TOKENFACTORY_QUOTA_URL = "https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true"
 # Only documented numeric headers cross the worker boundary. These ceilings are
 # parsing limits, not assumed account entitlements or permission to generate.
 QUOTA_FIELDS = (
@@ -64,7 +66,7 @@ def validate_request(url, token, payload_size, timeout, max_response_bytes, meth
         raise WorkerError("protocol")
     if method not in ("POST", "GET"):
         raise WorkerError("protocol")
-    if method == "GET" and url not in TOKENFACTORY_RESOURCES.values():
+    if method == "GET" and url not in (*TOKENFACTORY_RESOURCES.values(), TOKENFACTORY_QUOTA_URL):
         raise WorkerError("protocol")
     if (type(payload_size) is not int or payload_size < 0
             or (method == "POST" and payload_size == 0)

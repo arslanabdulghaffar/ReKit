@@ -1,14 +1,23 @@
 # AMD TokenFactory qualification
 
 Mission 06, October 15, 2026. This is a shared-service integration, separate from
-an owned AMD Developer Cloud allocation. Successful service requests will establish
-TokenFactory usage, not a specific GPU, ROCm release or immutable deployed weights.
+an owned AMD Developer Cloud allocation. Successful generation requests would
+establish TokenFactory inference usage, not a specific GPU, ROCm release or
+immutable deployed weights.
 Read-only model discovery has returned a real catalog. Quota and image execution
-remain unqualified: the supplied usage alias was unusable, no quota headers were
-returned, and the live MiMo catalog advertises `structured_outputs: false` and
+remain unqualified: the supplied usage alias was unusable, and the separately
+authorized one-time official quota GET returned HTTP 404. Neither route nor the
+catalog returned quota headers. There have been **three authenticated GET
+attempts, zero generation POSTs and zero transmitted images**. The live MiMo
+catalog advertises `structured_outputs: false` and
 `free: false` despite the documentation's strict-schema description. The free
 flag describes allowance accounting; it alone does not establish billable use
-or free account entitlement. No generation has been attempted. See the current
+or free account entitlement. The operator checked the dashboard: allowance and
+reset time were not displayed or confirmed, sign-in and team-key issuance
+succeeded, and API-verification status was not explicit. These are operator
+reports, not measured quota. The **Check Usage** panel still needs inspection;
+no browser is connected to the agent's session. Do not infer missing values or
+make generation requests until usable quota is verified. See the current
 [Mission 06 checkpoint](reports/development-mission-06.md).
 
 ## Mandatory credential and image-transfer gate
@@ -51,6 +60,8 @@ Before any authenticated request, the user must separately confirm:
 
 Configuration alone is not consent. Keep the gate closed while any required
 confirmation is missing. Never ask the user to disclose the key in Codex chat.
+For this mission, all three confirmations and local replacement-key setup are
+complete. They do not remove the remaining quota-evidence gate.
 
 ## Cached, read-only discovery
 
@@ -96,6 +107,22 @@ does not repeat the usage request or contact another host. It is unavailable
 after rejected authentication, rate limiting, unavailable account status or a
 detected credential echo. Its own result is also cached without retries.
 
+The user subsequently authorized one GET to the exact URL in the
+[official usage documentation](https://amd-aim.github.io/radeon-cloud-docs/api/usage/):
+`https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true`.
+The reviewed operation was:
+
+```powershell
+powershell.exe -NoProfile -NonInteractive -File scripts/run_tokenfactory.ps1 -Action Quota -Authorized
+```
+
+It returned HTTP 404 (`request_rejected`, `application/json`, 22 response bytes,
+0.688 seconds), without quota headers or Retry-After. Its sanitized receipt is
+`.secrets/tokenfactory/qualification/quota-discovery.json`. This was the third
+authenticated GET attempt overall. The single authorized attempt is consumed;
+the result is cached and must not be deleted to trigger a retry. No guessed
+host/path, redirect or further authenticated request followed this failure.
+
 The transport retains only parsed, bounded Retry-After seconds and documented
 numeric quota headers. Missing or invalid values remain unknown. No 429 is
 automatically retried. Catalog image/schema flags describe advertised support;
@@ -130,14 +157,33 @@ input order, unverified evidence and human decision boundary.
 
 ## Staged acceptance
 
-After authorization, cache sanitized `/models` discovery and establish actual
-quota before generation. The mission supplies `/usage?include_recent=true`, but
-the current [official usage documentation](https://amd-aim.github.io/radeon-cloud-docs/api/usage/)
-instead names `https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true`.
-The supplied alias is unverified. Do not silently forward credentials to this
-different host, follow a redirect or guess account limits. Confirm the route and
-authorization, or obtain a sanitized current dashboard quota reading. Stop on
-rejected access or incomplete verification. Save no keys or sensitive headers.
+The `/models` response is cached, but usable quota remains unknown after both
+usage routes failed. The official host was explicitly authorized and attempted;
+host authorization is no longer the missing step. Obtain only a sanitized
+current Check Usage reading of remaining free allowance, reset time and account
+API-verification status. The operator's initial dashboard check did not expose
+these values. Successful sign-in and a redeemed/issued team key do not establish
+allowance or API verification. Stop on rejected access or incomplete verification.
+Do not infer allowance from documentation examples, an HTTP 200 catalog or the
+absence of quota headers. Save no keys, account IDs or sensitive headers.
+
+Public documentation inspected on October 15 did not establish the Check Usage
+UI's input requirements or a replacement quota route. The official usage API
+documents session or API-key authentication, but this is not proof of the UI's
+behavior. Inspect that panel in the existing signed-in session and retain only
+quota/reset/status values or sanitized error text. If it remains unavailable,
+ask the provider or hackathon support to confirm the correct regional usage
+route and the team's shared-model API eligibility. Do not send a credential or
+infer a route from the public site's `/radeon` routing prefix. No support message
+has been sent by ReKit.
+
+The [catalog reference](https://amd-aim.github.io/radeon-cloud-docs/api/models/)
+states that the catalog is the same for every key, not account-scoped. Its
+`free` flag describes zero-cost accounting against the daily allowance.
+The [shared-service guide](https://amd-aim.github.io/radeon-cloud-docs/guides/model-apis/)
+describes shared endpoints as free and distinguishes them from credit-consuming
+dedicated instances. Therefore `free=false` alone is not a finding of paid
+billing; it also cannot establish this account's available allowance.
 
 The [MiMo reference](https://amd-aim.github.io/radeon-cloud-docs/models/mimo-v2-6-flash/)
 documents the exact model ID `MiMo-V2.6-Flash`, base64 image data URLs, strict
@@ -148,12 +194,20 @@ trials/demos/hackathons, exclude production and confidential inputs, and state
 that request/output content is logged. Keep this qualification private/local;
 it is not permission to expose shared API access to third parties. Terms describe
 AMD accelerators at the service level, not per-request hardware attestation.
+They also describe shared-service quotas as capacity controls, not currency.
 
-Start with one small synthetic image, then two images only when supported. Use
-strict JSON Schema and MiMo's documented conservative reasoning configuration
-once its model contract is verified. Record actual output, model ID, ordered
+Once quota is established, a bounded qualification attempt may test the
+documented MiMo capability while retaining the contradictory catalog flags as
+unresolved evidence. Admission to that experiment is not capability confirmation.
+Start with one small synthetic image, review its actual result, then attempt
+two images only when justified. Keep strict JSON Schema, independent validation
+and `reasoning_effort: "none"`; do not automatically downgrade to `json_object`,
+switch models or increase generation limits after failure. Record actual output,
+model ID, ordered
 hashes, timing, bounded provider usage and quota. Respect rate limiting and
 Retry-After; never automatically retry or fall back to NVIDIA.
+A schema-conforming response establishes conformance for that response, not
+general server-side schema enforcement or correct understanding of the images.
 
 An approved product-image request through the real ReKit browser/API may count
 once toward both integration gates. Keep recovery optimization a separate

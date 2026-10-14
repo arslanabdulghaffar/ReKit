@@ -11,7 +11,7 @@ import time
 
 from rekit.inference.adapters.https_worker import (
     MAX_HEADER_BYTES, MAX_PROTOCOL_BYTES, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES,
-    TOKENFACTORY_RESOURCES, WorkerError, validate_request, validate_response_metadata,
+    TOKENFACTORY_QUOTA_URL, TOKENFACTORY_RESOURCES, WorkerError, validate_request, validate_response_metadata,
 )
 
 
@@ -89,6 +89,17 @@ def get_tokenfactory(resource: str, token: str, *, timeout: float,
     if not isinstance(resource, str) or resource not in TOKENFACTORY_RESOURCES:
         raise RemoteTransportError("protocol")
     return _https(TOKENFACTORY_RESOURCES[resource], token, b"", timeout=timeout,
+                  max_response_bytes=max_response_bytes, method="GET")
+
+
+def get_tokenfactory_quota(token: str, *, timeout: float,
+                          max_response_bytes: int) -> HttpResponse:
+    """One explicitly authorized read of the fixed official quota endpoint.
+
+    This different host is never selected by discovery, redirects or fallback.
+    Caller authorization and its persisted one-attempt gate remain mandatory.
+    """
+    return _https(TOKENFACTORY_QUOTA_URL, token, b"", timeout=timeout,
                   max_response_bytes=max_response_bytes, method="GET")
 
 

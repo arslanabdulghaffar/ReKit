@@ -194,3 +194,84 @@ def test_catalog_followup_cannot_bypass_rejected_access_or_limits(discovery, tmp
         discovery.discover(tmp_path, TOKEN, transport=lambda *a, **k: pytest.fail("Must stop authenticated testing"),
                            catalog_after_unusable_usage=True)
     assert not (tmp_path / "catalog-discovery.json").exists()
+
+
+def _catalog_receipt(directory, **changes):
+    call = {"endpoint": "https://developer.amd.com.cn/radeon/api/v1/models", "status": "succeeded", "http_status": 200}
+    call.update(changes)
+    (directory / "catalog-discovery.json").write_text(json.dumps({"status": "blocked", "calls": [call]}))
+
+
+def test_separately_authorized_quota_is_one_cached_sanitized_get(discovery, tmp_path):
+    _catalog_receipt(tmp_path)
+    calls = []
+    def transport(token, **bounds):
+        assert token == TOKEN and bounds == {"timeout": 30, "max_response_bytes": 128 * 1024}
+        receipt = json.loads((tmp_path / "quota-discovery.json").read_text())
+        assert receipt["calls"][0]["status"] == "pending"
+        calls.append(1)
+        return response(USAGE)
+    first = discovery.discover_quota(tmp_path, TOKEN, transport=transport)
+    second = discovery.discover_quota(tmp_path, TOKEN, transport=lambda *a, **k: pytest.fail("One authorized GET only"))
+    assert first == second and calls == [1]
+    assert first["status"] == "quota_available"
+    assert first["schema_execution"] == "not_tested" and first["generation_attempts"] == 0
+    assert first["calls"][0]["endpoint"] == "https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true"
+    assert first["quota"]["daily_cost_remaining_usd"] == 5.5
+    assert "drop@example.test" not in (tmp_path / "quota-discovery.json").read_text()
+
+
+@pytest.mark.parametrize("status,reason", [(401, "authentication_rejected"), (403, "authentication_rejected"),
+                                         (429, "rate_limited"), (502, "request_rejected")])
+def test_official_quota_failure_stops_and_is_never_retried(discovery, tmp_path, status, reason):
+    _catalog_receipt(tmp_path)
+    first = discovery.discover_quota(tmp_path, TOKEN, transport=lambda *a, **k: response({"error": TOKEN}, status))
+    assert first["status"] == "blocked" and first["calls"][0]["status"] == reason
+    assert TOKEN not in (tmp_path / "quota-discovery.json").read_text()
+    assert discovery.discover_quota(tmp_path, TOKEN, transport=lambda *a, **k: pytest.fail("No retry")) == first
+
+
+@pytest.mark.parametrize("usage,reason", [({"status": "not_configured"}, "account_or_quota_unavailable"),
+                                         ({"status": "not_available"}, "account_or_quota_unavailable"),
+                                         ({"status": "ok", "daily_cost_remaining_usd": 0}, "quota_exhausted"),
+                                         ({"status": "ok"}, "quota_unknown"),
+                                         ({"status": "ok", "daily_cost_remaining_usd": 2}, "quota_unknown"),
+                                         ({"status": "ok", "daily_cost_remaining_usd": 2, "rpm_limit": 0}, "minute_capacity_exhausted")])
+def test_official_quota_requires_actual_capacity(discovery, tmp_path, usage, reason):
+    _catalog_receipt(tmp_path)
+    record = discovery.discover_quota(tmp_path, TOKEN, transport=lambda *a, **k: response(usage))
+    assert record["status"] == "blocked" and record["quota"] is None
+    assert record["calls"][0]["status"] == reason
+
+
+def test_official_quota_credential_echo_rejected(discovery, tmp_path):
+    _catalog_receipt(tmp_path)
+    record = discovery.discover_quota(tmp_path, TOKEN, transport=lambda *a, **k: response({**USAGE, "discarded": TOKEN}))
+    assert record["calls"][0]["validation_stage"] == "credential_echo"
+    assert TOKEN not in (tmp_path / "quota-discovery.json").read_text()
+
+
+def test_official_quota_cannot_bypass_failed_catalog(discovery, tmp_path):
+    _catalog_receipt(tmp_path, http_status=401, status="authentication_rejected")
+    with pytest.raises(ValueError):
+        discovery.discover_quota(tmp_path, TOKEN, transport=lambda *a, **k: pytest.fail("Stop after rejection"))
+    assert not (tmp_path / "quota-discovery.json").exists()
+
+
+def test_official_quota_interrupted_attempt_stays_charged(discovery, tmp_path):
+    _catalog_receipt(tmp_path)
+    def interrupted(*args, **kwargs):
+        raise KeyboardInterrupt
+    with pytest.raises(KeyboardInterrupt):
+        discovery.discover_quota(tmp_path, TOKEN, transport=interrupted)
+    result = discovery.discover_quota(tmp_path, TOKEN, transport=lambda *a, **k: pytest.fail("No uncertain repeat"))
+    assert result["status"] == "incomplete" and len(result["calls"]) == 1
+
+
+def test_official_quota_transport_failure_stays_charged(discovery, tmp_path):
+    _catalog_receipt(tmp_path)
+    def transport(*args, **kwargs):
+        raise RemoteTransportError("timeout")
+    result = discovery.discover_quota(tmp_path, TOKEN, transport=transport)
+    assert result["calls"][0]["transport_code"] == "timeout"
+    assert result["status"] == "blocked" and result["quota"] is None
