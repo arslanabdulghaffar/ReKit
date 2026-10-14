@@ -4,6 +4,8 @@ Prepared October 14, 2026 for **NeuralFoundry — Forging Intelligent Systems.**
 Target duration: **4:00**. This is a recording plan, not a recorded or uploaded
 video. Source captures below are actual successful Mission 05 runs on the polished
 UI. Historical measurements remain in the [Mission 04 report](reports/development-mission-04.md).
+Use the [recording workflow](demo-recording-workflow.md) for private capture,
+current provider status, evidence checks and final export review.
 
 ## Reproduce and record
 
@@ -42,7 +44,7 @@ synthetic demonstrations visibly labeled throughout.
 | 1:50–2:30 | Explicit transition: “Separate synthetic recovery scenario.” Show `desktop-evidence.png`, manual verification, `compatibility-denied.png` → `compatibility-approved.png`. | “Now we switch to a separate synthetic recovery example. Three returns contain four unique components. A human reviewer records identity, revision, visible condition and supporting evidence. The approved catalog rules reject an incompatible revision. A correction is a new accountable decision; the original history stays available.” |
 | 2:30–3:10 | `planning-form-desktop.png` → `plan-overview.png`; selected actions precede approval. | “We enter the scenario’s costs, demand and labor limits. The real CPU CP-SAT optimizer finds two complete kits while allocating each physical part at most once. Estimated net recovery is 175 US dollars in this fixture. That is a modeled scenario value, not customer savings or realized revenue. The operator can inspect selected parts, costs and exclusions before approval.” |
 | 3:10–3:40 | `reserved-plan.png` → `completion-open-desktop.png` → `final-inventory.png` → `audit-completed-desktop.png`. | “Approval reserves all four components atomically. Each kit still needs a separate completion confirmation against the reserved parts. After both confirmations, inventory records two kits and four consumed components, with their source returns and audit trail. These visible checks do not establish hidden functionality or safety.” |
-| 3:40–4:00 | Architecture / final slide, current versus pending status. | “Local execution works today. The AMD remote adapter is implemented and tested offline; actual AMD execution still needs authorized resources and qualification. Independent semantic reviews are also pending, so recognition accuracy is not measurable yet. Our next gate is an evidence-backed AMD demonstration.” |
+| 3:40–4:00 | Architecture / final slide, current versus pending status. | “Local NVIDIA inspection and CPU recovery workflows work today. Two single-image submissions to the AMD service returned HTTP 400; successful AMD visual inference remains unconfirmed. Independent semantic review is pending, so recognition accuracy is unmeasured. Our next gate is a verified AMD demonstration.” |
 
 Do not fit a 47-second request into the 35-second segment without an edit label
 such as “Inference wait shortened; actual request 47.19 s.” This is one measured

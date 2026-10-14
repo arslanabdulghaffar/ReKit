@@ -1,5 +1,13 @@
 # AMD access: confirmed facts and open questions
 
+**Current Mission 06 status, October 15:** the saved TokenFactory catalog and
+two single-image HTTP 400 responses supersede the access-only snapshot below.
+There have been three GETs and two POSTs; successful AMD visual inference remains
+unverified. See the [current report](reports/development-mission-06.md) and
+[TokenFactory gate](tokenfactory.md). No further AMD API call is approved pending
+provider clarification, fresh quota evidence and new user approval. The earlier
+public-source findings below remain historical; no owned deployment was created.
+
 Public documentation checked **2026-10-14**. No authenticated model request,
 instance creation, credit use, or AMD inference was performed. Offline transport
 tests do not establish access, model quality, or hackathon eligibility.

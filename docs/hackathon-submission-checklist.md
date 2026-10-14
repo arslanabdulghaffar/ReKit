@@ -1,6 +1,7 @@
 # ACT III submission checklist
 
-Public information checked October 14, 2026. Team: **NeuralFoundry**. This is a
+Event dates and general media guidance rechecked October 15, 2026 (Asia/Seoul).
+Team: **NeuralFoundry**. This is a
 preparation checklist, not a submission receipt or eligibility claim. ReKit
 remains private. This document authorizes no publication, hosting, licensing
 change, spending or authenticated AMD call.
@@ -15,12 +16,19 @@ demo platform and application URL. It also states originality and MIT compliance
 
 - [ ] Confirm the submission cutoff **and timezone** in the portal or with the
   organizer. The public [live page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii/live)
-  currently describes online building as October 12–17, conflicting with the
-  landing page. Neither inspected page establishes the submission cutoff.
+  still describes online building as October 12–17, while the landing page says
+  October 12–18. Both were freshly read. The live page labels submissions open,
+  but its extracted countdown contains zero placeholders, not a usable deadline.
+  Neither inspected page establishes the submission cutoff or timezone; the
+  landing page's event schedule is still to be announced. Search results did not
+  establish a more specific official cutoff. Do not substitute an event date,
+  venue closing time or the countdown placeholder for the submission deadline.
   Earlier live-page metadata recorded `endAt=2026-10-18T15:00:00.000Z`, equivalent
   to October 19 at 00:00 in Korea. That was **event-end metadata, not a submission
-  deadline**. The timestamp was not freshly reverified: the unauthenticated raw
-  page request returned HTTP 403.
+  deadline**. That timestamp was not freshly reverified during this continuation;
+  the earlier unauthenticated raw-page request returned HTTP 403. Obtain an
+  explicit cutoff, source and timezone from the portal or organizer before
+  converting it to Asia/Seoul. No organizer message has been sent.
 - [ ] Confirm enrollment, team membership, challenge and required fields in the
   authenticated form. No account-specific form was inspected. Proposed challenge:
   Reinvent Commerce; confirm its fit before submission.
@@ -50,8 +58,9 @@ form's actual limits, required fields and file formats before uploading.
   [deck guide](pitch-deck.md) and editable [architecture SVG](assets/rekit-architecture.svg).
 - [ ] Approve the deck and cover for release against the actual form; these
   private assets have not been uploaded. Follow the [recording script](demo-script.md).
-- [ ] Record and inspect the final video. **No final video has been recorded or
-  uploaded.** Screenshots, scripts and browser runs are not a video.
+- [ ] Record and inspect the final video using the prepared
+  [capture-to-release workflow](demo-recording-workflow.md). **No final video has
+  been recorded or uploaded.** Screenshots, scripts and browser runs are not a video.
 - [ ] Retain [ABO attribution](real-product-evaluation.md#source-license-and-attribution)
   and [Qwen provenance](local-inference.md), identifying presentation crops or
   overlays. Do not relicense their source material.
@@ -92,13 +101,26 @@ These are Mission 05 Task 3 observations, separate from historical results in th
 Recheck final artifact paths and counts before release. Do not merge historical
 and current runs into an unlabeled benchmark or count a browser/API request twice.
 
+Mission 06's HTTP 400 continuation separately reran 1,449 backend tests and 61
+frontend tests, TypeScript/build and the CPU synthetic evaluation. A new synthetic
+browser replay, `var/mission02-acceptance/run-fc_4k8wo/`, passed in 5.4 seconds,
+reserved four components and completed two kits, with state/credentials removed.
+No model ran in that replay. Local product preflight verified the ten pinned
+model files, original ABO inputs and CUDA device 1 without loading a model or
+performing inference. These checks preserve the local demonstration, not AMD
+eligibility. See the [current report](reports/development-mission-06.md).
+
 ## Remaining release and eligibility gates
 
-- [ ] Qualify AMD execution. **Completed AMD requests: zero.** The remote adapter
-  has offline tests only. Local NVIDIA execution does not verify ROCm/vLLM or
-  AMD eligibility. Follow the [activation gate](../deploy/amd/README.md#activation-checklist)
-  and preserve actual model, hardware/runtime, input, execution and failure
-  evidence. Obtain authorization before authenticated access or cloud spending.
+- [ ] Qualify AMD execution. **Successful AMD visual inference: unconfirmed.**
+  Mission 06 records three GETs and two single-image POST attempts, both HTTP 400;
+  those rejections do not prove model execution. Two of six attempts remain
+  charged. The [current report](reports/development-mission-06.md) and
+  [unsent support draft](tokenfactory-support-request.md) describe the blocker.
+  Further API calls require provider clarification, fresh quota evidence and new
+  user approval. Local NVIDIA execution does not verify AMD eligibility. Preserve
+  actual model, input, output and failure evidence before application acceptance;
+  do not invent GPU/runtime or revision attestations for the shared service.
 - [ ] Obtain explicit approval before publishing a reviewed release or changing
   repository visibility. Preserve the private repository until then. Audit
   release content/history for secrets and private assets; resolve code licensing

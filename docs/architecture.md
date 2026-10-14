@@ -35,6 +35,10 @@ authority are unchanged. See the
 [Mission 06 checkpoint](reports/development-mission-06.md) and
 [TokenFactory procedure](tokenfactory.md).
 
+The [recording workflow](demo-recording-workflow.md) keeps the demonstrated local
+NVIDIA inspection, separate synthetic CPU recovery and pending AMD qualification
+explicit. A recording plan or successful launcher run is not a finished video.
+
 ## Repository boundaries
 
 The editable [presentation architecture figure](assets/rekit-architecture.svg)

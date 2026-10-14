@@ -95,7 +95,10 @@ is attributed under Apache-2.0 with the [pinned model provenance](local-inferenc
 No endorsement is implied.
 
 The complete [submission copy](submission-content.md) and
-[four-minute recording script](demo-script.md) provide narration and limitations.
+[provisional four-minute recording script](demo-script.md) provide narration and
+limitations. Follow the [recording workflow](demo-recording-workflow.md) for
+private capture, current provider wording, evidence checks and export review;
+no final video has been produced by the launcher or this guide.
 The [submission checklist](hackathon-submission-checklist.md) records unconfirmed
 cutoff/timezone, publication and licensing decisions, judge-accessible hosting,
 final video, actual AMD evidence and submission receipt as outstanding gates.

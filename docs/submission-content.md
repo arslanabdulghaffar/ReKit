@@ -155,7 +155,8 @@ economics are synthetic.
 
 ## Assets and release status
 
-Use the [recording script](demo-script.md), [architecture](architecture.md),
+Use the [recording workflow](demo-recording-workflow.md),
+[recording script](demo-script.md), [architecture](architecture.md),
 [local demo guide](local-demo.md), [review instructions](real-product-evaluation.md)
 and [submission checklist](hackathon-submission-checklist.md) with this copy.
 An editable seven-slide PowerPoint, seven rendered slides and a candidate cover

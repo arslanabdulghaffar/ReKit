@@ -15,6 +15,19 @@ image twice; no ABO image was sent. No AMD visual/schema success, joint-image
 qualification, application/browser acceptance or paired comparison is claimed.
 Stop before a third replay. See the current
 [Mission 06 checkpoint](reports/development-mission-06.md).
+Neither original raw error body was retained; exact provider error wording is
+unavailable. See the [offline diagnosis](tokenfactory-http400-diagnosis.md) for
+the reproduced request and the limits of the retained error categories.
+
+The HTTP 400 continuation instruction requires **new user approval and fresh
+quota evidence before any subsequent AMD API call**. The remaining four attempts
+are a ceiling, not permission to use them now. Preserve the two original receipts
+and their ledger; do not reset, replay, substitute a model or rotate the configured
+key merely to resume. The [support request](tokenfactory-support-request.md) is
+prepared but has not been sent. After provider clarification, prepare the exact
+request change for review; an approved test may make one new synthetic-image
+attempt and then stop. The discovery commands below describe prior authorized
+operations and do not reopen this gate.
 
 ## Mandatory credential and image-transfer gate
 

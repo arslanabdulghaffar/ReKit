@@ -17,6 +17,51 @@ joint-image result, AMD application/browser acceptance or paired comparison.
 One local NVIDIA API regression passed. Tasks 3–5 and the AMD-dependent parts
 of Task 6 remain incomplete.
 
+## HTTP 400 resolution continuation
+
+This continuation began at
+`e13e65dbe38377d460e43bdea74169a57d03ac6c`, whose two CPU CI jobs passed in
+[run 38603624010](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38603624010).
+It made **no additional AMD API calls** and read no API credential. The ledger
+still contains two consumed attempts; neither receipt nor the ledger was reset,
+replaced or edited. No model, schema, validator, inference adapter or application
+code changed. No dependency, model, dataset, container or global tool was installed.
+
+| Requested work | Result |
+| --- | --- |
+| Offline technical diagnosis | Complete. The capture-only reconstruction is exactly 19,251 bytes and matches both recorded request hashes; all 22 evidence comparisons pass. Original PNG bytes survive base64 unchanged. The audit blocked network-capable socket operations and child execution and used read-only SQLite. |
+| Schema and catalog comparison | Complete within retained evidence. One nested `anyOf` remains under a zero-length candidates array; two null-valued properties occur in one alternative; every property of all five objects is required. No literal type-array union exists. Keyword-level remote support is unknown, and the saved strict-output flag conflicts with the previously reviewed model documentation. |
+| More precise error classification | Not possible from saved evidence. **Neither original raw error body was retained; exact wording is unavailable.** `invalid_request_error` and a `model` substring mention do not identify a specific rejected field. |
+| Provider clarification | Sanitized support report prepared for user review; **not sent**. Model eligibility/ID, image data URLs, strict schema/features, minimum compatible request, failed usage routes and quota/reset questions are included. |
+| State preservation | Both POST receipts, catalog receipt and ledger have unchanged file hashes. Two of six attempts remain charged. No repeated request, new budget, credential rotation or model substitution. |
+| Useful offline work | CPU and browser recovery demonstrations pass; NVIDIA product preflight passes without inference. Architecture/submission wording and capture-to-release video workflow are reviewed. Public deadline check remains inconclusive. |
+| Conditional qualification | Not started. Provider confirmation, a concrete reviewed request change, fresh quota evidence and new user approval must precede exactly one next attempt. Successful AMD output and application acceptance remain required. |
+
+The [offline diagnosis](../tokenfactory-http400-diagnosis.md) records the exact
+request, schema paths, private audit digests and ranked hypotheses. Investigation
+priority is model access/routing, strict-format availability, then specific schema
+features; this is not a probability ranking or an established cause. Local JSON
+or image corruption is less supported by the byte-equivalent reconstruction.
+The audit JSON is `var/mission06-offline/http400-diagnosis/audit.json`, SHA-256
+`49114dfd95b01e93761ed344e4ebd0739d289c5f6cf120cc2fe8487c96d8123c`.
+
+The [support draft](../tokenfactory-support-request.md) includes a one-attempt
+review template, not a runnable replacement payload. The
+[recording workflow](../demo-recording-workflow.md) separates original ABO/local
+NVIDIA inspection from synthetic CPU recovery. No video, upload, release,
+repository visibility change or support contact occurred. Submission field counts
+remain 224 characters and 323 words; the private PowerPoint remains unchanged.
+
+After the network-free diagnosis, public event pages were rechecked separately.
+The [landing page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii)
+lists online building through October 18, while the
+[live page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii/live)
+still says October 17 and shows submissions open with an unusable zero countdown.
+Neither establishes an explicit submission cutoff/timezone. Event-end metadata
+is not a deadline. The [submission checklist](../hackathon-submission-checklist.md)
+retains this blocker and the general media guidance; authenticated form rules,
+judge-accessible hosting and approved publication remain outstanding.
+
 ## Authorization and credential handling
 
 The user confirmed revocation/replacement of the potentially exposed key and
@@ -266,8 +311,41 @@ remains CPU-only.
 | Final full backend after review fixes, warnings as errors | 1,449 passed in 39.35 seconds. |
 | Latest frontend suite and production build | 61 passed in 28.84 seconds; build passed, including TypeScript `--noEmit`. |
 | Latest synthetic recovery evaluation | OPTIMAL; 2 kits, 4 components, 17,500 cents modeled value. |
-| Latest safe source scan | 157 files; 0 findings and 0 forbidden paths. |
-| Final local documentation links and diff checks | 64 relative links across 7 documents resolve; no whitespace errors. |
+| Bounded-probe checkpoint safe source scan | 157 files; 0 findings and 0 forbidden paths. |
+| Bounded-probe checkpoint documentation links and diff checks | 64 relative links across 7 documents resolve; no whitespace errors. |
+| HTTP 400 continuation offline reconstruction | 22 comparisons pass; exact request matches both ledger rows; no network, credential access or evidence mutation. |
+| HTTP 400 continuation full backend, warnings as errors | 1,449 passed in 41.81 seconds. |
+| HTTP 400 continuation frontend and build | 61 passed in 29.13 seconds; TypeScript `--noEmit` and production build pass. |
+| HTTP 400 continuation CPU synthetic evaluation | OPTIMAL; 2 kits, 4 consumed components, 17,500 cents modeled value. |
+| HTTP 400 continuation local preflight | Synthetic and product modes pass; product checks 10 pinned model files, original input hashes and CUDA device 1, with no model load/inference. |
+| HTTP 400 continuation synthetic browser replay | One test passed in 5.4 seconds; three returns, four distinct parts, eight images, four reservations, two kits and four audit events. No model ran. |
+| HTTP 400 continuation safe source scan | 160 files; 0 findings and 0 forbidden paths. |
+| HTTP 400 continuation documentation checks | 90 relative links across all 11 changed documents resolve; no whitespace errors. |
+
+The new browser evidence is `var/mission02-acceptance/run-fc_4k8wo/`.
+Its runner and acceptance receipts report successful cleanup, removed temporary
+state/credentials, and no page, cleanup or reporting errors. Fourteen screenshots
+were produced; the final desktop inventory screenshot was visually inspected.
+It shows the synthetic label, four consumed components and two completed kits.
+No movie was produced. Product preflight initially stopped on occupied loopback
+ports while the backend suite was running; it passed when rerun sequentially
+after that suite. No unrelated process was stopped and no inference was retried.
+
+Additional continuation commands, from the repository root:
+
+```powershell
+.venv\Scripts\python.exe -B -W error var/mission06-offline/http400-diagnosis/audit_request.py
+.venv\Scripts\python.exe -B -W error -m pytest -q
+.venv\Scripts\python.exe -B evaluation/run_synthetic.py
+.venv\Scripts\python.exe -B evaluation/run_demo.py --mode synthetic-recovery --check
+.venv\Scripts\python.exe -B evaluation/run_demo.py --mode product-ai --check --device 1
+.venv\Scripts\python.exe -B evaluation/run_demo.py --mode synthetic-recovery
+```
+
+Frontend commands remain `npm.cmd test` and `npm.cmd run build` from `frontend`.
+The audit deliberately uses an exclusive output file; preserve it rather than
+deleting it to rerun. The new product preflight is not a new NVIDIA generation;
+the previously recorded actual NVIDIA regression below remains historical.
 
 Task 2 validation commands, from the repository root. The combined focused
 command was used for the first checkpoint; the two separate focused commands
@@ -427,7 +505,27 @@ follow-up's post-push local/tracking/remote heads, private visibility and CPU CI
 verification are retained separately in
 `var/mission06-offline/live-first-verification.json` and the final handoff.
 
+That bounded-probe follow-up is committed as
+`e13e65dbe38377d460e43bdea74169a57d03ac6c`, with both CI jobs successful as linked
+above. The HTTP 400 diagnosis continuation adds three documentation files:
+`docs/tokenfactory-http400-diagnosis.md`, `docs/tokenfactory-support-request.md`
+and `docs/demo-recording-workflow.md`. It updates eight existing documents:
+`docs/reports/development-mission-06.md`, `docs/tokenfactory.md`,
+`docs/amd-access.md`, `docs/hackathon-submission-checklist.md`,
+`docs/architecture.md`, `docs/demo-script.md`, `docs/pitch-deck.md` and
+`docs/submission-content.md`. Runtime code and counted submission fields are
+unchanged. This continuation's final local/tracking/remote SHA, private visibility
+and CPU CI verification will be preserved in the separate ignored
+`var/mission06-offline/http400-resolution-final-verification.json` and handoff.
+
 ## Next gate and remaining work
+
+The latest instruction supersedes the earlier bounded-probe authorization:
+**any subsequent AMD API call requires fresh quota evidence and new user
+approval**. Provider clarification must support a concrete reviewed request
+change before one new synthetic attempt. Do not interpret the four unused
+attempts as permission to continue. No provider response or new approval has
+arrived during this continuation.
 
 Stop after the two HTTP 400 outcomes. Ask the provider/hackathon support to
 clarify the enabled MiMo model ID/account eligibility and accepted strict-schema
