@@ -122,6 +122,7 @@ def test_template_keeps_raw_invalid_outputs_pending_and_handles_execution_absenc
     {"reviewer": "someone"}, {"reviewed_at": NOW}, {"independent_human_review": True},
     {"expected_marking_text": "LABEL", "model_marking_text": "LABEL"},
     {"correction": "A different identity"}, {"notes": "Automatic judgment"},
+    {"uncertainty": "supported"},
 ])
 def test_pending_cannot_assert_human_judgment(review, changes):
     row = review.template(result()).reviews[0].model_dump(mode="json")
@@ -196,6 +197,32 @@ def test_semantic_denominators_exclude_pending_absent_and_undetermined_cases(rev
     assert "not individual claims or product accuracy" in summary["unit"]
 
 
+def test_older_assessment_omission_is_not_assumed_correct_uncertainty(review):
+    source = result()
+    payload = assessed(review, source, identity="supported").model_dump(mode="json")
+    del payload["reviews"][0]["uncertainty"]
+    summary = review.summarize(source, review.Assessments.model_validate(payload))
+    assert summary["metrics"]["uncertainty"] == {
+        "numerator": None, "denominator": 0, "rate": None, "excluded_cases": 1}
+    assert summary["metrics"]["identity_supported"] == {
+        "numerator": 1, "denominator": 1, "rate": 1.0, "excluded_cases": 0}
+    assert summary["metrics"]["identity"]["numerator"] == 0
+
+
+def test_reviewed_uncertainty_and_support_rates_use_their_own_eligible_cases(review):
+    source = result([case("one"), case("two"), case("three")])
+    payload = assessed(review, source).model_dump(mode="json")
+    payload["reviews"][0].update(uncertainty="supported", revision="supported", marking="unsupported")
+    payload["reviews"][1].update(uncertainty="unsupported", revision="not_present", marking="supported")
+    summary = review.summarize(source, review.Assessments.model_validate(payload))
+    assert summary["metrics"]["uncertainty"] == {
+        "numerator": 1, "denominator": 2, "rate": 0.5, "excluded_cases": 1}
+    assert summary["metrics"]["revision_supported"] == {
+        "numerator": 1, "denominator": 1, "rate": 1.0, "excluded_cases": 2}
+    assert summary["metrics"]["marking_supported"] == {
+        "numerator": 1, "denominator": 2, "rate": 0.5, "excluded_cases": 1}
+
+
 def test_transcription_match_is_human_assessed_exact_text_and_corrections_are_not_automatic(review):
     source = result([case("case-1"), case("case-2"), case("case-3")])
     payload = assessed(review, source).model_dump(mode="json")
@@ -261,6 +288,9 @@ def test_queue_escapes_hostile_model_source_and_case_text_without_creating_revie
     assert hostile not in page and "&lt;/script&gt;" in page
     assert all(not any(name.startswith("on") for name in attrs) for _, attrs in parsed.tags)
     assert all(attrs.get("src") != "x" for tag, attrs in parsed.tags if tag == "img")
+    assert all(attrs.get("target") == "_blank" and attrs.get("rel") == "noopener noreferrer"
+               for tag, attrs in parsed.tags if tag == "a" and attrs.get("href", "").endswith(".jpg"))
+    assert "Original image unavailable" in page and "!image.naturalWidth" in page
     assert len([tag for tag, _ in parsed.tags if tag == "script"]) == 2
     assert "connect-src 'none'" in page and "form-action 'none'" in page
     template = review.Assessments.model_validate_json(parsed.template)

@@ -14,7 +14,7 @@ from product_data import Sha256, Timestamp, load_manifest, verify_images
 
 
 Judgment = Literal["undetermined", "not_present", "supported", "unsupported"]
-FIELDS = ("identity", "revision", "marking", "source_attribution", "additional_view")
+FIELDS = ("identity", "revision", "marking", "source_attribution", "additional_view", "uncertainty")
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -36,6 +36,8 @@ class CaseReview(BaseModel):
     marking: Judgment = "undetermined"
     source_attribution: Judgment = "undetermined"
     additional_view: Judgment = "undetermined"
+    # Older v1 assessment files omit this field; omission is never a judgment.
+    uncertainty: Judgment = "undetermined"
     expected_marking_text: str | None = Field(default=None, max_length=2000)
     model_marking_text: str | None = Field(default=None, max_length=2000)
     correction: str = Field(default="", max_length=4000)
@@ -104,8 +106,11 @@ def summarize(result: dict, assessments: Assessments) -> dict:
     metrics = {}
     for field in FIELDS:
         eligible = [row for row in reviewed if getattr(row, field) in ("supported", "unsupported")]
-        positive = "supported" if field == "additional_view" else "unsupported"
+        positive = "supported" if field in ("additional_view", "uncertainty") else "unsupported"
         metrics[field] = rate(sum(getattr(row, field) == positive for row in eligible), len(eligible))
+        if field in ("identity", "revision", "marking"):
+            metrics[f"{field}_supported"] = rate(
+                sum(getattr(row, field) == "supported" for row in eligible), len(eligible))
     transcriptions = [row for row in reviewed if row.expected_marking_text is not None]
     metrics["transcription_exact_match"] = rate(
         sum(row.expected_marking_text == row.model_marking_text for row in transcriptions), len(transcriptions))
@@ -152,27 +157,35 @@ def create_queue(manifest_path: Path, root: Path, result_path: Path, destination
                 raise ValueError("Evaluation image provenance differs from manifest")
             relative = Path(os.path.relpath((root / original.local_path).resolve(), destination.resolve())).as_posix()
             photographs.append(f'<figure><figcaption>Input {index}: {html.escape(original.image_id)}</figcaption>'
-                               f'<a href="{html.escape(relative, quote=True)}"><img loading="lazy" src="{html.escape(relative, quote=True)}" alt="Original source image {index}"></a>'
+                               f'<a href="{html.escape(relative, quote=True)}" target="_blank" rel="noopener noreferrer"><img loading="lazy" src="{html.escape(relative, quote=True)}" alt="Original source image {index}"></a>'
                                f'<details><summary>Source provenance</summary><p>Listing {html.escape(original.group_id)}; {original.split}</p>'
                                f'<code>{original.sha256}</code><p>Catalog metadata, not visual truth: {html.escape(json.dumps(original.source_labels, ensure_ascii=False))}</p></details></figure>')
         fields = ""
         if case["case_id"] in rows:
             for name in FIELDS:
-                label = "Additional view: useful / unhelpful" if name == "additional_view" else name.replace("_", " ").capitalize()
+                label = {"additional_view": "Would the suggested view help?",
+                         "source_attribution": "Do the cited images support the claims?",
+                         "uncertainty": "Does the uncertainty or abstention fit the available evidence?"}.get(
+                             name, name.replace("_", " ").capitalize())
                 fields += f'<label>{label}<select data-field="{name}"><option value="undetermined">Undetermined</option><option value="not_present">No such claim/request</option><option value="supported">Supported / useful</option><option value="unsupported">Unsupported / unhelpful</option></select></label>'
             fields += '<label><input type="checkbox" data-transcription> Compare these transcriptions (an empty string means no readable text)</label><label>Readable marking: human transcription<textarea maxlength="2000" data-field="expected_marking_text"></textarea></label><label>Corresponding model transcription<textarea maxlength="2000" data-field="model_marking_text"></textarea></label><label>Correction, if needed<textarea maxlength="4000" data-field="correction"></textarea></label><label>Review notes: appearance, ambiguity, and supporting pixels<textarea maxlength="4000" data-field="notes"></textarea></label><label><input type="checkbox" data-reviewed> I personally reviewed these images and this output.</label>'
         model = {"status": case["status"], "validated_output": case.get("output"),
                  "raw_output": (case.get("execution") or {}).get("text"), "error": case.get("error")}
         cards.append(f'<article data-case="{html.escape(case["case_id"], quote=True)}"><h2>{html.escape(case["case_id"])}</h2><div class="images">{"".join(photographs)}</div>'
-                     '<p>Inspect the original image first. Record independent image labels in the separate reviews.json ledger before expanding model output.</p>'
+                     '<p>Inspect the original image first. Complete the independent image-review gallery before expanding model output. Assess claims anywhere in the text, including observations and uncertainty, not only the candidate list.</p><p data-image-error role="alert" hidden>Original image unavailable. Restore the original files and run the integrity check before reviewing this case.</p>'
                      f'<details><summary>Model suggestions — unverified</summary><pre>{html.escape(json.dumps(model, indent=2, ensure_ascii=False))}</pre></details><div class="fields">{fields}</div></article>')
     payload = assessments.model_dump_json().replace("<", "\\u003c").replace("&", "\\u0026")
     script = """const pending=JSON.parse(document.getElementById('template').textContent);
+for(const image of document.querySelectorAll('article img')){
+ image.addEventListener('error',()=>{const card=image.closest('article');card.querySelector('[data-image-error]').hidden=false;const box=card.querySelector('[data-reviewed]');if(box){box.checked=false;box.disabled=true;}});
+ if(image.complete && !image.naturalWidth)image.dispatchEvent(new Event('error'));
+}
 document.getElementById('export').onclick=()=>{
  const result=structuredClone(pending), actor=document.getElementById('reviewer').value.trim();
  for(const row of result.reviews){
   const card=[...document.querySelectorAll('article')].find(x=>x.dataset.case===row.case_id);
   if(!card.querySelector('[data-reviewed]').checked)continue;
+  if([...card.querySelectorAll('img')].some(image=>!image.complete || !image.naturalWidth)){alert('Load every original image before exporting a reviewed case. Restore missing files and run the integrity check.');return;}
   if(!actor){alert('Enter the human reviewer name.');return;}
   row.status='reviewed';row.reviewer=actor;row.reviewed_at=new Date().toISOString();row.independent_human_review=true;
   for(const input of card.querySelectorAll('[data-field]'))row[input.dataset.field]=input.value;
@@ -188,7 +201,7 @@ document.getElementById('export').onclick=()=>{
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src 'sha256-{script_hash}'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>ReKit product evidence review</title><style>body{{font:16px system-ui;background:#f4f6f8;color:#18212c;max-width:1100px;margin:auto;padding:24px}}article{{background:white;padding:24px;margin:24px 0;border-radius:12px}}.images,.fields{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}}figure{{margin:0}}img{{max-width:100%;max-height:460px;object-fit:contain}}pre,code{{white-space:pre-wrap;overflow-wrap:anywhere}}label{{display:block;margin:12px 0}}textarea,select{{display:block;box-sizing:border-box;width:100%;padding:8px}}button{{padding:12px 20px}}details{{margin:16px 0}}footer{{position:sticky;bottom:0;background:#e6edf4;padding:16px}}</style>
 <h1>Review product evidence</h1><p>All judgments start pending. Source imagery includes product views, composites, and reference graphics. These are not returned-kit photographs. Model text may invent identity, markings, hidden function, safety, or compatibility.</p>
-<p>Review pixels before predictions. Source attribution asks whether the cited input actually supports a claim. The additional-view judgment asks whether another photo would resolve a stated uncertainty. An undetermined judgment stays outside that metric's denominator. This page exports local review files; it cannot approve inventory.</p>
+<p>Review pixels before predictions. Source attribution asks whether the cited input actually supports a claim. The additional-view judgment asks whether another photo would resolve a stated uncertainty. Judge uncertainty and abstention against the evidence, not model confidence wording. An undetermined judgment stays outside that metric's denominator. This page exports local review files; it cannot approve inventory.</p>
 <p>Attribution: {html.escape(manifest.attribution)} <a href="{html.escape(manifest.source_url, quote=True)}">Dataset source</a> · <a href="{html.escape(manifest.license_url, quote=True)}">CC BY 4.0 license</a>. Original image bytes are unchanged. Model preprocessing may resize them.</p>
 {''.join(cards)}<footer><label>Human reviewer <input id="reviewer" maxlength="200"></label><button id="export">Download case assessments</button><p>Validate the downloaded file with product_review.py check. Independent image labels remain in the separate image-review ledger.</p></footer>
 <script id="template" type="application/json">{payload}</script><script>{script}</script></html>'''

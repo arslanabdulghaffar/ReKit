@@ -69,6 +69,120 @@ For each original image, an independent human reviewer should:
 
 The ledger validator checks completeness and internal consistency; it cannot certify a person's independent judgment or the truth of a label. No automated script may set the human-review declaration on a reviewer's behalf. Machine suggestions can be stored separately, but cannot silently become human ground truth.
 
+## Mission 05: two-phase review of 19 development images
+
+Use [image_review.py](../evaluation/image_review.py) for original-image review
+before opening model suggestions. In manifest order, it selects the first three
+distinct development listing groups in each category, then includes the first
+two views of the first development group with multiple views. For the current
+manifest this gives **19 images from 18 groups**: three groups per category and
+one additional view. It includes all 13 unique images in the saved evaluations
+plus six newly selected images with no inference result. Holdout images are not
+selected. This is a deterministic review sample, not proof that every difficult
+case or product type is represented.
+
+### Phase 1: record what the original pixels support
+
+From the repository root, create the gallery in a new ignored directory:
+
+```powershell
+.venv\Scripts\python.exe evaluation\image_review.py create --manifest evaluation\fixtures\abo-manifest.json --root var\evaluation\abo --output var\evaluation\abo\review-mission05-images
+.venv\Scripts\python.exe evaluation\image_review.py check --manifest evaluation\fixtures\abo-manifest.json --root var\evaluation\abo --selection var\evaluation\abo\review-mission05-images\selection.json --reviews var\evaluation\abo\review-mission05-images\image-reviews.json
+```
+
+Creation writes `index.html`, `selection.json` and `image-reviews.json`; all
+19 reviews start pending. It verifies the original files and refuses to overwrite
+an existing destination. If the gallery already exists, open its `index.html`
+and use the check command rather than recreating it. Neither command runs AI,
+downloads images or creates human labels. The selection binds the manifest hash,
+ordered image IDs and original-byte hashes.
+
+The image-only page contains no model predictions or source listing labels.
+Enter your reviewer identity, then inspect each original at full resolution:
+
+1. Describe visible shape, color, connectors and condition in **Visible attributes
+   / support notes**. Record whether imagery is photographic, rendered, composite
+   or uncertain. Appearance alone cannot establish hidden function or safety.
+2. Answer whether any marking is visibly present. Transcribe only readable text,
+   one line per marking. For a visible but unreadable marking, choose Yes and
+   leave transcription empty; record the limitation in ambiguity notes.
+3. Answer whether exact identity and revision are visually established. Enter
+   labels only when supported; a revision requires readable marking evidence.
+   “No” means this image does not establish the fact, not proven incompatibility.
+4. Record similar-looking alternatives, uncertainty, obstructed areas and the
+   missing view or close-up needed. Do not infer a label from the listing title
+   or fill a gap with the model's prediction.
+5. Check the independent-review declaration only for images you personally
+   assessed. Export the ledger after supplying all three visible-support answers
+   and support notes. Reviewed entries record reviewer, UTC time and declaration;
+   unchecked entries remain empty and pending. Missing originals block affected
+   reviewed exports: restore the original files and run the integrity check.
+
+**Save non-annotation draft** downloads `image-review-draft.json` to preserve
+unfinished form text and choices. It contains no review status, review timestamp
+or declaration. Loading a matching draft restores form text, choices and reviewer
+name but resets every review declaration; inspect the originals again before
+declaring reviews. A final
+ledger export omits all unchecked form facts, so save a draft first if those notes
+are still needed. Neither drafts nor checked file structure authenticate the
+reviewer's identity or establish visual truth.
+
+Save the actual browser exports under ignored storage, using distinct filenames
+such as those below. Replace these paths with the files you actually downloaded:
+
+```powershell
+.venv\Scripts\python.exe evaluation\image_review.py check --manifest evaluation\fixtures\abo-manifest.json --root var\evaluation\abo --selection var\evaluation\abo\review-mission05-images\selection.json --reviews var\evaluation\abo\mission05-human-image-reviews.json
+.venv\Scripts\python.exe evaluation\image_review.py check --manifest evaluation\fixtures\abo-manifest.json --root var\evaluation\abo --selection var\evaluation\abo\review-mission05-images\selection.json --draft var\evaluation\abo\mission05-image-review-draft.json
+```
+
+Use **either** `--reviews` **or** `--draft`, never both. A valid draft creates zero
+independent reviews. A selected review ledger must contain exactly the selected
+images in their bound order. Keep the original pending template and separate
+52-image ledger intact. With no completed reviews, the selected count is
+19 pending and zero reviewed; all 52 source images still lack human labels.
+
+### Phase 2: assess each saved model response
+
+After recording original-image judgments, use the fresh Mission 05 output queues.
+Their creation commands are:
+
+```powershell
+.venv\Scripts\python.exe evaluation\product_review.py create --manifest evaluation\fixtures\abo-manifest.json --root var\evaluation\abo --result var\evaluation\abo\qwen-baseline-v1.json --output-dir var\evaluation\abo\review-mission05-baseline
+.venv\Scripts\python.exe evaluation\product_review.py create --manifest evaluation\fixtures\abo-manifest.json --root var\evaluation\abo --result var\evaluation\abo\qwen-after-v2.json --output-dir var\evaluation\abo\review-mission05-after
+```
+
+These directories already contain newly generated pending queues; open their
+`index.html` files rather than rerunning creation into an existing directory.
+The CLI subcommand is `create`, not `create-queue`. Each queue has **13 cases**
+and its own `case-assessments.json`. The 19 image reviews do not become 19 model
+cases: the six extra images have no predictions, and the joint case reuses an
+image from a single-image case. Do not combine baseline and after-case denominators
+as independent products or transfer one result's assessments to the other.
+
+Inspect each case's ordered inputs before expanding **Model suggestions —
+unverified**. Use your original-image notes, then judge claims throughout the raw
+text, including observations and uncertainty, not only `candidates`. Assess
+identity, revision, markings, cited-image support, whether uncertainty/abstention
+fits the evidence, and whether a requested view would resolve a real gap or repeat
+an available view. Record supporting pixels and any correction. Leave unresolved
+judgments Undetermined; declare a case reviewed only after personal assessment.
+
+The output page downloads `case-assessments.json`. Save baseline and after exports
+with distinct names and pass those actual files to `check`, which validates their
+bindings and prints metric numerators, denominators, rates and exclusions:
+
+```powershell
+.venv\Scripts\python.exe evaluation\product_review.py check --result var\evaluation\abo\qwen-baseline-v1.json --assessments var\evaluation\abo\mission05-baseline-human-assessments.json
+.venv\Scripts\python.exe evaluation\product_review.py check --result var\evaluation\abo\qwen-after-v2.json --assessments var\evaluation\abo\mission05-after-human-assessments.json
+```
+
+To check the initial pending state, use each queue's existing
+`case-assessments.json` instead. Both start with 13 pending and zero reviewed
+cases. The 11 human-assessment metrics then each have a null numerator, denominator
+0, null rate and 13 excluded cases. Accuracy remains **not measurable**. Image
+labels and model-output assessments stay separate; neither changes production
+evidence, compatibility or inventory.
+
 ## Evaluation boundaries
 
 All views of a listing share a deterministic development/holdout split based on its listing ID. The same item across marketplaces remains one group, and identical selected bytes cannot occur twice. A listing group is not a physical return ID; the collection does not claim separate physical units or real cross-return kit compatibility. Do not create product BOMs or revision mappings from listing text alone.
@@ -153,10 +267,10 @@ The completed schema-v2 run also has a queue at `var/evaluation/abo/review-after
 
 There are two independent review records:
 
-- The `product_data.py` image-review ledger describes what a human can establish from the original pixels. Complete it before reading predictions to limit anchoring on model guesses.
+- The `image_review.py` gallery exports the existing `product_data.py` image-review ledger, describing what a human can establish from the original pixels. Complete it before reading predictions to limit anchoring on model guesses.
 - `case-assessments.json` judges the particular model response, including prose outside `candidates`. It binds the full result digest, raw-output hash and ordered input hashes. Changing the execution record or image order invalidates the assessment. This does not modify the original image labels or the saved model output.
 
-Every output judgment starts pending. A human reviewer supplies their name, review time, independent-review declaration and supporting notes. For identity, revision, marking and source attribution, choose unsupported if any relevant claim in that case lacks support, supported only if the relevant claims are supported, not present when no such claim exists, or undetermined when review cannot establish a judgment. For additional views, supported means useful and unsupported means unhelpful; explain what missing evidence the requested view would resolve. Marking comparison fields require a human transcription and the corresponding model text. Corrections are recorded as review text; they do not execute corrections in production inventory.
+Every output judgment starts pending. A human reviewer supplies their name, review time, independent-review declaration and supporting notes. For identity, revision, marking and source attribution, choose unsupported if any relevant claim in that case lacks support, supported only if the relevant claims are supported, not present when no such claim exists, or undetermined when review cannot establish a judgment. For additional views, supported means useful and unsupported means unhelpful; explain what missing evidence the requested view would resolve. For uncertainty, supported means the uncertainty or abstention fits the available evidence; unsupported means it does not, with a reason. An empty candidate array imposed by the no-catalog contract does not by itself establish appropriate uncertainty. Older assessment files that omit this field load it as undetermined, never as a human judgment. Marking comparison fields require a human transcription and the corresponding model text. Corrections are recorded as review text; they do not execute corrections in production inventory.
 
 The HTML page downloads the edited assessment JSON when the reviewer explicitly exports it. Use the path of that downloaded file in `product_review.py check`; the untouched template remains pending. Neither the runner nor an assistant may mark a case independently human-reviewed on the reviewer's behalf.
 
@@ -168,13 +282,15 @@ The HTML page downloads the edited assessment JSON when the reviewer explicitly 
 | Instructed abstention | Valid responses with no candidates and explicit uncertainty / valid responses. This is not identity-recognition accuracy. |
 | Output counts | Validated observation, candidate, revision, marking, image-reference and additional-view records. These are occurrence counts, not supported-claim judgments. |
 | Unsupported identity/revision/marking | Independently assessed cases judged unsupported / cases judged supported or unsupported for that field. These are case-level rates, not individual-claim rates. |
+| Supported identity/revision/marking | `identity_supported`, `revision_supported` and `marking_supported`: cases judged supported / the same eligible supported-or-unsupported cases for that field. These complement unsupported rates within that denominator; they are not product-recognition accuracy. |
 | Incorrect image attribution | Cases judged unsupported for source attribution / cases with a supported-or-unsupported source judgment. Valid index numbers alone do not establish visual attribution. |
 | Useful additional views | Cases judged useful / cases with useful-or-unhelpful judgments. Absent requests are excluded. |
+| Appropriate uncertainty/abstention | `uncertainty`: cases whose uncertainty or abstention a human judged supported / cases with supported-or-unsupported uncertainty judgments. This is separate from the runner's instructed-abstention count. |
 | Transcription exact match | Reviewed pairs of human/model strings that are exactly equal / reviewed transcription pairs. No case, whitespace or spelling normalization is applied; this is not a character-error-rate measure. |
 | Human corrections | Independently reviewed cases containing a nonblank correction / independently reviewed cases. |
 | Latency | Actual per-attempt wall time and measured inference time; inference is also separated into first-load and warm requests. Report sample count, minimum, median, nearest-rank p95 and maximum. |
 | GPU memory | Actual recorded load/inference peak allocated and peak reserved bytes, with measurement count and maximum. Missing measurements are excluded, never replaced with zero. |
 
-Not-present, undetermined, pending and missing human assessments are excluded from each semantic metric's denominator. The checker reports each exclusion count. A zero eligible denominator produces a null numerator/rate, never a claim of 0% error. The runner's semantic fields remain unmeasured; the separate assessment checker supplies review-based rates only when genuine reviews are available. Failed responses that retained raw text can still be assessed for harmful or unsupported claims.
+`product_review.py check` reports 11 human-assessment metrics: six judgment metrics, three supported-claim counterparts, transcription exact match and human corrections. For the six judgments and their supported counterparts, not-present, undetermined, pending and missing assessments are excluded. Transcription includes only explicitly reviewed comparison pairs; corrections use all independently reviewed cases. The checker reports each exclusion count. A zero eligible denominator produces a null numerator/rate, never a claim of 0% error. The runner's semantic fields remain unmeasured; the separate assessment checker supplies review-based rates only when genuine reviews are available. Failed responses that retained raw text can still be assessed for harmful or unsupported claims.
 
 Cold request wall time includes model initialization; adapter `inference_seconds` measures processing/generation after model loading. Wall time also includes input reading and the runner's pre-execution bookkeeping. With this small sample, p95 may equal the maximum. Report image presentations and listing groups alongside request counts, and preserve the photographic/composite/reference-image limitation in every quality summary.
