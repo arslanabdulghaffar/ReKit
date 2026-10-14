@@ -7,6 +7,13 @@ exercise simulated endpoints, not AMD GPUs. No AMD allocation, remote model,
 serving runtime or actual cloud inference has been qualified. Local CUDA and
 transport tests cannot pass the AMD execution gate.
 
+For the shortest authorized setup path, use the
+[AMD activation guide](../../docs/amd-activation.md): allocation probes, pinned
+Linux serving configuration, restricted TLS, the existing remote-provider
+environment and managed-image qualification. Its commands are preparation, not
+evidence of an AMD run. Local NVIDIA browser/API runners do not switch to AMD
+through environment configuration.
+
 Historical Mission 03 Task 5 qualification passed its recorded API
 acceptance, two complete real-AI browser runs, and the default browser regression.
 Four earlier browser failures and the reproduced v4 baseline remain preserved.

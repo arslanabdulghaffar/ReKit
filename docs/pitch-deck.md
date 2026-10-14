@@ -39,7 +39,10 @@ Run from the repository root after closing your own PowerPoint session. The
 builder refuses to run when PowerPoint is already open, refuses to overwrite an
 existing output directory and writes only to a fresh directory under ignored
 `var/mission05-submission/`. It validates the supplied successful run receipts and
-source files before authoring. Its default inputs are:
+source files before authoring. Before writing any evidence, it restricts the new
+output's Windows access list to the current user, SYSTEM and Administrators;
+files and slide renders inherit that restriction. Git ignore rules alone do not
+restrict local readers. Its default inputs are:
 
 - Product: `var/mission02-acceptance/run-ai-5p7lbguu/`.
 - Recovery: `var/mission02-acceptance/run-g563yhm_/`.

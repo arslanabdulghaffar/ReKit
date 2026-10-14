@@ -54,6 +54,20 @@ if (-not $output.StartsWith($privateRoot + [IO.Path]::DirectorySeparatorChar, [S
 if (Test-Path -LiteralPath $output) { throw 'Refusing to overwrite an existing output directory.' }
 if (Get-Process POWERPNT -ErrorAction SilentlyContinue) { throw 'Close your own PowerPoint session before running this isolated builder.' }
 [IO.Directory]::CreateDirectory($output) | Out-Null
+# Git exclusion does not restrict local readers. Protect the new output before
+# embedding original evidence; descendants inherit this explicit access list.
+$privateAcl = [Security.AccessControl.DirectorySecurity]::new()
+$privateAcl.SetAccessRuleProtection($true, $false)
+$privateIdentities = @(
+    [Security.Principal.WindowsIdentity]::GetCurrent().User,
+    [Security.Principal.SecurityIdentifier]::new('S-1-5-18'),
+    [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+)
+foreach ($identity in $privateIdentities) {
+    $privateAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new(
+        $identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+}
+Set-Acl -LiteralPath $output -AclObject $privateAcl
 $renderDir = Join-Path $output 'slides'
 [IO.Directory]::CreateDirectory($renderDir) | Out-Null
 Add-Type -AssemblyName System.Drawing
@@ -361,7 +375,8 @@ try {
         source_runs=@($ProductRun,$RecoveryRun);sources=$sources;geometry=$checks;editability=$xmlChecks;
         screenshot_policy='Original pixels embedded; native PowerPoint crops disclosed in notes; no fabricated interface.';
         visual_review='Required separately after export; build success alone does not establish visual QA.';
-        artifact_tool_runtime='Unavailable; used explicitly authorized installed PowerPoint fallback.'}
+        artifact_tool_runtime='Unavailable; used explicitly authorized installed PowerPoint fallback.';
+        local_access='New output ACL allows only the current Windows user, SYSTEM and Administrators.'}
 } catch {
     $failure=$_
     $result=[ordered]@{status='failed';error=$_.Exception.Message;output=$output;visual_review='Not qualified'}

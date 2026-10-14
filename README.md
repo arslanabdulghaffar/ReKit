@@ -260,6 +260,9 @@ and an [editable architecture figure](docs/assets/rekit-architecture.svg).
 The deck guide identifies locally generated private assets and how to recreate
 them. These materials are prepared for review; the repository remains private,
 no video or submission is claimed, and actual AMD qualification remains pending.
+See the [release-readiness assessment](docs/release-readiness.md) and
+[AMD activation commands](docs/amd-activation.md) for the security findings and
+the remaining authorized deployment work.
 
 Read [architecture](docs/architecture.md), [domain contracts](docs/domain-contracts.md),
 [evidence persistence](docs/evidence-provenance.md), [recovery planning](docs/recovery-planning.md),

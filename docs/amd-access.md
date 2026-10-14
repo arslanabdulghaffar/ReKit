@@ -62,6 +62,12 @@ endpoint on AMD Developer Cloud, plus at least two Evolus building blocks and
 application API integration. Evolus is optional. Shared TokenFactory access is
 not evidence that these narrower award requirements are met.
 
-Use the [deployment activation checklist](../deploy/amd/README.md#activation-checklist)
+Use the [command-by-command activation guide](amd-activation.md) and
+[deployment checklist](../deploy/amd/README.md#activation-checklist)
 once credentials, endpoint facts and permission are available. An echoed model
 name is not proof of loaded weights, processor revision, or AMD execution.
+
+The 2026-10-14 activation-guide recheck reached the public Notebooks sign-in
+page; fetching the TokenFactory path did not yield its API contract. Official
+vLLM documentation confirms multimodal/schema interfaces, but neither framework
+documentation nor an AMD-branded login proves this account's available service.
