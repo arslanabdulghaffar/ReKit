@@ -263,6 +263,8 @@ no video or submission is claimed, and actual AMD qualification remains pending.
 See the [release-readiness assessment](docs/release-readiness.md) and
 [AMD activation commands](docs/amd-activation.md) for the security findings and
 the remaining authorized deployment work.
+The [Mission 05 report](docs/reports/development-mission-05.md) records the final
+local tests, demonstrations, private submission assets and outstanding gates.
 
 Read [architecture](docs/architecture.md), [domain contracts](docs/domain-contracts.md),
 [evidence persistence](docs/evidence-provenance.md), [recovery planning](docs/recovery-planning.md),

@@ -138,23 +138,60 @@ or screen recording. Reuse an existing private operator configuration, or follow
 [operator provisioning](operator-auth.md) privately. The operator token and
 model-service key are separate credentials.
 
-```powershell
-$env:REKIT_DATABASE_PATH = '.\var\amd-qualification\rekit.sqlite3'
-$env:REKIT_EVIDENCE_DIR = '.\var\amd-qualification\evidence'
-$env:REKIT_CATALOG_PATH = '.\tests\fixtures\synthetic_catalog.json'
-$env:REKIT_DISPOSITION_POLICY_PATH = '.\tests\fixtures\synthetic_disposition_policy.json'
-$env:REKIT_AUTH_CONFIG_PATH = '.\.secrets\operators.json'
-$env:REKIT_INFERENCE_PROVIDER = 'openai-remote'
-$env:REKIT_INFERENCE_BASE_URL = Read-Host 'Actual HTTPS base URL ending /v1 (no trailing slash)'
-$env:REKIT_INFERENCE_ALLOWED_ENDPOINTS = $env:REKIT_INFERENCE_BASE_URL + '/chat/completions'
-$env:REKIT_INFERENCE_MODEL = Read-Host 'Exact served model ID'
-$env:REKIT_INFERENCE_MODEL_REVISION = Read-Host 'Verified model commit (40 lowercase hex)'
-$env:REKIT_INFERENCE_PROCESSOR_REVISION = Read-Host 'Verified processor commit (40 lowercase hex)'
-$env:REKIT_INFERENCE_MAX_IMAGES = '2'
-$env:REKIT_INFERENCE_TIMEOUT_SECONDS = '120'
-$env:REKIT_INFERENCE_API_KEY = [System.Net.NetworkCredential]::new('', (Read-Host 'Private model-service bearer token' -AsSecureString)).Password
+The example refuses an existing qualification directory. It checks the exact
+workspace path and its ancestors for reparse points, then protects the new
+directory for the current Windows user, SYSTEM and Administrators before any
+database or image is written. Descendants inherit that ACL. Ignoring `var/` in
+Git alone does not make its contents private. Preserve any existing qualification
+data; review a different fresh path instead of deleting it to rerun this example.
 
+```powershell
+$ErrorActionPreference = 'Stop'
 try {
+    $workspacePath = [IO.Path]::GetFullPath('A:\hackathon\ReKit')
+    if ((Get-Location).Path -ne $workspacePath) { throw 'Run from the exact ReKit workspace.' }
+    $varPath = [IO.Path]::GetFullPath((Join-Path $workspacePath 'var'))
+    $qualificationPath = [IO.Path]::GetFullPath((Join-Path $varPath 'amd-qualification'))
+    if (-not $qualificationPath.StartsWith($varPath + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Qualification output must remain under the workspace var directory.'
+    }
+    $ancestor = Get-Item -LiteralPath $varPath -Force
+    while ($null -ne $ancestor) {
+        if (-not $ancestor.PSIsContainer -or ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Qualification ancestors must be real directories, not reparse points.'
+        }
+        $ancestor = $ancestor.Parent
+    }
+    if (Test-Path -LiteralPath $qualificationPath) { throw 'Refusing to reuse existing qualification data.' }
+    New-Item -ItemType Directory -Path $qualificationPath | Out-Null
+    $privateAcl = [Security.AccessControl.DirectorySecurity]::new()
+    $privateAcl.SetAccessRuleProtection($true, $false)
+    $privateIdentities = @(
+        [Security.Principal.WindowsIdentity]::GetCurrent().User,
+        [Security.Principal.SecurityIdentifier]::new('S-1-5-18'),
+        [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+    )
+    foreach ($identity in $privateIdentities) {
+        $privateAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new(
+            $identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+    }
+    Set-Acl -LiteralPath $qualificationPath -AclObject $privateAcl
+
+    $env:REKIT_DATABASE_PATH = Join-Path $qualificationPath 'rekit.sqlite3'
+    $env:REKIT_EVIDENCE_DIR = Join-Path $qualificationPath 'evidence'
+    $env:REKIT_CATALOG_PATH = Join-Path $workspacePath 'tests\fixtures\synthetic_catalog.json'
+    $env:REKIT_DISPOSITION_POLICY_PATH = Join-Path $workspacePath 'tests\fixtures\synthetic_disposition_policy.json'
+    $env:REKIT_AUTH_CONFIG_PATH = Join-Path $workspacePath '.secrets\operators.json'
+    $env:REKIT_INFERENCE_PROVIDER = 'openai-remote'
+    $env:REKIT_INFERENCE_BASE_URL = Read-Host 'Actual HTTPS base URL ending /v1 (no trailing slash)'
+    $env:REKIT_INFERENCE_ALLOWED_ENDPOINTS = $env:REKIT_INFERENCE_BASE_URL + '/chat/completions'
+    $env:REKIT_INFERENCE_MODEL = Read-Host 'Exact served model ID'
+    $env:REKIT_INFERENCE_MODEL_REVISION = Read-Host 'Verified model commit (40 lowercase hex)'
+    $env:REKIT_INFERENCE_PROCESSOR_REVISION = Read-Host 'Verified processor commit (40 lowercase hex)'
+    $env:REKIT_INFERENCE_MAX_IMAGES = '2'
+    $env:REKIT_INFERENCE_TIMEOUT_SECONDS = '120'
+    $env:REKIT_INFERENCE_API_KEY = [System.Net.NetworkCredential]::new('', (Read-Host 'Private model-service bearer token' -AsSecureString)).Password
+
     # Configuration validation only: no request, GPU work or database opening.
     .\.venv\Scripts\python.exe -c "from rekit.inference.adapters.openai_remote import RemoteVisionSettings; RemoteVisionSettings.from_environment(); print('Settings validated; endpoint execution remains unverified.')"
     if ($LASTEXITCODE -ne 0) { throw 'Stop: remote settings are invalid.' }

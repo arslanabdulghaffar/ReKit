@@ -24,6 +24,10 @@ Existing `var/mission05-submission` artifacts were restricted after checking the
 exact directory boundary and absence of reparse points. Independent inspection
 of all 57 current items found zero unexpected Allow principals. An actual rebuild
 passed; its seven rendered slide hashes were unchanged and PowerPoint exited.
+Final review also added the same protected-directory requirement to the future
+AMD qualification commands, with an exact path/reparse check, refusal to reuse
+existing data and key cleanup even when settings validation fails. The commands
+were syntax checked; no AMD qualification directory or endpoint was started.
 
 The selected deck remains
 `var/mission05-submission/deck-20261014-152027-67d97c/ReKit-NeuralFoundry-pitch.pptx`,
@@ -94,5 +98,5 @@ confirmed. A generic API response cannot attest AMD hardware execution.
 The [deployment checklist](../deploy/amd/README.md) retains the broader failure,
 stale-result and repeated-latency gates. Keep CI CPU-only. See the
 [submission checklist](hackathon-submission-checklist.md) for media and event
-requirements. The final Mission 05 report will record final validation and Git
-state.
+requirements. The [Mission 05 report](reports/development-mission-05.md) records
+final local validation and explains its post-push Git verification receipt.
