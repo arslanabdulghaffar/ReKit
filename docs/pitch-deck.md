@@ -6,6 +6,13 @@ Every use must retain **AMD deployment planned; qualification pending** until
 actual AMD execution is qualified. This deck is prepared locally, not published
 or submitted.
 
+Mission 06 checkpoint: the explicit TokenFactory adapter and private discovery
+launcher are implemented, and a real model-catalog response was obtained.
+Quota remains unknown and MiMo's live schema/free flags conflict with the docs.
+This establishes discovery, not AMD visual inference or a successful AMD demo.
+Retain the qualification-pending narrative below. The private PowerPoint has
+not been edited; see the [Mission 06 report](reports/development-mission-06.md).
+
 ## Slide content and design
 
 | Slide | Main copy and purpose | Visual and presentation guidance |

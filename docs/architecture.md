@@ -16,6 +16,17 @@ The two AI browser runs `run-ai-52823ogs` and `run-ai-73rjz6dy` each retained an
 
 Mission 04 adds an ignored ABO catalog-image collection and separate pending human-review records, actual local before/after evaluation, and schema v2's no-catalog candidate restriction. A real-product browser/API run preserves one simulated unit as unverified and held; separate synthetic recovery regressions still complete two kits. The implemented `openai-remote` adapter has controlled offline qualification only. Actual AMD execution and independently reviewed semantic accuracy remain unmeasured. See the [Mission 04 report](reports/development-mission-04.md).
 
+Mission 06 adds a narrowly allowlisted `amd-tokenfactory` shared-service profile,
+explicitly unattested model/processor revisions, and cached read-only discovery.
+Local CUDA and generic remote revision requirements remain pinned. The actual
+catalog response identifies MiMo-V2.6-Flash as image-capable, but its schema/free
+flags conflict with documentation and quota is still unknown. No AMD image
+inference, hardware/runtime attestation, or AMD browser acceptance is claimed.
+The credential remains in the private backend boundary; deterministic catalog,
+human approval and inventory authority are unchanged. See the
+[Mission 06 checkpoint](reports/development-mission-06.md) and
+[TokenFactory procedure](tokenfactory.md).
+
 ## Repository boundaries
 
 The editable [presentation architecture figure](assets/rekit-architecture.svg)

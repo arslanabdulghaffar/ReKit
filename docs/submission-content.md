@@ -5,6 +5,13 @@ not a submission receipt. **Actual AMD execution is pending.** The requested
 title describes the intended deployment; retain this qualification wherever it
 is presented until the AMD gate passes.
 
+Mission 06 checkpoint, October 15: TokenFactory's exact remote profile and
+read-only discovery are implemented. An actual catalog response lists MiMo as
+image-capable, but quota and strict-schema execution remain unqualified. No
+image has been sent to the service. This does not change the pending-inference
+claims in the submission fields below; see the
+[Mission 06 report](reports/development-mission-06.md). Nothing was submitted.
+
 ## Identity and form limits
 
 | Field | Copy | Count |

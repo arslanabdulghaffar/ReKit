@@ -3,7 +3,13 @@
 Mission 06, October 15, 2026. This is a shared-service integration, separate from
 an owned AMD Developer Cloud allocation. Successful service requests will establish
 TokenFactory usage, not a specific GPU, ROCm release or immutable deployed weights.
-Live discovery, image execution and quota qualification have not yet occurred.
+Read-only model discovery has returned a real catalog. Quota and image execution
+remain unqualified: the supplied usage alias was unusable, no quota headers were
+returned, and the live MiMo catalog advertises `structured_outputs: false` and
+`free: false` despite the documentation's strict-schema description. The free
+flag describes allowance accounting; it alone does not establish billable use
+or free account entitlement. No generation has been attempted. See the current
+[Mission 06 checkpoint](reports/development-mission-06.md).
 
 ## Mandatory credential and image-transfer gate
 
@@ -45,6 +51,56 @@ Before any authenticated request, the user must separately confirm:
 
 Configuration alone is not consent. Keep the gate closed while any required
 confirmation is missing. Never ask the user to disclose the key in Codex chat.
+
+## Cached, read-only discovery
+
+After all three confirmations, the private Windows launcher can perform the
+authorized discovery operation:
+
+```powershell
+powershell.exe -NoProfile -NonInteractive -File scripts/run_tokenfactory.ps1 -Action Discover -Authorized
+```
+
+`-Authorized` records the caller's intent; it does not replace the user's consent.
+The launcher validates the existing protected credential directory and file
+permissions, decrypts the key only into its Python child environment, and never
+changes the parent environment. The discovery process removes that variable
+before starting the HTTPS worker, whose credential arrives only through stdin.
+No frontend or browser process is started. The launcher does not repair unsafe
+permissions or request elevated privileges. It drains child stdout/stderr without
+logging their contents, reports only a controlled action/exit/receipt summary,
+and attempts to terminate its owned process tree if waiting is interrupted.
+
+The operation makes at most two GET attempts: the mission's same-host usage
+alias, then the model catalog. It never generates images/text or retries. An
+authentication rejection, unavailable account, exhausted quota, zero remaining
+minute capacity or rate limit stops it. A usage-alias 404 may proceed to catalog
+discovery, where actual positive quota response headers can establish remaining
+capacity. Documentation examples are never used as account measurements.
+
+Sanitized receipts live at
+`.secrets/tokenfactory/qualification/discovery.json`, under the restricted,
+Git-ignored credential directory. Only selected model capabilities, numeric
+usage/quota values, timestamps, HTTP status, duration and response hashes are
+retained. Raw account profiles, recent-call lists, arbitrary error bodies and
+request headers are discarded. An echoed credential rejects the response.
+The request is recorded before network activity; interrupted and failed
+receipts are cached too. Re-running reads the receipt without another request.
+Refreshing a failed/stale discovery requires a deliberate reviewed operation;
+do not delete its audit record to trigger an implicit retry.
+
+If the usage alias returns HTTP 200 with an unusable response, a separately
+reviewed `-Action Catalog -Authorized` operation can query the already allowed
+model URL once and preserve a linked `catalog-discovery.json` receipt. This
+does not repeat the usage request or contact another host. It is unavailable
+after rejected authentication, rate limiting, unavailable account status or a
+detected credential echo. Its own result is also cached without retries.
+
+The transport retains only parsed, bounded Retry-After seconds and documented
+numeric quota headers. Missing or invalid values remain unknown. No 429 is
+automatically retried. Catalog image/schema flags describe advertised support;
+single-image execution, joint-image execution and ReKit's exact schema remain
+unqualified until their own successful live tests.
 
 ## Exact endpoint and provenance boundary
 

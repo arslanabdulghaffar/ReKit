@@ -11,7 +11,7 @@ import time
 
 from rekit.inference.adapters.https_worker import (
     MAX_HEADER_BYTES, MAX_PROTOCOL_BYTES, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES,
-    WorkerError, validate_request,
+    TOKENFACTORY_RESOURCES, WorkerError, validate_request, validate_response_metadata,
 )
 
 
@@ -35,6 +35,8 @@ class HttpResponse:
     status: int
     body: bytes
     content_type: str
+    retry_after_seconds: int | None = None
+    quota_headers: dict[str, int | float] | None = None
 
 
 def _decode_response(raw: bytes, maximum: int) -> HttpResponse:
@@ -51,7 +53,9 @@ def _decode_response(raw: bytes, maximum: int) -> HttpResponse:
         raise RemoteTransportError("protocol")
     if set(metadata) == {"error"} and not body:
         raise RemoteTransportError(metadata["error"] if isinstance(metadata["error"], str) else "protocol")
-    if set(metadata) != {"status", "body_size", "content_type"}:
+    required = {"status", "body_size", "content_type"}
+    if (not required <= set(metadata)
+            or not set(metadata) <= required | {"retry_after_seconds", "quota_headers"}):
         raise RemoteTransportError("protocol")
     status, size, content_type = metadata["status"], metadata["body_size"], metadata["content_type"]
     if (type(status) is not int or not 200 <= status <= 599 or 300 <= status <= 399
@@ -59,11 +63,37 @@ def _decode_response(raw: bytes, maximum: int) -> HttpResponse:
             or not isinstance(content_type, str) or len(content_type) > 128
             or any(ord(char) < 32 or ord(char) >= 127 for char in content_type)):
         raise RemoteTransportError("protocol")
-    return HttpResponse(status=status, body=body, content_type=content_type)
+    try:
+        validate_response_metadata(metadata)
+    except WorkerError as error:
+        raise RemoteTransportError(error.code) from None
+    return HttpResponse(status=status, body=body, content_type=content_type,
+                        retry_after_seconds=metadata.get("retry_after_seconds"),
+                        quota_headers=metadata.get("quota_headers"))
 
 
 def post_https(url: str, token: str, payload: bytes, *, timeout: float,
                max_response_bytes: int) -> HttpResponse:
+    """One bounded POST; the original interface and private protocol are retained."""
+    return _https(url, token, payload, timeout=timeout, max_response_bytes=max_response_bytes,
+                  method="POST")
+
+
+def get_tokenfactory(resource: str, token: str, *, timeout: float,
+                     max_response_bytes: int) -> HttpResponse:
+    """Read one exact mission resource; never follow redirects or try other hosts.
+
+    The same-host usage alias is not confirmed by the current official docs.
+    Its failure is an unknown quota, not permission to query another endpoint.
+    """
+    if not isinstance(resource, str) or resource not in TOKENFACTORY_RESOURCES:
+        raise RemoteTransportError("protocol")
+    return _https(TOKENFACTORY_RESOURCES[resource], token, b"", timeout=timeout,
+                  max_response_bytes=max_response_bytes, method="GET")
+
+
+def _https(url: str, token: str, payload: bytes, *, timeout: float,
+           max_response_bytes: int, method: str) -> HttpResponse:
     """Never put credentials in argv or logs. Kill and reap on absolute deadline.
 
     The deadline also bounds blocked stdin on Windows, where communicate's own
@@ -73,13 +103,16 @@ def post_https(url: str, token: str, payload: bytes, *, timeout: float,
     if not isinstance(payload, bytes):
         raise RemoteTransportError("protocol")
     try:
-        validate_request(url, token, len(payload), timeout, max_response_bytes)
+        validate_request(url, token, len(payload), timeout, max_response_bytes, method)
     except WorkerError as error:
         raise RemoteTransportError(error.code) from None
-    header = json.dumps({
+    metadata = {
         "url": url, "token": token, "payload_size": len(payload),
         "timeout": timeout, "max_response_bytes": max_response_bytes,
-    }, separators=(",", ":")).encode("ascii") + b"\n"
+    }
+    if method != "POST":
+        metadata["method"] = method
+    header = json.dumps(metadata, separators=(",", ":")).encode("ascii") + b"\n"
     if len(header) > MAX_HEADER_BYTES:
         raise RemoteTransportError("oversized")
     expired = threading.Event()

@@ -1,6 +1,7 @@
 """Offline transport tests; no AMD connection, credentials, or GPU required."""
 
 from io import BytesIO
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import ssl
@@ -208,7 +209,8 @@ def test_private_worker_input_is_bounded_and_validated_without_network(monkeypat
     assert json.loads(output.getvalue())["error"] in {"protocol", "oversized"}
 
 
-def test_parent_passes_token_and_payload_only_in_stdin(monkeypatch):
+@pytest.mark.parametrize("resource", [None, "models", "usage"])
+def test_parent_passes_token_and_payload_only_in_stdin(monkeypatch, resource):
     captured = {}
 
     class Process:
@@ -230,7 +232,10 @@ def test_parent_passes_token_and_payload_only_in_stdin(monkeypatch):
             pytest.fail("completed worker killed")
 
     monkeypatch.setattr(transport.subprocess, "Popen", Process)
-    result = transport.post_https(URL, TOKEN, PAYLOAD, timeout=1.0, max_response_bytes=1024)
+    if resource is None:
+        result = transport.post_https(URL, TOKEN, PAYLOAD, timeout=1.0, max_response_bytes=1024)
+    else:
+        result = transport.get_tokenfactory(resource, TOKEN, timeout=1.0, max_response_bytes=1024)
     assert result == transport.HttpResponse(200, b"{}", "application/json")
     assert captured["command"] == [sys.executable, "-I", "-S", str(transport._WORKER_PATH)]
     assert TOKEN not in repr(captured["command"]) and URL not in repr(captured["command"])
@@ -238,7 +243,13 @@ def test_parent_passes_token_and_payload_only_in_stdin(monkeypatch):
     assert captured["options"]["creationflags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0)
     assert captured["options"]["close_fds"] is True
     header, _, body = captured["data"].partition(b"\n")
-    assert json.loads(header)["token"] == TOKEN and body == PAYLOAD
+    fields = json.loads(header)
+    assert fields["token"] == TOKEN
+    if resource is None:
+        assert body == PAYLOAD and "method" not in fields
+    else:
+        assert body == b"" and fields["payload_size"] == 0 and fields["method"] == "GET"
+        assert fields["url"] == worker.TOKENFACTORY_RESOURCES[resource]
     assert 0 < captured["timeout"] <= 1.0
     assert all(pipe.closed for pipe in captured["pipes"])
 
@@ -260,7 +271,8 @@ def test_parent_validates_child_protocol_without_echoing_untrusted_output(raw, c
     assert "private-secret" not in str(error.value)
 
 
-def test_absolute_deadline_kills_and_reaps_worker_even_if_it_never_reads_stdin(monkeypatch, tmp_path):
+@pytest.mark.parametrize("read_only", [False, True])
+def test_absolute_deadline_kills_and_reaps_worker_even_if_it_never_reads_stdin(monkeypatch, tmp_path, read_only):
     blocked = tmp_path / "blocked_worker.py"
     blocked.write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
     monkeypatch.setattr(transport, "_WORKER_PATH", blocked)
@@ -275,7 +287,10 @@ def test_absolute_deadline_kills_and_reaps_worker_even_if_it_never_reads_stdin(m
     monkeypatch.setattr(transport.subprocess, "Popen", launch)
     started = time.monotonic()
     with pytest.raises(transport.RemoteTransportError) as error:
-        transport.post_https(URL, TOKEN, b"x" * (2 * 1024 * 1024), timeout=0.3, max_response_bytes=1024)
+        if read_only:
+            transport.get_tokenfactory("models", TOKEN, timeout=0.3, max_response_bytes=1024)
+        else:
+            transport.post_https(URL, TOKEN, b"x" * (2 * 1024 * 1024), timeout=0.3, max_response_bytes=1024)
     elapsed = time.monotonic() - started
     assert error.value.code == "timeout"
     assert 0.2 <= elapsed < 5
@@ -391,3 +406,159 @@ from rekit.inference.adapters.remote_transport import post_https
                             timeout=10, cwd=Path(__file__).parents[2], check=False,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("resource,path", [
+    ("models", "/radeon/api/v1/models"),
+    ("usage", "/radeon/api/v1/usage?include_recent=true"),
+])
+def test_get_discovery_uses_only_exact_same_host_with_no_body_or_proxy(monkeypatch, resource, path):
+    monkeypatch.setenv("HTTPS_PROXY", "http://must-not-be-used.invalid:8080")
+    connections = install_connection(monkeypatch, wire_response())
+    output = BytesIO()
+    worker.main(BytesIO(request_header(url=worker.TOKENFACTORY_RESOURCES[resource],
+                                      payload_size=0, method="GET")), output)
+    metadata, _, body = output.getvalue().partition(b"\n")
+    assert json.loads(metadata) == {"status": 200, "content_type": "application/json", "body_size": len(body)}
+    assert len(connections) == 1
+    connection = connections[0]
+    assert (connection.host, connection.port) == ("developer.amd.com.cn", 443)
+    assert connection.context.check_hostname is True
+    assert connection.context.verify_mode == ssl.CERT_REQUIRED
+    assert connection.calls == [("GET", path, {
+        "body": None,
+        "headers": {"Authorization": "Bearer " + TOKEN, "Accept": "application/json",
+                    "Accept-Encoding": "identity", "Connection": "close"},
+    })]
+    assert connection.closed
+
+
+@pytest.mark.parametrize("resource", ["", "Models", "../models", "chat/completions", "usage?include_recent=true",
+                                      "https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true",
+                                      None, [], True])
+def test_get_resource_cannot_be_an_arbitrary_url_or_path(monkeypatch, resource):
+    monkeypatch.setattr(transport.subprocess, "Popen", lambda *args, **kwargs: pytest.fail("worker started"))
+    with pytest.raises(transport.RemoteTransportError) as error:
+        transport.get_tokenfactory(resource, TOKEN, timeout=1, max_response_bytes=1024)
+    assert error.value.code == "protocol"
+    assert TOKEN not in str(error.value)
+
+
+@pytest.mark.parametrize("url", [
+    "https://developer.amd.com.cn/radeon/api/v1/models/",
+    "https://developer.amd.com.cn:443/radeon/api/v1/models",
+    "https://DEVELOPER.amd.com.cn/radeon/api/v1/models",
+    "https://developer.amd.com.cn/radeon/api/v1/%6dodels",
+    "https://developer.amd.com.cn/radeon/api/v1/x/../models",
+    "https://developer.amd.com.cn/radeon/api/v1/models?extra=true",
+    "https://developer.amd.com.cn/radeon/api/v1/usage",
+    "https://developer.amd.com.cn/radeon/api/v1/usage?include_recent=false",
+    "https://developer.amd.com.cn/radeon/api/v1/usage?include_recent=true&extra=1",
+    "https://developer.amd.com.cn.evil.invalid/radeon/api/v1/models",
+    "https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true",
+    URL,
+])
+def test_worker_get_revalidates_exact_destinations_before_network(monkeypatch, url):
+    monkeypatch.setattr(worker, "request", lambda *args, **kwargs: pytest.fail("network invoked"))
+    output = BytesIO()
+    worker.main(BytesIO(request_header(url=url, payload_size=0, method="GET")), output)
+    assert output.getvalue() == b'{"error":"protocol"}\n'
+
+
+@pytest.mark.parametrize("method,payload_size,body", [
+    ("HEAD", 0, b""), ("DELETE", 0, b""), ("get", 0, b""), (True, 0, b""),
+    ("GET", 1, b"x"), ("GET", True, b"x"), ("GET", 0, b"unexpected"), ("POST", 0, b""),
+])
+def test_worker_rejects_other_methods_get_bodies_and_empty_post(monkeypatch, method, payload_size, body):
+    monkeypatch.setattr(worker, "request", lambda *args, **kwargs: pytest.fail("network invoked"))
+    output = BytesIO()
+    worker.main(BytesIO(request_header(url=worker.TOKENFACTORY_RESOURCES["models"],
+                                      method=method, payload_size=payload_size) + body), output)
+    assert output.getvalue() == b'{"error":"protocol"}\n'
+
+
+def test_get_redirect_never_forwards_credentials_to_official_other_host(monkeypatch):
+    connections = install_connection(monkeypatch, wire_response(status=302, headers=[
+        ("Location", "https://radeon-global.anruicloud.com/api/profile/model-usage?include_recent=true"),
+    ]))
+    output = BytesIO()
+    worker.main(BytesIO(request_header(url=worker.TOKENFACTORY_RESOURCES["usage"],
+                                      method="GET", payload_size=0)), output)
+    assert output.getvalue() == b'{"error":"protocol"}\n'
+    assert len(connections) == 1 and len(connections[0].calls) == 1 and connections[0].closed
+    assert connections[0].host == "developer.amd.com.cn"
+
+
+def test_numeric_quota_and_retry_metadata_survive_parent_boundary_without_other_headers(monkeypatch):
+    headers = [("Content-Type", "application/json"), ("Retry-After", "60"),
+               ("X-RateLimit-Limit-User-RPM", "30"), ("X-RateLimit-Remaining-User-RPM", "0"),
+               ("X-RateLimit-Reset", "1792018800"), ("X-RateLimit-Limit-User-Daily-USD", "10.50"),
+               ("X-RateLimit-Used-User-Daily-USD", "1.8412"),
+               ("X-RateLimit-Remaining-User-Daily-USD", "8.6588"),
+               ("X-RateLimit-Reset-User-Daily-USD", "1792105200"),
+               ("X-Private-Account", "private-account-must-not-leak"),
+               ("Set-Cookie", "private-session-must-not-leak")]
+    metadata, body, connections = worker_result(monkeypatch, wire_response(status=429, headers=headers))
+    response = transport._decode_response(json.dumps(metadata).encode() + b"\n" + body, 1024)
+    assert response.status == 429 and response.retry_after_seconds == 60
+    assert response.quota_headers == {
+        "user_rpm_limit": 30, "user_rpm_remaining": 0, "rpm_reset_unix": 1792018800,
+        "daily_usd_limit": 10.5, "daily_usd_used": 1.8412, "daily_usd_remaining": 8.6588,
+        "daily_reset_unix": 1792105200,
+    }
+    assert "private-" not in json.dumps(metadata)
+    assert len(connections) == 1 and len(connections[0].calls) == 1
+    assert len(json.dumps(metadata).encode()) < worker.MAX_PROTOCOL_BYTES
+
+
+@pytest.mark.parametrize("value,expected", [
+    (None, None), ("0", 0), ("60", 60), ("86400", 86400), ("86401", None),
+    ("999999999999999999999999999", None), ("-1", None), ("1.5", None),
+    ("NaN", None), ("Inf", None), ("1e2", None), ("６０", None), ("60\r\nX: secret", None),
+    ("Thu, 15 Oct 2026 00:00:01 GMT", 1), ("Wed, 14 Oct 2026 23:59:59 GMT", 0),
+    ("Fri, 16 Oct 2026 00:00:01 GMT", None), ("Thu, 15 Oct 2026 00:00:01 -0000", None),
+])
+def test_retry_after_parses_bounded_delta_or_aware_date_without_early_retry(value, expected):
+    now = datetime(2026, 10, 15, 0, 0, 0, 100000, tzinfo=timezone.utc)
+    assert worker._retry_after(value, now=now) == expected
+
+
+@pytest.mark.parametrize("header", ["Retry-After"] + [field[0] for field in worker.QUOTA_FIELDS])
+def test_duplicate_optional_headers_reject_ambiguous_response(monkeypatch, header):
+    metadata, body, connections = worker_result(monkeypatch, wire_response(headers=[(header, "1"), (header, "2")]))
+    assert metadata == {"error": "protocol"} and body == b""
+    assert len(connections) == 1 and connections[0].closed
+
+
+@pytest.mark.parametrize("header,value", [
+    ("Retry-After", "999999"), ("X-RateLimit-Limit-User-RPM", "1.5"),
+    ("X-RateLimit-Limit-User-RPM", "1000001"), ("X-RateLimit-Remaining-User-RPM", "-1"),
+    ("X-RateLimit-Reset", "253402300800"), ("X-RateLimit-Reset-User-Daily-USD", "1e9"),
+    ("X-RateLimit-Limit-User-Daily-USD", "NaN"), ("X-RateLimit-Used-User-Daily-USD", "Infinity"),
+    ("X-RateLimit-Remaining-User-Daily-USD", "-0.1"),
+    ("X-RateLimit-Limit-User-Daily-USD", "1000000001"),
+    ("X-RateLimit-Used-User-Daily-USD", "9" * 65),
+])
+def test_invalid_optional_numeric_header_is_unknown_not_zero(monkeypatch, header, value):
+    metadata, body, _ = worker_result(monkeypatch, wire_response(headers=[(header, value)]))
+    response = transport._decode_response(json.dumps(metadata).encode() + b"\n" + body, 1024)
+    assert response.status == 200 and response.retry_after_seconds is None and response.quota_headers is None
+
+
+@pytest.mark.parametrize("extra", [
+    {"retry_after_seconds": True}, {"retry_after_seconds": -1}, {"retry_after_seconds": 1.5},
+    {"retry_after_seconds": 86401}, {"retry_after_seconds": None},
+    {"quota_headers": None}, {"quota_headers": []}, {"quota_headers": {"secret": 1}},
+    {"quota_headers": {"user_rpm_limit": True}}, {"quota_headers": {"user_rpm_remaining": 1.0}},
+    {"quota_headers": {"rpm_reset_unix": 253402300800}},
+    {"quota_headers": {"daily_usd_used": float("nan")}},
+    {"quota_headers": {"daily_usd_limit": float("inf")}},
+    {"quota_headers": {"daily_usd_remaining": -0.1}},
+    {"quota_headers": {"daily_usd_limit": 10 ** 400}},
+    {"quota_headers": {"daily_reset_unix": "1792105200"}},
+])
+def test_parent_revalidates_optional_metadata_strict_types_and_finite_bounds(extra):
+    metadata = {"status": 200, "body_size": 2, "content_type": "application/json", **extra}
+    with pytest.raises(transport.RemoteTransportError) as error:
+        transport._decode_response(json.dumps(metadata).encode() + b"\n{}", 1024)
+    assert error.value.code == "protocol"
