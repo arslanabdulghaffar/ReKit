@@ -218,6 +218,33 @@ def test_configuration_requires_pinned_revisions_and_bounded_scalar_metadata(fie
         InferenceConfiguration.model_validate({**configuration(), field: value})
 
 
+def test_shared_service_null_revisions_are_explicit_and_survive_serialization():
+    values = configuration() | {
+        "provider": "amd-tokenfactory", "device": "remote",
+        "model_revision": None, "processor_revision": None,
+        "runtime": {"revision_verification": "shared_service_unattested", "remote_runtime": "unknown"},
+    }
+    admitted = InferenceConfiguration.model_validate(values)
+    assert admitted.model_revision is None and admitted.processor_revision is None
+    assert InferenceConfiguration.model_validate_json(admitted.model_dump_json()) == admitted
+
+
+@pytest.mark.parametrize("changes", [
+    {"provider": "local-transformers"}, {"provider": "openai-remote"}, {"provider": "unrecognized-service"},
+    {"model_revision": "a" * 40}, {"processor_revision": "b" * 40},
+    {"model_revision": "a" * 40, "processor_revision": "b" * 40},
+    {"device": "cuda:1"}, {"runtime": {"revision_verification": "not_attested_by_response"}},
+])
+def test_shared_revision_exception_cannot_weaken_local_generic_or_claim_pins(changes):
+    values = configuration() | {
+        "provider": "amd-tokenfactory", "device": "remote",
+        "model_revision": None, "processor_revision": None,
+        "runtime": {"revision_verification": "shared_service_unattested"},
+    }
+    with pytest.raises(ValidationError):
+        InferenceConfiguration.model_validate(values | changes)
+
+
 @pytest.mark.parametrize("status", ["failed", "unavailable", "timed_out", "invalid_output"])
 def test_non_success_outcomes_require_reason_without_validated_output_or_applied_events(status):
     assert outcome(status=status, output=None, failure_reason="Explicit execution failure.").status == status

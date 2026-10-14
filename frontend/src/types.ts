@@ -52,7 +52,8 @@ export interface InspectionOutput {
 }
 export type JsonScalar = string | number | boolean | null;
 export interface InferenceConfiguration {
-  provider: string; model_repository: string; model_revision: string; processor_revision: string;
+  // The backend permits null revisions only for the unattested TokenFactory service.
+  provider: string; model_repository: string; model_revision: string | null; processor_revision: string | null;
   runtime: Record<string, string>; device: string; prompt_version: string;
   preprocessing: Record<string, JsonScalar>; generation: Record<string, JsonScalar>;
 }

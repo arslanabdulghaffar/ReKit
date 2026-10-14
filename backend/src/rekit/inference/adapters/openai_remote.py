@@ -8,6 +8,7 @@ import os
 import re
 import threading
 import time
+from typing import Literal
 from urllib.parse import urlsplit
 import warnings
 
@@ -27,13 +28,23 @@ from rekit.inference.adapters.remote_transport import RemoteTransportError, post
 MAX_IMAGE_BYTES = 10 * 1024**2
 MAX_REQUEST_BYTES = 30 * 1024**2
 PROVIDER = "openai-remote"
+TOKENFACTORY_PROVIDER = "amd-tokenfactory"
+TOKENFACTORY_BASE = "https://developer.amd.com.cn/radeon/api/v1"
+TOKENFACTORY_ENDPOINT = TOKENFACTORY_BASE + "/chat/completions"
+TOKENFACTORY_MIMO_MODEL = "MiMo-V2.6-Flash"
 PROMPT_VERSION = "rekit-remote-inspection-v1"
 
 
-def _endpoint(base_url: str) -> str:
-    """Use only a canonical HTTPS /v1 base; no URL/path comes from an operator."""
+def _endpoint(base_url: str, provider: str = PROVIDER) -> str:
+    """Canonical /v1 for generic serving, or one exact shared-service destination."""
     if not isinstance(base_url, str) or len(base_url) > 2048:
         raise ValueError("Invalid remote base URL")
+    if provider == TOKENFACTORY_PROVIDER:
+        if base_url != TOKENFACTORY_BASE:
+            raise ValueError("AMD TokenFactory requires its exact trusted HTTPS base URL")
+        return TOKENFACTORY_ENDPOINT
+    if provider != PROVIDER:
+        raise ValueError("Unknown remote inference provider")
     try:
         parsed = urlsplit(base_url)
         port = parsed.port
@@ -53,26 +64,34 @@ def _endpoint(base_url: str) -> str:
 
 
 class RemoteVisionSettings(BaseModel):
-    """Trusted process settings; immutable revisions come from a deployment manifest."""
+    """Trusted settings; the shared-service exception never invents deployment pins."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, hide_input_in_errors=True)
+    provider: Literal["openai-remote", "amd-tokenfactory"] = PROVIDER
     base_url: str
     allowed_endpoints: tuple[str, ...] = Field(min_length=1, max_length=8)
     api_key: SecretStr = Field(repr=False)
     model_id: str = Field(min_length=1, max_length=256)
-    model_revision: Revision
-    processor_revision: Revision
+    model_revision: Revision | None
+    processor_revision: Revision | None
     max_images: int = Field(default=2, ge=1, le=2)
     timeout_seconds: float = Field(default=120.0, ge=1, le=120)
     max_response_bytes: int = Field(default=128 * 1024, ge=1024, le=128 * 1024)
 
     @model_validator(mode="after")
     def trusted_destination(self):
-        endpoint = _endpoint(self.base_url)
+        endpoint = _endpoint(self.base_url, self.provider)
+        if self.provider == TOKENFACTORY_PROVIDER:
+            if self.allowed_endpoints != (TOKENFACTORY_ENDPOINT,):
+                raise ValueError("AMD TokenFactory requires its single exact chat endpoint allowlist")
+            if self.model_revision is not None or self.processor_revision is not None:
+                raise ValueError("Shared TokenFactory weights and processor revisions must be explicitly unattested")
+        elif self.model_revision is None or self.processor_revision is None:
+            raise ValueError("Generic remote inference requires pinned model and processor revisions")
         if endpoint not in self.allowed_endpoints or len(set(self.allowed_endpoints)) != len(self.allowed_endpoints):
             raise ValueError("Remote destination is not explicitly allowlisted")
         for allowed in self.allowed_endpoints:
-            if not allowed.endswith("/chat/completions") or _endpoint(allowed[:-17]) != allowed:
+            if not allowed.endswith("/chat/completions") or _endpoint(allowed[:-17], self.provider) != allowed:
                 raise ValueError("Allowlist entries must be exact HTTPS chat completion endpoints")
         key = self.api_key.get_secret_value()
         if not 1 <= len(key) <= 4096 or any(ord(c) < 33 or ord(c) > 126 for c in key):
@@ -83,18 +102,22 @@ class RemoteVisionSettings(BaseModel):
 
     @property
     def endpoint(self) -> str:
-        return _endpoint(self.base_url)
+        return _endpoint(self.base_url, self.provider)
 
     @classmethod
     def from_environment(cls):
         try:
+            provider = os.environ.get("REKIT_INFERENCE_PROVIDER", PROVIDER)
+            model_revision = os.environ.get("REKIT_INFERENCE_MODEL_REVISION", "")
+            processor_revision = os.environ.get("REKIT_INFERENCE_PROCESSOR_REVISION", "")
             return cls(
+                provider=provider,
                 base_url=os.environ.get("REKIT_INFERENCE_BASE_URL", ""),
                 allowed_endpoints=tuple(os.environ.get("REKIT_INFERENCE_ALLOWED_ENDPOINTS", "").split(",")),
                 api_key=SecretStr(os.environ.get("REKIT_INFERENCE_API_KEY", "")),
                 model_id=os.environ.get("REKIT_INFERENCE_MODEL", ""),
-                model_revision=os.environ.get("REKIT_INFERENCE_MODEL_REVISION", ""),
-                processor_revision=os.environ.get("REKIT_INFERENCE_PROCESSOR_REVISION", ""),
+                model_revision=None if provider == TOKENFACTORY_PROVIDER and model_revision == "" else model_revision,
+                processor_revision=None if provider == TOKENFACTORY_PROVIDER and processor_revision == "" else processor_revision,
                 max_images=int(os.environ.get("REKIT_INFERENCE_MAX_IMAGES", "2")),
                 timeout_seconds=float(os.environ.get("REKIT_INFERENCE_TIMEOUT_SECONDS", "120")),
             )
@@ -160,6 +183,35 @@ def _contains_secret(value, secret: str) -> bool:
     return False
 
 
+def _usage_metrics(envelope: dict) -> dict[str, int]:
+    """Retain only bounded provider-reported token counters, never arbitrary fields."""
+    usage = envelope.get("usage")
+    if usage is None:
+        return {}
+    if not isinstance(usage, dict):
+        raise ValueError("Invalid provider usage metadata")
+    result = {}
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        if key in usage:
+            value = usage[key]
+            if type(value) is not int or not 0 <= value <= 2**63 - 1:
+                raise ValueError("Invalid provider usage counter")
+            result[f"usage_{key}"] = value
+    for parent, key in (("completion_tokens_details", "reasoning_tokens"),
+                        ("prompt_tokens_details", "cached_tokens"), ("prompt_tokens_details", "image_tokens")):
+        detail = usage.get(parent)
+        if detail is None:
+            continue
+        if not isinstance(detail, dict):
+            raise ValueError("Invalid provider usage detail")
+        if key in detail:
+            value = detail[key]
+            if type(value) is not int or not 0 <= value <= 2**63 - 1:
+                raise ValueError("Invalid provider usage counter")
+            result[f"usage_{key}"] = value
+    return result
+
+
 class OpenAICompatibleVision:
     """No retries, model substitution, implicit URL fetching, or inventory access."""
 
@@ -168,15 +220,17 @@ class OpenAICompatibleVision:
         self._transport = transport
         self._prompt = _inspection_prompt(catalog)
         self._allow_candidates = catalog is not None
+        self._reasoning_effort = "none" if settings.provider == TOKENFACTORY_PROVIDER and settings.model_id == TOKENFACTORY_MIMO_MODEL else None
         self._lock = threading.Lock()
         self._state = "configured"
         self._configuration = InferenceConfiguration(
-            provider=PROVIDER, model_repository=settings.model_id,
+            provider=settings.provider, model_repository=settings.model_id,
             model_revision=settings.model_revision, processor_revision=settings.processor_revision,
             device="remote", prompt_version=PROMPT_VERSION,
             runtime={"protocol": "openai-chat-completions-v1", "remote_runtime": "unknown",
-                     "hardware_verification": "unverified", "revision_source": "server_configuration",
-                     "revision_verification": "not_attested_by_response",
+                     "hardware_verification": "unverified",
+                     "revision_source": "not_provided_by_shared_service" if settings.provider == TOKENFACTORY_PROVIDER else "server_configuration",
+                     "revision_verification": "shared_service_unattested" if settings.provider == TOKENFACTORY_PROVIDER else "not_attested_by_response",
                      "endpoint_sha256": hashlib.sha256(settings.endpoint.encode()).hexdigest()},
             preprocessing={"transport": "original_bytes_base64", "max_images": settings.max_images,
                            "remote_preprocessing": "unknown", "input_attribution": "client_encoded_original_bytes",
@@ -185,7 +239,8 @@ class OpenAICompatibleVision:
                         "decoding": "json-schema-request", "schema_version": SCHEMA_VERSION,
                         "schema_sha256_1": schema_digest(inspection_schema(1, allow_candidates=self._allow_candidates)),
                         "schema_sha256_2": schema_digest(inspection_schema(2, allow_candidates=self._allow_candidates)),
-                        "identity_candidates_allowed": self._allow_candidates, "remote_schema_enforcement": "unverified"},
+                        "identity_candidates_allowed": self._allow_candidates, "remote_schema_enforcement": "unverified",
+                        **({"reasoning_effort": self._reasoning_effort} if self._reasoning_effort is not None else {})},
         )
 
     @property
@@ -211,6 +266,7 @@ class OpenAICompatibleVision:
             schema = inspection_schema(len(images), allow_candidates=self._allow_candidates)
             payload = json.dumps({
                 "model": self._settings.model_id, "stream": False, "temperature": 0, "max_tokens": 512,
+                **({"reasoning_effort": self._reasoning_effort} if self._reasoning_effort is not None else {}),
                 "messages": [{"role": "user", "content": [*content, {"type": "text", "text": self._prompt}]}],
                 "response_format": {"type": "json_schema", "json_schema": {
                     "name": "rekit_inspection", "strict": True, "schema": schema}},
@@ -266,6 +322,7 @@ class OpenAICompatibleVision:
                 raw = message["content"]
                 if not isinstance(raw, str) or not 0 < len(raw) <= MAX_OUTPUT_CHARACTERS:
                     raise ValueError("Missing or oversized model text")
+                usage = _usage_metrics(envelope)
             except (ValueError, TypeError, KeyError, AttributeError, RecursionError):
                 raise VisionInvalidOutput("Remote JSON, model identity, or completion envelope is invalid") from None
             try:
@@ -276,14 +333,15 @@ class OpenAICompatibleVision:
             if time.monotonic() - started >= self._settings.timeout_seconds:
                 raise VisionTimeout("The remote request deadline expired during validation")
             self._state = "ready"
-            return {"status": "succeeded", "text": raw, "provider": PROVIDER,
+            return {"status": "succeeded", "text": raw, "provider": self._settings.provider,
                     "model_repository": self._settings.model_id, "model_revision": self._settings.model_revision,
                     "device": "remote", "runtime": self._configuration.runtime.copy(),
                     "metrics": {"input_sha256": [hashlib.sha256(raw_image).hexdigest() for raw_image in images],
                                 "request_bytes": len(payload), "response_bytes": len(response.body),
                                 "transport_seconds": time.monotonic() - started,
                                 "decoding": "json-schema-request", "schema_version": SCHEMA_VERSION,
-                                "schema_sha256": schema_digest(schema), "response_model_id_matched": True}}
+                                "schema_sha256": schema_digest(schema), "response_model_id_matched": True,
+                                "response_model_id": envelope["model"], "finish_reason": "stop", **usage}}
         except VisionUnavailable:
             self._state = "unavailable"
             raise

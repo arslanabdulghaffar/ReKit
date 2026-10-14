@@ -157,7 +157,7 @@ try {
     }
     $ancestor = Get-Item -LiteralPath $varPath -Force
     while ($null -ne $ancestor) {
-        if (-not $ancestor.PSIsContainer -or ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        if ($ancestor -isnot [IO.DirectoryInfo] -or ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
             throw 'Qualification ancestors must be real directories, not reparse points.'
         }
         $ancestor = $ancestor.Parent

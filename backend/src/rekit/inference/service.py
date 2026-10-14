@@ -112,7 +112,7 @@ class InferenceService:
             if isinstance(raw_output, str):
                 diagnostic_raw = raw_output[:MAX_OUTPUT_CHARACTERS]
             config = run.start.configuration
-            if any(result.get(key) != getattr(config, key)
+            if any(key not in result or result[key] != getattr(config, key)
                    for key in ("provider", "model_repository", "model_revision", "device")):
                 raise ValueError("Inference provider provenance did not match the admitted configuration")
             if (result.get("metrics", {}).get("input_sha256") != [item.sha256 for item in run.start.inputs]

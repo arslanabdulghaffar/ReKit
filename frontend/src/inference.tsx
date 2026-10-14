@@ -11,6 +11,10 @@ export interface InferencePanelProps {
 }
 type AnalyzeBody = { request_id: string; asset_ids: string[]; expected_version: number };
 
+const revisionLabel = (provider: string | null | undefined, revision: string | null | undefined) =>
+  provider === 'amd-tokenfactory' ? 'Weight/processor revision not attested by shared service'
+    : `${provider === 'openai-remote' ? 'Configured revision' : 'Revision'} ${revision ?? 'unknown'}`;
+
 export function InferencePanel({ api, actor, componentId, history, assets, locked, catalog, onUpdated, onProposal }: InferencePanelProps) {
   const [status, setStatus] = useState<InferenceStatus | null>(null);
   const [runs, setRuns] = useState<InferenceRun[]>([]);
@@ -27,8 +31,10 @@ export function InferencePanel({ api, actor, componentId, history, assets, locke
   const scope = useRef(0);
   const updated = useRef(onUpdated); updated.current = onUpdated;
   const run = runs.find(item => item.start.run_id === runId) ?? null;
-  const remoteStatus = status?.provider === 'openai-remote';
-  const remoteRun = run?.start.configuration.provider === 'openai-remote';
+  const tokenFactoryStatus = status?.provider === 'amd-tokenfactory';
+  const tokenFactoryRun = run?.start.configuration.provider === 'amd-tokenfactory';
+  const remoteStatus = status?.provider === 'openai-remote' || tokenFactoryStatus;
+  const remoteRun = run?.start.configuration.provider === 'openai-remote' || tokenFactoryRun;
   const reviewer = can(actor, 'reviewer');
   const outcome = run?.outcome;
   const historical = !!run && (!!outcome?.stale || history.current.version > (outcome?.evidence_version_after ?? run.start.evidence_version));
@@ -193,7 +199,8 @@ export function InferencePanel({ api, actor, componentId, history, assets, locke
   const canAnalyze = reviewer && !locked && !busy && !loading && !status?.busy && !pending && !!status?.provider && selected.length >= 1 && selected.length <= 2 && !retry;
   return <Section eyebrow="2 · UNVERIFIED AI SUGGESTIONS" title="AI-assisted inspection" aside={<Badge value={loading ? 'checking' : status?.status ?? 'unknown'} />}>
     <p>AI output is unverified. Compare each claim with its images and uncertainty. Only explicit human verification can establish an eligible identity.</p>
-    {status?.model_repository && <div className="context-line"><strong>{status.model_repository}</strong><span>{status.provider} · {status.device}</span><code>{remoteStatus ? 'Configured revision' : 'Revision'} {status.model_revision}</code></div>}
+    {status?.model_repository && <div className="context-line"><strong>{status.model_repository}</strong><span>{status.provider} · {status.device}</span><code>{revisionLabel(status.provider, status.model_revision)}</code></div>}
+    {(tokenFactoryStatus || tokenFactoryRun) && <Notice>AMD TokenFactory is a shared remote service. Weight and processor revisions are not attested by the shared service. Its GPU model and server runtime remain unverified.</Notice>}
     {(remoteStatus || remoteRun) && <Notice>Remote responses are checked for the configured model ID. The response does not verify deployed weights, runtime, or AMD hardware.</Notice>}
     {status?.status === 'unavailable' && <Notice>AI image analysis is unavailable. Continue manual inspection and human verification below; no AI fallback is used.</Notice>}
     {status?.status === 'unavailable' && status.provider !== null && <Notice>A provider is configured. You may select images and choose Analyze images to attempt inspection again. The request can still fail; no result is assumed.</Notice>}
@@ -218,7 +225,7 @@ export function InferencePanel({ api, actor, componentId, history, assets, locke
     {runs.length > 1 && <Field label="Inspection run"><select value={runId} disabled={busy} onChange={event => { setRunId(event.target.value); setReason(''); setIdlePending(!runs.find(item => item.start.run_id === event.target.value)?.outcome && !status?.busy); }}>{runs.map(item => <option key={item.start.run_id} value={item.start.run_id}>{dateTime(item.start.started_at)} · {item.outcome?.status ?? 'pending'} · {item.start.run_id}</option>)}</select></Field>}
     {run && <div className="inference-result">
       <div className="context-line"><Badge value={outcome?.status ?? 'pending'} /><Badge value="unverified" /><code>{run.start.run_id}</code><span>Input evidence version {run.start.evidence_version}</span></div>
-      <p className="muted">Run model: {run.start.configuration.model_repository} · {run.start.configuration.provider} · {run.start.configuration.device} · {remoteRun ? 'Configured revision' : 'Revision'} <code>{run.start.configuration.model_revision}</code></p>
+      <p className="muted">Run model: {run.start.configuration.model_repository} · {run.start.configuration.provider} · {run.start.configuration.device} · {tokenFactoryRun ? <span>{revisionLabel(run.start.configuration.provider, run.start.configuration.model_revision)}</span> : <>{remoteRun ? 'Configured revision' : 'Revision'} <code>{run.start.configuration.model_revision}</code></>}</p>
       {historical && <Notice danger>Stale or historical inspection. {outcome?.stale_reason ?? 'Newer component evidence exists.'} This output cannot prefill or replace the current human decision.</Notice>}
       {rejected.map(event => <Notice key={event.event_id}>{String(event.payload.reason)}</Notice>)}
       {outcome?.failure_reason && <Notice danger>{outcome.failure_reason} Continue manual inspection, or retry with a new request when the provider is ready.</Notice>}

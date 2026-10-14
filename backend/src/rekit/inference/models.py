@@ -34,8 +34,8 @@ class InputAsset(CatalogModel):
 class InferenceConfiguration(CatalogModel):
     provider: Identifier
     model_repository: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=256, pattern=r"^\S(?:.*\S)?$")]
-    model_revision: Revision
-    processor_revision: Revision
+    model_revision: Revision | None
+    processor_revision: Revision | None
     runtime: Annotated[
         dict[Identifier, Annotated[str, StringConstraints(strict=True, min_length=1, max_length=512, pattern=r"\S")]],
         Field(min_length=1, max_length=32),
@@ -44,6 +44,17 @@ class InferenceConfiguration(CatalogModel):
     prompt_version: Identifier
     preprocessing: ScalarMap = Field(min_length=1)
     generation: ScalarMap = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def explicit_revision_provenance(self) -> Self:
+        if self.provider == "amd-tokenfactory":
+            if (self.model_revision is not None or self.processor_revision is not None
+                    or self.device != "remote"
+                    or self.runtime.get("revision_verification") != "shared_service_unattested"):
+                raise ValueError("AMD TokenFactory shared inference requires explicit unattested null revisions and a remote device")
+        elif self.model_revision is None or self.processor_revision is None:
+            raise ValueError("Local and generic remote inference require pinned model and processor revisions")
+        return self
 
 
 class InspectionRequest(CatalogModel):

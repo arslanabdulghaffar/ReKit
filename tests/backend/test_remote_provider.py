@@ -38,6 +38,14 @@ def settings(**changes):
     } | changes))
 
 
+def tokenfactory_settings(**changes):
+    return settings(**({
+        "provider": "amd-tokenfactory", "base_url": remote.TOKENFACTORY_BASE,
+        "allowed_endpoints": (remote.TOKENFACTORY_ENDPOINT,),
+        "model_revision": None, "processor_revision": None,
+    } | changes))
+
+
 def envelope(raw=None):
     return {"model": MODEL, "choices": [{"index": 0, "finish_reason": "stop", "message": {
         "role": "assistant", "content": json.dumps(OUTPUT) if raw is None else raw,
@@ -159,6 +167,7 @@ def test_settings_fail_closed_without_exposing_input_values(changes):
 
 def test_settings_environment_and_forged_instance_are_revalidated(monkeypatch):
     values = {
+        "REKIT_INFERENCE_PROVIDER": "openai-remote",
         "REKIT_INFERENCE_BASE_URL": BASE, "REKIT_INFERENCE_ALLOWED_ENDPOINTS": ENDPOINT,
         "REKIT_INFERENCE_API_KEY": TOKEN, "REKIT_INFERENCE_MODEL": MODEL,
         "REKIT_INFERENCE_MODEL_REVISION": "a" * 40, "REKIT_INFERENCE_PROCESSOR_REVISION": "b" * 40,
@@ -173,6 +182,129 @@ def test_settings_environment_and_forged_instance_are_revalidated(monkeypatch):
     assert TOKEN not in str(caught.value)
     with pytest.raises(ValidationError):
         OpenAICompatibleVision(settings().model_copy(update={"base_url": "http://untrusted.invalid/v1"}), transport=Transport())
+
+
+@pytest.mark.parametrize("base", [
+    "https://other.example.test/radeon/api/v1", "https://developer.amd.com.cn/v1",
+    "https://developer.amd.com.cn/radeon/api/v1/", "https://developer.amd.com.cn:443/radeon/api/v1",
+    "https://developer.amd.com.cn.evil.test/radeon/api/v1", "https://Developer.amd.com.cn/radeon/api/v1",
+    "https://developer.amd.com.cn/radeon/api/v1?x=1", "https://developer.amd.com.cn/radeon/api/v1#fragment",
+    "https://developer.amd.com.cn/radeon/%61pi/v1", "https://developer.amd.com.cn/radeon/api/v1/../v1",
+    "http://developer.amd.com.cn/radeon/api/v1", "https://fixture:invalid@developer.amd.com.cn/radeon/api/v1",
+])
+def test_tokenfactory_path_exception_is_one_exact_trusted_destination(base):
+    with pytest.raises(ValidationError):
+        tokenfactory_settings(base_url=base, allowed_endpoints=(base + "/chat/completions",))
+
+
+@pytest.mark.parametrize("changes", [
+    {"allowed_endpoints": (ENDPOINT,)},
+    {"allowed_endpoints": (remote.TOKENFACTORY_ENDPOINT, ENDPOINT)},
+    {"model_revision": "a" * 40}, {"processor_revision": "b" * 40},
+    {"model_revision": "unknown"}, {"processor_revision": "shared"},
+])
+def test_tokenfactory_never_accepts_another_allowlist_or_invented_revision(changes):
+    with pytest.raises(ValidationError) as caught:
+        tokenfactory_settings(**changes)
+    assert TOKEN not in str(caught.value)
+
+
+def test_generic_provider_does_not_inherit_shared_endpoint_or_null_revision_exception():
+    for changes in ({"base_url": remote.TOKENFACTORY_BASE, "allowed_endpoints": (remote.TOKENFACTORY_ENDPOINT,)},
+                    {"model_revision": None}, {"processor_revision": None}):
+        with pytest.raises(ValidationError):
+            settings(**changes)
+
+
+def test_tokenfactory_environment_is_explicit_and_rejects_leftover_generic_pins(monkeypatch):
+    values = {
+        "REKIT_INFERENCE_PROVIDER": "amd-tokenfactory", "REKIT_INFERENCE_BASE_URL": remote.TOKENFACTORY_BASE,
+        "REKIT_INFERENCE_ALLOWED_ENDPOINTS": remote.TOKENFACTORY_ENDPOINT,
+        "REKIT_INFERENCE_API_KEY": TOKEN, "REKIT_INFERENCE_MODEL": MODEL,
+    }
+    for key, value in values.items():
+        monkeypatch.setenv(key, value)
+    for key in ("REKIT_INFERENCE_MODEL_REVISION", "REKIT_INFERENCE_PROCESSOR_REVISION",
+                "REKIT_INFERENCE_MAX_IMAGES", "REKIT_INFERENCE_TIMEOUT_SECONDS"):
+        monkeypatch.delenv(key, raising=False)
+    assert RemoteVisionSettings.from_environment() == tokenfactory_settings()
+    monkeypatch.setenv("REKIT_INFERENCE_MODEL_REVISION", "a" * 40)
+    with pytest.raises(RuntimeError) as caught:
+        RemoteVisionSettings.from_environment()
+    assert TOKEN not in str(caught.value)
+
+
+@pytest.mark.parametrize("count", [1, 2])
+def test_tokenfactory_keeps_original_bytes_schema_and_unattested_provenance(count, image_bytes):
+    transport = Transport()
+    provider = OpenAICompatibleVision(tokenfactory_settings(), transport=transport)
+    originals = [image_bytes(color=color) for color in ("red", "blue")[:count]]
+    config = provider.configuration
+    assert config.provider == "amd-tokenfactory"
+    assert config.model_revision is None and config.processor_revision is None
+    assert config.runtime["revision_verification"] == "shared_service_unattested"
+    assert config.runtime["remote_runtime"] == "unknown"
+    assert config.runtime["hardware_verification"] == "unverified"
+    assert transport.calls == []
+    result = provider.inspect(originals)
+    assert result["provider"] == "amd-tokenfactory" and result["model_revision"] is None
+    assert result["device"] == "remote"
+    assert result["text"] == json.dumps(OUTPUT)
+    assert result["metrics"]["input_sha256"] == [hashlib.sha256(raw).hexdigest() for raw in originals]
+    assert "vision_forward_calls" not in result["metrics"]
+    assert len(transport.calls) == 1
+    endpoint, _, payload, _ = transport.calls[0]
+    assert endpoint == remote.TOKENFACTORY_ENDPOINT
+    sent = json.loads(payload)
+    assert [base64.b64decode(item["image_url"]["url"].split(",", 1)[1])
+            for item in sent["messages"][0]["content"][:-1]] == originals
+    assert sent["response_format"]["json_schema"]["strict"] is True
+    assert sent["response_format"]["json_schema"]["schema"] == inspection_schema(count, allow_candidates=False)
+    assert TOKEN not in json.dumps(result)
+
+
+def test_remote_usage_retains_only_bounded_provider_reported_counters(image_bytes):
+    payload = envelope()
+    payload["usage"] = {"prompt_tokens": 21, "completion_tokens": 13, "total_tokens": 34,
+                        "completion_tokens_details": {"reasoning_tokens": 0},
+                        "prompt_tokens_details": {"cached_tokens": 4, "image_tokens": 8},
+                        "account_email": "private fixture metadata must not be retained"}
+    result = OpenAICompatibleVision(tokenfactory_settings(), transport=Transport(response(payload))).inspect([image_bytes()])
+    assert {key: value for key, value in result["metrics"].items() if key.startswith("usage_")} == {
+        "usage_prompt_tokens": 21, "usage_completion_tokens": 13, "usage_total_tokens": 34,
+        "usage_reasoning_tokens": 0, "usage_cached_tokens": 4, "usage_image_tokens": 8,
+    }
+    assert result["metrics"]["response_model_id"] == MODEL
+    assert "account_email" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("shared,model", [
+    (True, "MiMo-V2.6-Flash"), (False, "MiMo-V2.6-Flash"), (True, MODEL),
+])
+def test_reasoning_none_is_only_requested_for_documented_mimo_shared_profile(shared, model, image_bytes):
+    payload = envelope() | {"model": model}
+    transport = Transport(response(payload))
+    config = tokenfactory_settings(model_id=model) if shared else settings(model_id=model)
+    provider = OpenAICompatibleVision(config, transport=transport)
+    provider.inspect([image_bytes()])
+    sent = json.loads(transport.calls[0][2])
+    expected = "none" if shared and model == "MiMo-V2.6-Flash" else None
+    assert sent.get("reasoning_effort") == expected
+    assert provider.configuration.generation.get("reasoning_effort") == expected
+    if expected is None:
+        assert "reasoning_effort" not in sent
+
+
+@pytest.mark.parametrize("usage", [
+    "unexpected", {"prompt_tokens": True}, {"completion_tokens": -1}, {"total_tokens": 2**63},
+    {"prompt_tokens": 1.5}, {"completion_tokens_details": {"reasoning_tokens": "2"}},
+    {"prompt_tokens_details": {"image_tokens": True}},
+])
+def test_remote_invalid_usage_is_not_silently_converted_to_a_measurement(usage, image_bytes):
+    payload = envelope() | {"usage": usage}
+    with pytest.raises(VisionInvalidOutput) as caught:
+        OpenAICompatibleVision(tokenfactory_settings(), transport=Transport(response(payload))).inspect([image_bytes()])
+    assert caught.value.raw_output is None
 
 
 @pytest.mark.parametrize("invalid", ["empty", "three", "tuple", "invalid_bytes", "gif", "oversized"])

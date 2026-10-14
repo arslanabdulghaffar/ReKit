@@ -699,18 +699,22 @@ class RemoteHttpDouble:
         return HttpResponse(status=self.status, body=body, content_type="application/json")
 
 
-@pytest.fixture
-def remote_workflow(workflow):
+@pytest.fixture(params=["openai-remote", "amd-tokenfactory"])
+def remote_workflow(workflow, request):
     from pydantic import SecretStr
-    from rekit.inference.adapters.openai_remote import OpenAICompatibleVision, RemoteVisionSettings
+    from rekit.inference.adapters.openai_remote import (
+        OpenAICompatibleVision, RemoteVisionSettings, TOKENFACTORY_BASE, TOKENFACTORY_ENDPOINT,
+    )
 
     workflow.service.close()
     transport = RemoteHttpDouble()
+    shared = request.param == "amd-tokenfactory"
     settings = RemoteVisionSettings(
-        base_url="https://vision.example.test/v1",
-        allowed_endpoints=("https://vision.example.test/v1/chat/completions",),
+        provider=request.param,
+        base_url=TOKENFACTORY_BASE if shared else "https://vision.example.test/v1",
+        allowed_endpoints=(TOKENFACTORY_ENDPOINT if shared else "https://vision.example.test/v1/chat/completions",),
         api_key=SecretStr(transport.token), model_id=transport.model_id,
-        model_revision="c" * 40, processor_revision="d" * 40,
+        model_revision=None if shared else "c" * 40, processor_revision=None if shared else "d" * 40,
     )
     workflow.provider = OpenAICompatibleVision(settings, workflow.evidence.catalog, transport=transport)
     workflow.service = InferenceService(workflow.store, workflow.provider, timeout_seconds=5)
@@ -743,7 +747,7 @@ def test_remote_api_original_bytes_and_unverified_inventory_boundary(remote_work
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=workflow.app), base_url="http://testserver",
                                      headers=headers(workflow)) as client:
             status = checked(await client.get("/inference/status"))
-            assert status["provider"] == "openai-remote"
+            assert status["provider"] == workflow.provider.configuration.provider
             assert status["device"] == "remote"
             accepted = checked(await client.post(f"/components/{workflow.component_id}/inference",
                                                  json=command(workflow, asset_ids=asset_ids)), 202)
@@ -756,7 +760,12 @@ def test_remote_api_original_bytes_and_unverified_inventory_boundary(remote_work
             assert [entry["sha256"] for entry in run["start"]["inputs"]] == [hashlib.sha256(raw).hexdigest() for raw in original_bytes]
             config = run["start"]["configuration"]
             metrics = run["outcome"]["metrics"]
-            assert config["runtime"]["revision_verification"] == "not_attested_by_response"
+            shared = config["provider"] == "amd-tokenfactory"
+            assert config["runtime"]["revision_verification"] == ("shared_service_unattested" if shared else "not_attested_by_response")
+            assert (config["model_revision"], config["processor_revision"]) == ((None, None) if shared else ("c" * 40, "d" * 40))
+            provider_status = checked(await client.get("/inference/status"))
+            assert provider_status["provider"] == config["provider"]
+            assert provider_status["model_revision"] == config["model_revision"]
             assert metrics["runtime_hardware_verification"] == "unverified"
             assert metrics["response_model_id_matched"] is True
             assert metrics["schema_sha256"] == config["generation"][f"schema_sha256_{image_count}"]
@@ -820,7 +829,7 @@ def test_remote_api_failures_preserve_evidence_and_sanitize_diagnostics(remote_w
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("tamper", ["provider", "input_sha256", "schema_sha256"])
+@pytest.mark.parametrize("tamper", ["provider", "input_sha256", "schema_sha256", "missing_model_revision"])
 def test_remote_api_rejects_tampered_execution_provenance(remote_workflow, monkeypatch, tamper):
     workflow = remote_workflow
     inspect = workflow.provider.inspect
@@ -829,6 +838,7 @@ def test_remote_api_rejects_tampered_execution_provenance(remote_workflow, monke
         result = inspect(images)
         if tamper == "provider": result["provider"] = "local-transformers"
         elif tamper == "input_sha256": result["metrics"][tamper] = ["0" * 64]
+        elif tamper == "missing_model_revision": del result["model_revision"]
         else: result["metrics"][tamper] = "0" * 64
         return result
 
@@ -893,7 +903,8 @@ def test_remote_configuration_cannot_be_supplied_by_api_client(remote_workflow, 
     asyncio.run(scenario())
 
 
-def test_remote_factory_uses_only_explicit_trusted_server_configuration(workflow, tmp_path, monkeypatch):
+@pytest.mark.parametrize("provider", ["openai-remote", "amd-tokenfactory"])
+def test_remote_factory_uses_only_explicit_trusted_server_configuration(workflow, tmp_path, monkeypatch, provider):
     from rekit.inference.adapters import openai_remote
 
     auth_path = tmp_path / "remote-factory-auth.json"
@@ -909,6 +920,10 @@ def test_remote_factory_uses_only_explicit_trusted_server_configuration(workflow
         "REKIT_INFERENCE_MODEL_REVISION": "c" * 40, "REKIT_INFERENCE_PROCESSOR_REVISION": "d" * 40,
         "REKIT_INFERENCE_TIMEOUT_SECONDS": "20", "REKIT_INFERENCE_MAX_IMAGES": "2",
     }
+    if provider == "amd-tokenfactory":
+        values.update(REKIT_INFERENCE_PROVIDER=provider, REKIT_INFERENCE_BASE_URL=openai_remote.TOKENFACTORY_BASE,
+                      REKIT_INFERENCE_ALLOWED_ENDPOINTS=openai_remote.TOKENFACTORY_ENDPOINT,
+                      REKIT_INFERENCE_MODEL_REVISION="", REKIT_INFERENCE_PROCESSOR_REVISION="")
     for key, value in values.items(): monkeypatch.setenv(key, value)
     monkeypatch.delenv("REKIT_MODEL_DIR", raising=False)
     real_provider = openai_remote.OpenAICompatibleVision
@@ -926,7 +941,7 @@ def test_remote_factory_uses_only_explicit_trusted_server_configuration(workflow
         settings, catalog = constructions[0]
         assert catalog == workflow.evidence.catalog
         assert settings.api_key.get_secret_value() == transport.token
-        assert app.state.inference.provider.configuration.provider == "openai-remote"
+        assert app.state.inference.provider.configuration.provider == provider
         assert app.state.inference.timeout_seconds == 35
         assert transport.calls == []
     finally:

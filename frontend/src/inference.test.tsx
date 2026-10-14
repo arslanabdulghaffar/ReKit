@@ -130,6 +130,68 @@ describe('unverified inspection evidence', () => {
     expect(screen.getByText(/The response does not verify deployed weights, runtime, or AMD hardware/)).toBeInTheDocument()
   })
 
+  it.each(['configured', 'unavailable'] as const)('shows %s TokenFactory configuration without inventing revisions or a successful run', async status => {
+    const shared = { ...ready, status, provider: 'amd-tokenfactory', model_repository: 'controlled/shared-vision', model_revision: null, device: 'remote' }
+    const calls = transport([], undefined, shared)
+    const properties = props()
+    render(<InferencePanel {...properties} />)
+    expect(await screen.findByText('controlled/shared-vision')).toBeInTheDocument()
+    expect(screen.getByText('amd-tokenfactory · remote')).toBeInTheDocument()
+    expect(screen.getByText('Weight/processor revision not attested by shared service')).toBeInTheDocument()
+    expect(screen.getByText(/Its GPU model and server runtime remain unverified/)).toBeInTheDocument()
+    expect(screen.queryByText(/Configured revision|^Run model:|Analysis finished/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Analyze images' })).toBeDisabled()
+    if (status === 'unavailable') expect(screen.getByText(/no AI fallback is used/)).toBeInTheDocument()
+    expect(properties.onProposal).not.toHaveBeenCalled()
+    expect(calls.filter(call => call.method !== 'GET')).toEqual([])
+  })
+
+  it('preserves a TokenFactory run and source evidence as unverified with unattested revisions', async () => {
+    const shared = { ...ready, provider: 'amd-tokenfactory', model_repository: 'controlled/shared-vision', model_revision: null, device: 'remote' }
+    const run = completedRun()
+    Object.assign(run.start.configuration, { provider: shared.provider, model_repository: shared.model_repository,
+      device: shared.device, model_revision: null, processor_revision: null,
+      runtime: { revision_verification: 'shared_service_unattested', remote_runtime: 'unknown', hardware_verification: 'unverified' } })
+    const calls = transport([run], undefined, shared)
+    const properties = props()
+    const user = userEvent.setup()
+    render(<InferencePanel {...properties} />)
+    expect(await screen.findByText(/^Run model:/)).toHaveTextContent('controlled/shared-vision · amd-tokenfactory · remote · Weight/processor revision not attested by shared service')
+    expect(screen.getByText('Controlled blue housing observation.')).toBeInTheDocument()
+    expect(screen.getByText(/The response does not verify deployed weights, runtime, or AMD hardware/)).toBeInTheDocument()
+    await user.click(screen.getByText('Source images & run provenance'))
+    expect(screen.getAllByText(`SHA-256 ${assets[0].sha256}`)[0]).toBeVisible()
+    expect(screen.getAllByText(`SHA-256 ${assets[1].sha256}`)[0]).toBeVisible()
+    expect(screen.queryByText(/Configured revision/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Review proposal body A' })).toBeEnabled()
+    expect(properties.onProposal).not.toHaveBeenCalled()
+    expect(calls.filter(call => call.method !== 'GET')).toEqual([])
+  })
+
+  it('labels a historical TokenFactory run independently of the current pinned local provider', async () => {
+    const local = { ...ready, provider: 'local-transformers', device: 'cuda:1' }
+    const localRun = completedRun()
+    Object.assign(localRun.start.configuration, { provider: local.provider, device: local.device })
+    const sharedRun = completedRun()
+    sharedRun.start.run_id = 'historical-shared-run'
+    sharedRun.outcome!.run_id = sharedRun.start.run_id
+    Object.assign(sharedRun.start.configuration, { provider: 'amd-tokenfactory', device: 'remote',
+      model_revision: null, processor_revision: null,
+      runtime: { revision_verification: 'shared_service_unattested', remote_runtime: 'unknown', hardware_verification: 'unverified' } })
+    transport([localRun, sharedRun], undefined, local)
+    const user = userEvent.setup()
+    render(<InferencePanel {...props()} />)
+    const selector = await screen.findByRole('combobox', { name: /^Inspection run/ })
+    expect(screen.queryByText(/AMD TokenFactory is a shared remote service/)).not.toBeInTheDocument()
+    await user.selectOptions(selector, sharedRun.start.run_id)
+    expect(screen.getByText(`Revision ${local.model_revision}`)).toBeInTheDocument()
+    expect(screen.getByText(/^Run model:/)).toHaveTextContent('amd-tokenfactory · remote · Weight/processor revision not attested by shared service')
+    expect(screen.getByText(/AMD TokenFactory is a shared remote service/)).toBeInTheDocument()
+    await user.selectOptions(selector, localRun.start.run_id)
+    expect(screen.queryByText(/AMD TokenFactory is a shared remote service/)).not.toBeInTheDocument()
+    expect(screen.getByText(/^Run model:/)).toHaveTextContent(`local-transformers · cuda:1 · Revision ${local.model_revision}`)
+  })
+
   it('preserves local model revision wording without remote deployment notices', async () => {
     const local = { ...ready, provider: 'local-transformers', device: 'cuda:1' }
     const run = completedRun()

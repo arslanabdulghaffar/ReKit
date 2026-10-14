@@ -265,6 +265,9 @@ See the [release-readiness assessment](docs/release-readiness.md) and
 the remaining authorized deployment work.
 The [Mission 05 report](docs/reports/development-mission-05.md) records the final
 local tests, demonstrations, private submission assets and outstanding gates.
+Mission 06's [TokenFactory guide](docs/tokenfactory.md) covers the explicit
+shared-provider profile and mandatory key-rotation/image-transfer gate. Offline
+adapter support does not establish successful TokenFactory execution.
 
 Read [architecture](docs/architecture.md), [domain contracts](docs/domain-contracts.md),
 [evidence persistence](docs/evidence-provenance.md), [recovery planning](docs/recovery-planning.md),

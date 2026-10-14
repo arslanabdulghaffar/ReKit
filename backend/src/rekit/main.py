@@ -140,7 +140,7 @@ def create_configured_app() -> FastAPI:
         device = int(os.environ.get("REKIT_CUDA_DEVICE", "1"))
         inference = InferenceService(InferenceStore(evidence, assets),
                                      LocalVisionProvider(Path(model_dir), device=device, catalog=catalog))
-    elif provider_name == "openai-remote":
+    elif provider_name in ("openai-remote", "amd-tokenfactory"):
         from rekit.inference.adapters.openai_remote import OpenAICompatibleVision, RemoteVisionSettings
         from rekit.inference.store import InferenceStore
 
@@ -149,7 +149,7 @@ def create_configured_app() -> FastAPI:
                                      OpenAICompatibleVision(settings, catalog=catalog),
                                      timeout_seconds=settings.timeout_seconds + 15)
     elif provider_name != "disabled":
-        raise RuntimeError("REKIT_INFERENCE_PROVIDER must be disabled, local-transformers, or openai-remote")
+        raise RuntimeError("REKIT_INFERENCE_PROVIDER must be disabled, local-transformers, openai-remote, or amd-tokenfactory")
     return create_app(InventoryStore(evidence, policy), auth=auth, assets=assets, inference=inference)
 
 
