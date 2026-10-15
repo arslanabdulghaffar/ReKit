@@ -16,6 +16,7 @@ four-day horizon is a planning assumption, not a confirmed cutoff.
 
 | Completed and ready for review | Evidence |
 | --- | --- |
+| Current Block D preparation | [Block D report](reports/winning-quality-block-d.md): separate [seven-slide candidate](pitch-deck.md#block-d-candidate-for-owner-review), reproducible [economic sensitivity proposal](canonical-sensitivity-proposal.md), [reviewer handoff](block-d-reviewer-handoff.md), [capture/edit specification](block-d-capture-edit-specification.md), [AMD contingency research](amd-contingency-options.md) and [decision-aware evidence proposal](decision-aware-evidence-proposal.md). Runtime/UI and original evidence are unchanged; proposals need review before expansion. |
 | Working local implementation and synthetic recovery | Accepted checkpoint `86e970a`; 1,449 backend / 61 frontend tests, build, CPU recovery and browser replay passed. These are prior verified results, not new tests in this documentation review. |
 | Media/copy audit | All seven existing renders, cover, PPTX package, notes and description counts rechecked in the [asset audit](submission-asset-audit.md). Original deck and counted fields preserved. |
 | Concrete recording workflow | [Script](demo-script.md) and [workflow](demo-recording-workflow.md) now distinguish dated stills from fresh footage and identify immediate work, manual capture and AMD dependencies. |
@@ -29,11 +30,18 @@ four-day horizon is a planning assumption, not a confirmed cutoff.
 | Actual AMD visual inference and integration | AMD support, then owner approval of concrete request and fresh quota | One approved synthetic attempt first, preserving 2/6 history; validated output, application provenance and separately approved acceptance. A successful stand-alone call alone is insufficient. |
 | Exact online cutoff, eligibility and form | Owner / organizer | Explicit cutoff and timezone, source/date, track, required fields, limits and judge access expectations from the signed-in form or organizer. |
 | Independent visual-quality evidence | Human reviewer | Completed existing assessment records with visible evidence and denominators; no invented labels or accuracy. |
-| Title and deck release copy | Owner review of separate Block C candidate | Approve the neutral title, seven-slide deck and cover against the actual form. Candidate renders are inspected; original deck and submission fields are preserved. |
+| Title and deck release copy | Owner review of separate Block D candidate | Approve the commercial opening, seven-slide deck and cover against the actual form. All candidate renders are inspected; original decks and submission fields are preserved. |
 | Final video | Recorder/narrator/editor | Actual captured or clearly labeled still-based movie, readable 16:9 edit, attribution, full playback/privacy review, duration/size/hash and final approval. |
 | Judge application URL | Owner authorization plus isolated hosting work | Reviewed host/cost/access proposal and fresh-session deployed acceptance. A recording or static frontend alone does not supply the working API. |
 | Public source and rights | Owner license/visibility decisions | Contributor rights, chosen license, third-party notices, exact release/history/media scan and approval. Repository stays private until then. |
 | Submission | Owner | Approved final files and URLs, completed form, actual receipt/timestamp. No submission has been made. |
+
+For AMD, the preferred contingency is a separately approved isolated Developer
+Cloud MI300X deployment, conditional on verified access and an enforceable
+spending boundary. No account allocation, card-free entitlement or hard cap is
+established. The [options brief](amd-contingency-options.md) distinguishes current
+credit advertising from conflicting older documentation and specifies the
+evidence/approval gate. Nothing has been provisioned or downloaded.
 
 Immediately useful work does not depend on AMD: rehearse the narration, organize
 existing evidence, record the local/synthetic segments, perform human review,

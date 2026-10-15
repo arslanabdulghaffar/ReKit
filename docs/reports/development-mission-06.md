@@ -19,7 +19,20 @@ of Task 6 remain incomplete.
 
 ## Winning-quality and submission-readiness review
 
-**Current Block C continuation:** the [Block C report](winning-quality-block-c.md)
+**Current Block D continuation:** the [Block D report](winning-quality-block-d.md)
+records a stronger separate seven-slide candidate, a reproducible synthetic
+economic sensitivity study, concise reviewer handoff, final capture/edit
+specification, official AMD contingency research and a bounded decision-aware
+evidence proposal. Accepted baseline: `5c6f437ce1ad6fe0e9a84e9450cac2bcf7ec4568`.
+No runtime/UI feature, schema, model, dependency or NVIDIA environment changed.
+The new evidence proposals await review before product or presentation expansion.
+All 39 independent assessments remain pending; no new inference, generation
+attempt, deployment, credential change, spending or external contact occurred.
+The original AMD attempts remain 2/6. Mission 06 is open; Mission 07 has not begun.
+Current tests and delivery evidence belong to the Block D report and its separate
+post-push verification receipt, not to the historical paragraphs below.
+
+**Accepted Block C continuation:** the [Block C report](winning-quality-block-c.md)
 records judge-facing assumptions/calculations and newly cited evidence, the
 unchanged review package's usability checks and reviewer guide, a separate
 seven-slide deck/cover candidate and a labeled silent-stills video draft.

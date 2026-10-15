@@ -1,5 +1,45 @@
 # ReKit pitch deck
 
+## Block D candidate for owner review
+
+The selected seven-slide candidate is
+[`ReKit-Block-D-candidate.pptx`](../var/mission06-submission/block-d-deck-20261015-224720-21fd9f/ReKit-Block-D-candidate.pptx),
+with a separate [1920 × 1080 cover](../var/mission06-submission/block-d-deck-20261015-224720-21fd9f/ReKit-Block-D-cover.png).
+Both are private, unapproved release candidates. The Block C and Mission 05
+files below are preserved.
+
+The opening now presents the commercial problem: one return lacks a part that
+another may contain. The story connects evidence and human correction to the
+existing economic comparison, exclusive reservations and two traceable kit
+records. Slides 3, 5 and 6 use larger details of actual captured evidence;
+slide 5 uses a full-width layout to avoid broken words. Slide 4 makes the
+USD 0.25/minute rebuild versus USD 2/minute liquidation decision explicit.
+The closing emphasizes accountable recovery decisions and keeps **AMD visual
+inference pending** prominent. The synthetic case and actual local NVIDIA
+inspection remain separate, and the model's flawed wording is unchanged.
+
+Slide 6 cites **1,485 backend / 91 frontend tests at accepted Block C**,
+`5c6f437ce1ad6fe0e9a84e9450cac2bcf7ec4568`. These are checkpoint results,
+not current Block D counts or recognition-accuracy measurements. Source notes,
+model revision, ABO attribution and limitations remain embedded. All seven
+1920 × 1080 renders were inspected; native text and tables remain editable and
+the four embedded images preserve their original bytes. Detailed credits are
+smaller than presentation headlines; full original captures remain available.
+
+Reproduce from the preserved evidence, with PowerPoint closed:
+
+```powershell
+powershell.exe -NoProfile -File scripts/build_block_d_deck.ps1
+```
+
+The builder creates a fresh restricted-access directory and refuses overwrites.
+The [Block D report](reports/winning-quality-block-d.md) records actual validation,
+source integrity and limits. The [capture/edit specification](block-d-capture-edit-specification.md)
+provides narration and manual recording steps. The new
+[economic sensitivity](canonical-sensitivity-proposal.md) and
+[decision-aware evidence](decision-aware-evidence-proposal.md) findings are
+proposals for review; neither expands this deck or the application.
+
 ## Block C candidate for owner review
 
 The separate, revised seven-slide candidate uses the accepted Block B results
