@@ -19,7 +19,17 @@ of Task 6 remain incomplete.
 
 ## Winning-quality and submission-readiness review
 
-**Current Block D continuation:** the [Block D report](winning-quality-block-d.md)
+**Current Block E continuation:** the [Block E review](winning-quality-block-e.md)
+records the standalone six-state decision artifact, separate three-point labor
+visual, bounded investigation of the unresolved native crash, and executable
+owner capture/reviewer and MI300X access checklists. Accepted starting checkpoint:
+`258b169f952bc5cfe1bd71e0ed1a0c1b7867fafd`. The approved Block D deck, production
+workflow, frozen human-review package and original 2/6 AMD attempts are preserved.
+No human judgments or new inference were generated. Current validation belongs
+to the Block E review; historical results below are unchanged. Mission 06 remains
+open, and Mission 07 has not begun.
+
+**Accepted Block D continuation:** the [Block D report](winning-quality-block-d.md)
 records a stronger separate seven-slide candidate, a reproducible synthetic
 economic sensitivity study, concise reviewer handoff, final capture/edit
 specification, official AMD contingency research and a bounded decision-aware

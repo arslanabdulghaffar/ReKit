@@ -5,8 +5,11 @@
 The selected seven-slide candidate is
 [`ReKit-Block-D-candidate.pptx`](../var/mission06-submission/block-d-deck-20261015-224720-21fd9f/ReKit-Block-D-candidate.pptx),
 with a separate [1920 × 1080 cover](../var/mission06-submission/block-d-deck-20261015-224720-21fd9f/ReKit-Block-D-cover.png).
-Both are private, unapproved release candidates. The Block C and Mission 05
-files below are preserved.
+The owner accepted Block D as the content baseline for Block E. Both files
+remain private; publication and submission are not authorized. The Block C and
+Mission 05 files below are preserved. The separate Block E
+[decision comparison and three-point labor visual](decision-evidence-demo.md)
+are optional review material, not additions to this seven-slide deck.
 
 The opening now presents the commercial problem: one return lacks a part that
 another may contain. The story connects evidence and human correction to the

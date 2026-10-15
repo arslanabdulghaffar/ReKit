@@ -10,6 +10,12 @@ React operator workbench. Local GPU inference and a server-configured remote
 vision adapter are implemented. The remote adapter has offline qualification;
 actual AMD deployment and inference remain required, uncompleted gates.
 
+The [Block E review](docs/reports/winning-quality-block-e.md) adds an offline
+[recorded decision-evidence demonstration](docs/decision-evidence-demo.md), a
+bounded investigation of the unresolved Windows native crash, and an
+[owner capture checklist](docs/block-e-owner-handoff.md). The approved Block D
+deck and production workflow are preserved. Mission 06 remains open.
+
 ## What works
 
 - Validated product families, configurations, BOM quantities, revisions, and
