@@ -6,6 +6,37 @@ preparation checklist, not a submission receipt or eligibility claim. ReKit
 remains private. This document authorizes no publication, hosting, licensing
 change, spending or authenticated AMD call.
 
+## Readiness at a glance
+
+Mission 06 remains open. The user confirms AMD support was emailed externally;
+its reply is being monitored. Do not send a duplicate or consume another attempt.
+The original two HTTP 400 attempts remain charged. The owner's approximately
+four-day horizon is a planning assumption, not a confirmed cutoff.
+
+| Completed and ready for review | Evidence |
+| --- | --- |
+| Working local implementation and synthetic recovery | Accepted checkpoint `86e970a`; 1,449 backend / 61 frontend tests, build, CPU recovery and browser replay passed. These are prior verified results, not new tests in this documentation review. |
+| Media/copy audit | All seven existing renders, cover, PPTX package, notes and description counts rechecked in the [asset audit](submission-asset-audit.md). Original deck and counted fields preserved. |
+| Concrete recording workflow | [Script](demo-script.md) and [workflow](demo-recording-workflow.md) now distinguish dated stills from fresh footage and identify immediate work, manual capture and AMD dependencies. |
+| Judge-access and release assessment | [Release review](submission-release-review.md) proposes a disposable CPU viewer demo and records security/licensing gaps. No host or license selected. |
+| Improvement priorities | [Winning-quality assessment](winning-quality-assessment.md) links judge criteria to measured strengths, gaps, proposed improvements and acceptance criteria. No Mission 07 or major new feature started. |
+
+| Remaining blocker | Owner / dependency | Completion evidence required |
+| --- | --- | --- |
+| Actual AMD visual inference and integration | AMD support, then owner approval of concrete request and fresh quota | One approved synthetic attempt first, preserving 2/6 history; validated output, application provenance and separately approved acceptance. A successful stand-alone call alone is insufficient. |
+| Exact online cutoff, eligibility and form | Owner / organizer | Explicit cutoff and timezone, source/date, track, required fields, limits and judge access expectations from the signed-in form or organizer. |
+| Independent visual-quality evidence | Human reviewer | Completed existing assessment records with visible evidence and denominators; no invented labels or accuracy. |
+| Title and deck release copy | Owner review, then bounded asset revision | Decide neutral title versus adjacent pending qualifier; apply approved slide updates, render and inspect the new release copy. |
+| Final video | Recorder/narrator/editor | Actual captured or clearly labeled still-based movie, readable 16:9 edit, attribution, full playback/privacy review, duration/size/hash and final approval. |
+| Judge application URL | Owner authorization plus isolated hosting work | Reviewed host/cost/access proposal and fresh-session deployed acceptance. A recording or static frontend alone does not supply the working API. |
+| Public source and rights | Owner license/visibility decisions | Contributor rights, chosen license, third-party notices, exact release/history/media scan and approval. Repository stays private until then. |
+| Submission | Owner | Approved final files and URLs, completed form, actual receipt/timestamp. No submission has been made. |
+
+Immediately useful work does not depend on AMD: rehearse the narration, organize
+existing evidence, record the local/synthetic segments, perform human review,
+prepare attribution, and review the targeted deck changes. Keep the AMD closing
+segment replaceable; do not spend this time adding unrelated features.
+
 ## Public requirements and unresolved deadline
 
 The [official event page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii)
@@ -15,20 +46,30 @@ challenge, technology tags, prototype, cover, video, slides, public GitHub,
 demo platform and application URL. It also states originality and MIT compliance.
 
 - [ ] Confirm the submission cutoff **and timezone** in the portal or with the
-  organizer. The public [live page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii/live)
+  organizer. New authoritative evidence: the organizer's
+  [Milan](https://luma.com/AMDHackathon-Milan),
+  [Rome](https://luma.com/AMDHackathon-Rome) and
+  [Imperia](https://luma.com/AMDHackathon-Imperia) agendas explicitly state a
+  Sunday October 18 submission deadline at 16:00. Milan's public event metadata
+  specifies `Europe/Rome`; applying that zone gives **October 18, 2026, 16:00
+  CEST / 14:00 UTC / 23:00 KST**. This verifies an **on-site agenda cutoff**;
+  applicability to ReKit's online submission form remains unconfirmed. The time
+  comes from the submission agenda, not event-end metadata. The public
+  [live page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii/live)
   still describes online building as October 12–17, while the landing page says
   October 12–18. Both were freshly read. The live page labels submissions open,
   but its extracted countdown contains zero placeholders, not a usable deadline.
   Neither inspected page establishes the submission cutoff or timezone; the
-  landing page's event schedule is still to be announced. Search results did not
-  establish a more specific official cutoff. Do not substitute an event date,
+  landing page's event schedule is still to be announced. Other searches did not
+  establish an online-specific official cutoff. Do not substitute an event date,
   venue closing time or the countdown placeholder for the submission deadline.
   Earlier live-page metadata recorded `endAt=2026-10-18T15:00:00.000Z`, equivalent
   to October 19 at 00:00 in Korea. That was **event-end metadata, not a submission
   deadline**. That timestamp was not freshly reverified during this continuation;
   the earlier unauthenticated raw-page request returned HTTP 403. Obtain an
-  explicit cutoff, source and timezone from the portal or organizer before
-  converting it to Asia/Seoul. No organizer message has been sent.
+  explicit online cutoff, source and timezone from the portal or organizer.
+  This review sent no organizer message; the user's separate AMD support email
+  is already sent and must not be duplicated.
 - [ ] Confirm enrollment, team membership, challenge and required fields in the
   authenticated form. No account-specific form was inspected. Proposed challenge:
   Reinvent Commerce; confirm its fit before submission.
@@ -116,7 +157,8 @@ eligibility. See the [current report](reports/development-mission-06.md).
   Mission 06 records three GETs and two single-image POST attempts, both HTTP 400;
   those rejections do not prove model execution. Two of six attempts remain
   charged. The [current report](reports/development-mission-06.md) and
-  [unsent support draft](tokenfactory-support-request.md) describe the blocker.
+  [retained support draft](tokenfactory-support-request.md) describe the blocker.
+  The user confirms external support contact; no reply is recorded yet.
   Further API calls require provider clarification, fresh quota evidence and new
   user approval. Local NVIDIA execution does not verify AMD eligibility. Preserve
   actual model, input, output and failure evidence before application acceptance;

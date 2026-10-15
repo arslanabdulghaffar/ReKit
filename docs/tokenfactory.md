@@ -23,8 +23,9 @@ The HTTP 400 continuation instruction requires **new user approval and fresh
 quota evidence before any subsequent AMD API call**. The remaining four attempts
 are a ceiling, not permission to use them now. Preserve the two original receipts
 and their ledger; do not reset, replay, substitute a model or rotate the configured
-key merely to resume. The [support request](tokenfactory-support-request.md) is
-prepared but has not been sent. After provider clarification, prepare the exact
+key merely to resume. The user confirms that AMD support was contacted externally;
+the [prepared request](tokenfactory-support-request.md) remains an archived draft,
+not a delivery receipt. Do not send a duplicate. After provider clarification, prepare the exact
 request change for review; an approved test may make one new synthetic-image
 attempt and then stop. The discovery commands below describe prior authorized
 operations and do not reopen this gate.
@@ -195,9 +196,9 @@ reviewed identical diagnostic, not general continuation.
 Stop now: request provider/hackathon clarification of this exact model's API
 eligibility and accepted request contract, and the quota/reset discrepancy.
 No third replay, automatic model switch, schema downgrade, guessed route or
-silent local fallback is authorized by these receipts. No support message has
-been sent. A support inquiry should contain only model/endpoint names, request
-times, HTTP status and the bounded categories above, never the key or account IDs.
+silent local fallback is authorized by these receipts. The user has sent the
+support email externally and is monitoring the reply. Do not duplicate it or
+request the key/account identifiers in chat. No provider response is recorded.
 
 The [catalog reference](https://amd-aim.github.io/radeon-cloud-docs/api/models/)
 states that the catalog is the same for every key, not account-scoped. Its

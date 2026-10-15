@@ -17,7 +17,64 @@ joint-image result, AMD application/browser acceptance or paired comparison.
 One local NVIDIA API regression passed. Tasks 3–5 and the AMD-dependent parts
 of Task 6 remain incomplete.
 
-## HTTP 400 resolution continuation
+## Winning-quality and submission-readiness review
+
+The user accepted the offline continuation at
+`86e970ae85d5ab59d264e28d7d5ec0de86b2d854`, with both CPU jobs successful in
+[run 38613148428](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38613148428).
+The user now confirms AMD support was emailed externally and its reply is being
+monitored. No duplicate message was sent. The exact external email, delivery
+receipt and any provider response were not inspected. The earlier unsent-draft
+statements below describe the prior checkpoint, not the current contact status.
+
+The follow-up reviews readiness and competitiveness without starting Mission 07.
+The owner's roughly four-day expectation is a planning assumption, not an
+established cutoff or instruction to sacrifice substantive improvements.
+No runtime code, schema, model, credential, dependency or NVIDIA environment was
+changed; no inference, deployment, publication or license selection occurred.
+The two original AMD attempts remain charged and the evidence remains intact.
+
+| Deliverable | Actual result and limits |
+| --- | --- |
+| [Winning-quality assessment](../winning-quality-assessment.md) | Nine judge perspectives, verified strengths/gaps, official criteria without invented weights, three commercial approaches, classified improvements, risks, measurable acceptance and phased plan. Runtime proposals remain proposals. |
+| [Asset audit](../submission-asset-audit.md) | All seven existing 1920 x 1080 renders visually inspected; PPTX/cover hashes match prior receipts. Package/notes metadata checked. Original deck and cover unchanged; targeted release copy, title alternative and privacy review are prepared, not implemented exports. |
+| [Recording workflow](../demo-recording-workflow.md) and [script](../demo-script.md) | Work available immediately is separated from recorder/audio/editing tasks and AMD-dependent proof. Dated stills and fresh motion have distinct narration rules. No movie or audio take was produced. |
+| [Release review](../submission-release-review.md) | Proposes an isolated CPU synthetic viewer demo, with no inference credential or workstation exposure. Documents current security boundaries, missing hosting/reset controls, licensing and third-party attribution. No public URL or license chosen. |
+| [Readiness checklist](../hackathon-submission-checklist.md) | Completed review work and remaining owner/provider/engineering gates separated. Signed-in form, online cutoff, release rights and actual submission remain unresolved. |
+| Current support status | Retained draft and next-step guides updated to record user-confirmed external email; wait for reply and do not resend. New calls still require concrete provider evidence, fresh quota and approval. |
+
+New authoritative deadline evidence is limited to the organizer's
+[Milan](https://luma.com/AMDHackathon-Milan),
+[Rome](https://luma.com/AMDHackathon-Rome) and
+[Imperia](https://luma.com/AMDHackathon-Imperia) on-site agendas: October 18,
+16:00 submission deadline. Milan's public event metadata specifies Europe/Rome,
+giving October 18 at 14:00 UTC / 23:00 KST. **Applicability to online submissions
+remains unconfirmed.** This is an agenda deadline, not a build-end timestamp.
+
+Validation for this documentation-only follow-up checks local links, whitespace,
+source secret/path patterns, asset hashes, preserved ledger/receipt hashes and
+unchanged counted submission fields. All 111 relative links across the 12 changed
+documents resolve; whitespace checks pass. The current-tree scan covered 163
+files with zero selected-pattern findings or forbidden paths. It is not a fresh
+full-history or universal secret scan. Six original evidence/asset file hashes
+match, the ledger contains two attempts, and the 224-character / 323-word fields
+are unchanged. An initial helper hit Windows' default text-decoding error when
+reading Git output; rerunning with explicit UTF-8 passed without changing files.
+The preceding 1,449/61 local test results
+remain historical; no local runtime suite or model was rerun merely for these
+documentation changes. The private commit's CPU CI is verified separately.
+
+This follow-up adds `docs/winning-quality-assessment.md`,
+`docs/submission-asset-audit.md` and `docs/submission-release-review.md`. It updates
+this report, `docs/demo-recording-workflow.md`, `docs/demo-script.md`,
+`docs/hackathon-submission-checklist.md`, `docs/pitch-deck.md`,
+`docs/submission-content.md`, `docs/tokenfactory.md`,
+`docs/tokenfactory-http400-diagnosis.md` and `docs/tokenfactory-support-request.md`.
+The final source SHA, private visibility, CI result, preservation checks and scan
+scope will be recorded in the separate ignored
+`var/mission06-offline/winning-quality-final-verification.json` and handoff.
+
+## HTTP 400 resolution continuation — accepted prior checkpoint
 
 This continuation began at
 `e13e65dbe38377d460e43bdea74169a57d03ac6c`, whose two CPU CI jobs passed in
@@ -527,12 +584,12 @@ change before one new synthetic attempt. Do not interpret the four unused
 attempts as permission to continue. No provider response or new approval has
 arrived during this continuation.
 
-Stop after the two HTTP 400 outcomes. Ask the provider/hackathon support to
-clarify the enabled MiMo model ID/account eligibility and accepted strict-schema
+Stop after the two HTTP 400 outcomes. The user has already contacted AMD support
+externally; wait for its clarification of the enabled MiMo model ID/account eligibility and accepted strict-schema
 PNG request contract, the
 unusable usage routes, and conflicting quota/reset labels. Include only sanitized
 request times, endpoint/model names, schema digest, HTTP status and bounded categories; never a
-key or account ID. No support message has been sent. The existing six-attempt
+key or account ID. Do not send a duplicate message. The existing six-attempt
 ceiling is not a direction to spend the remaining four attempts speculatively.
 
 A successful single-image result must precede joint-image qualification. Neither

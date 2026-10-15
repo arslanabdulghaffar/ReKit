@@ -115,8 +115,8 @@ The order below is an investigation priority, **not calibrated likelihood**.
 
 ## Reviewable continuation, not an executable change
 
-Send the [sanitized support draft](tokenfactory-support-request.md) only after
-the user chooses to contact support; no contact has occurred. Record the provider's
+The user now confirms external contact with AMD support; do not resend the
+[retained support draft](tokenfactory-support-request.md). Record the provider's
 answer, source/date, callable model/endpoint and supported image/schema subset.
 Prepare a concrete payload diff with the current request and schema hashes.
 State whether it changes only remote serialization or any accepted output set.

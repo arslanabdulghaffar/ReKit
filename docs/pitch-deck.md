@@ -6,6 +6,11 @@ Every use must retain **AMD deployment planned; qualification pending** until
 actual AMD execution is qualified. This deck is prepared locally, not published
 or submitted.
 
+The October 15 [asset audit](submission-asset-audit.md) rechecked all seven renders
+and the unchanged package hashes. It proposes targeted updates to the AMD status,
+shared-service measurement wording and title/cover treatment before release;
+the historical deck below remains intact.
+
 Mission 06 checkpoint: three authenticated GETs and two single-image synthetic
 POST attempts have run through the explicit TokenFactory profile. Both POSTs
 returned HTTP 400. The diagnostic replay reported `invalid_request_error`

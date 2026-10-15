@@ -1,6 +1,9 @@
 # ReKit recording script
 
 Prepared October 14, 2026 for **NeuralFoundry — Forging Intelligent Systems.**
+Readiness review: October 15. AMD support has been contacted externally, as
+confirmed by the user; a response is pending. Two preserved generation attempts
+returned HTTP 400. This script authorizes no additional AMD call.
 Target duration: **4:00**. This is a recording plan, not a recorded or uploaded
 video. Source captures below are actual successful Mission 05 runs on the polished
 UI. Historical measurements remain in the [Mission 04 report](reports/development-mission-04.md).
@@ -8,6 +11,22 @@ Use the [recording workflow](demo-recording-workflow.md) for private capture,
 current provider status, evidence checks and final export review.
 
 ## Reproduce and record
+
+Choose one production route before recording:
+
+- **Dated-stills edit:** use the existing October 14 images below, voiceover and
+  visible “Actual local run · October 14, 2026 · still image” captions. This can
+  be assembled without new model inference. Use the historical narration below.
+- **New local motion edit:** capture the existing supported launcher, then match
+  the narration to that run's actual output and receipts. Do not narrate the
+  historical 38.6-second timing or repeated/incomplete model text over a different
+  run. The product command makes one local NVIDIA request; it makes no AMD call.
+
+The first route provides an immediate source package. Recorder/microphone setup,
+voiceover, editing, export and complete review remain outstanding for either
+route. A narrated still sequence must not be presented as live motion footage.
+The [recording workflow](demo-recording-workflow.md#work-that-can-proceed-immediately)
+separates available material, local capture work and AMD-dependent work.
 
 Run from the repository root in the existing environment. Stop your own ReKit
 development servers first. Use one isolated mode at a time:
@@ -32,16 +51,19 @@ authorized publication remain outstanding.
 
 ## Four-minute narration and screen sequence
 
-The narration leaves time for clicks and reading. Keep the real-image and
-synthetic demonstrations visibly labeled throughout.
+This is the **historical-source narration**, using the October 14 product run.
+The four-minute allocation is unmeasured; rehearse the spoken script before
+locking the edit. Keep time for reading and keep the real-image and synthetic
+demonstrations visibly labeled throughout. A new run requires the replacement
+wording described below the table.
 
 | Time | Exact screen / transition | Narration |
 | --- | --- | --- |
 | 0:00–0:20 | Title: ReKit — AMD-Powered Visual Recovery Intelligence, alongside “AMD deployment pending qualification.” Show architecture briefly. | “We are NeuralFoundry. ReKit helps a return-recovery operator work out which incomplete products could become complete kits. The difficult work is identifying parts, checking revisions, and preventing the same part from being promised twice.” |
 | 0:20–0:50 | Product track: `product-originals-desktop.png`; open Integrity & provenance while recording. | “First, visual inspection. These are two original Amazon Berkeley Objects catalog images, uploaded into one simulated component record. They are not an actual customer return. ReKit preserves their source and byte hashes. Another image is another view, not another item in inventory.” |
-| 0:50–1:25 | `product-analysis-in-progress.png` → `product-ai-result-desktop.png`. Record Analyze images and actual completion; label any shortened wait. | “This run used the pinned Qwen3-VL two-billion-parameter model on a local NVIDIA GPU. It took about 38.6 seconds for inference. Each claim refers to the recorded input order. The model repeated an appearance phrase and produced an unfinished uncertainty statement. Valid structured output does not establish that its claims are true.” |
+| 0:50–1:25 | `product-analysis-in-progress.png` → `product-ai-result-desktop.png`. Show dated stills or record Analyze images and actual completion; label any shortened wait in motion footage. | “In this October 14 run, the pinned Qwen3-VL two-billion-parameter model ran on a local NVIDIA GPU. Inference took about 38.6 seconds. Each claim refers to the recorded input order. The model repeated an appearance phrase and produced an unfinished uncertainty statement. Valid structured output does not establish that its claims are true.” |
 | 1:25–1:50 | Product rejection reason → `product-review-held.png`; show held count. | “There is no approved matching catalog in this inspection. The software therefore permits no catalog identity proposal. We reject the output as proof of exact identity and request a readable label and connector view. This scripted operator action leaves the component unverified and held. It creates no recovered kit or independent accuracy label.” |
-| 1:50–2:30 | Explicit transition: “Separate synthetic recovery scenario.” Show `desktop-evidence.png`, manual verification, `compatibility-denied.png` → `compatibility-approved.png`. | “Now we switch to a separate synthetic recovery example. Three returns contain four unique components. A human reviewer records identity, revision, visible condition and supporting evidence. The approved catalog rules reject an incompatible revision. A correction is a new accountable decision; the original history stays available.” |
+| 1:50–2:30 | Explicit transition: “Separate synthetic recovery scenario.” Show `desktop-evidence.png`, explicit verification, `compatibility-denied.png` → `compatibility-approved.png`. | “Now we switch to a separate synthetic recovery example. Three returns contain four unique components. The replay exercises a human reviewer’s identity, revision, visible-condition and evidence decisions using fixture values. Approved catalog rules reject an incompatible revision. A correction is a new accountable decision; the original history stays available.” |
 | 2:30–3:10 | `planning-form-desktop.png` → `plan-overview.png`; selected actions precede approval. | “We enter the scenario’s costs, demand and labor limits. The real CPU CP-SAT optimizer finds two complete kits while allocating each physical part at most once. Estimated net recovery is 175 US dollars in this fixture. That is a modeled scenario value, not customer savings or realized revenue. The operator can inspect selected parts, costs and exclusions before approval.” |
 | 3:10–3:40 | `reserved-plan.png` → `completion-open-desktop.png` → `final-inventory.png` → `audit-completed-desktop.png`. | “Approval reserves all four components atomically. Each kit still needs a separate completion confirmation against the reserved parts. After both confirmations, inventory records two kits and four consumed components, with their source returns and audit trail. These visible checks do not establish hidden functionality or safety.” |
 | 3:40–4:00 | Architecture / final slide, current versus pending status. | “Local NVIDIA inspection and CPU recovery workflows work today. Two single-image submissions to the AMD service returned HTTP 400; successful AMD visual inference remains unconfirmed. Independent semantic review is pending, so recognition accuracy is unmeasured. Our next gate is a verified AMD demonstration.” |
@@ -53,7 +75,33 @@ the unedited recording and run artifacts. If a live request fails, show the
 failure/manual-review path or identify a previous actual run by date and version.
 Do not silently substitute results.
 
+For **new motion footage**, the 0:50–1:25 voiceover can begin: “This run used
+the pinned Qwen3-VL model on a local NVIDIA GPU. The observations remain
+unverified, and each refers to the recorded input order.” Continue with the
+specific limitation visible in that new result. Include a measured time only
+after reading its receipt; omit it if it adds no value. If the output differs
+from the historical source, keep the actual output and revise the narration.
+
+Keep these editorial captions visible at the relevant points:
+
+| Shot | Caption |
+| --- | --- |
+| Opening / AMD-powered title | `AMD visual inference pending — local prototype demonstrated` |
+| Product images and result | `ABO catalog images · simulated intake · local NVIDIA inspection` |
+| Historical source shots | `Actual local run · October 14, 2026 · still image` |
+| Transition and recovery | `Separate synthetic recovery scenario · CPU CP-SAT · no AI in this track` |
+| Economics | `USD 175 modeled value · synthetic assumptions` |
+| Closing | `AMD support response pending · 2 attempts returned HTTP 400 · Mission 06 open` |
+
+These are editing instructions, not text already burned into footage. Keep the
+closing provider-status segment separate so a later response can be reflected
+without re-recording the demonstrated local workflows. A support reply alone
+does not justify changing “AMD visual inference pending” to a success claim.
+
 ## Current source shots and evidence
+
+The three rows below are October 14 evidence. Their timing and screenshot
+review counts are historical, not measurements repeated in this readiness audit.
 
 | Track | Actual artifact directory | Outcome |
 | --- | --- | --- |
@@ -74,6 +122,14 @@ request **47.187 s**; peak allocated CUDA memory **4,901,876,736 bytes**.
 This single observation supplies no AMD measurement or calibrated confidence.
 Untouched `product-inference-results.json`, `acceptance-result.json` and
 `runner-result.json` retain output, provenance, outcomes and owned cleanup.
+
+The October 15 offline continuation additionally passed the synthetic browser
+replay in 5.4 seconds (`var/mission02-acceptance/run-fc_4k8wo/`) with two kits,
+four consumed components and successful temporary-state/credential cleanup.
+It generated fourteen screenshots; only `final-inventory.png` was visually
+inspected in that continuation. Product preflight passed without loading a model
+or performing inference. These newer checks do not refresh the October 14 model
+measurement or establish an AMD result.
 
 ## Recording and export checklist
 

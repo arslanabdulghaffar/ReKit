@@ -1,6 +1,12 @@
-# TokenFactory support request — draft for user review
+# TokenFactory support request — retained preparation draft
 
-**Not sent.** This sanitized draft requests clarification only. It does not
+**Current status, October 15:** the user confirms that an AMD support email was
+sent externally and its reply is being monitored. Do not send a duplicate.
+The exact sent text, recipient, timestamp and delivery status were not inspected;
+the text below is the original preparation draft, not a sent-message receipt.
+The assistant did not send it. No provider reply is recorded yet.
+
+This sanitized draft requests clarification only. It does not
 authorize another API request or change ReKit's provider, schema, or safety
 boundaries. No credentials, account/team identifiers, private images, local
 configuration files, or raw account responses are included.
@@ -157,4 +163,5 @@ schema relaxation. A future schema-valid response would still be unverified
 visual evidence and could not approve compatibility or inventory actions.
 
 Internal preparation source: the [Mission 06 checkpoint report](reports/development-mission-06.md)
-and the saved sanitized receipts. This draft has not been sent or submitted.
+and the saved sanitized receipts. Preserve this draft separately from any actual
+support reply; the user's external contact does not authorize another API call.

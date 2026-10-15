@@ -18,6 +18,11 @@ AMD browser or paired comparison request followed. The submission field copy
 and its counts below are unchanged; see the
 [Mission 06 report](reports/development-mission-06.md). Nothing was submitted.
 
+The [asset audit](submission-asset-audit.md) contains a neutral title alternative
+and updated AMD paragraph for owner review. Neither has replaced the counted
+fields below. The user confirms external support contact; no duplicate message
+or new AMD request is authorized.
+
 ## Identity and form limits
 
 | Field | Copy | Count |

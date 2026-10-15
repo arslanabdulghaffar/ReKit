@@ -1,6 +1,10 @@
 # ReKit demo recording workflow
 
 This is an offline preparation guide, not a recorded video or a submission.
+Reviewed October 15, 2026. The user confirms that the AMD support email was sent
+externally; a response is pending. Do not send another message or issue another
+AMD inference request from this workflow. Mission 06 remains open and the
+original two charged generation attempts remain preserved.
 The commands below were checked against the existing launcher and browser specs.
 The continuation passed both local preflight modes and a separate headless
 synthetic replay. It performed no model inference. The headed recording commands
@@ -17,6 +21,35 @@ are not a submission deadline. The public event and live pages still disagree
 on October 18 versus October 17 as the online-build end, without an explicit
 submission cutoff/timezone. The general guide still specifies a video within
 five minutes and below 300 MB; event-specific form limits remain unverified.
+The later checklist update records an explicit on-site agenda deadline at
+October 18, 16:00 Europe/Rome (23:00 KST), with online applicability still
+unconfirmed. The owner's approximately four-day horizon is a planning assumption.
+
+## Work that can proceed immediately
+
+Preparation and an honest local demonstration do not depend on an AMD reply.
+Use the dated-stills route for the first edit if avoiding another inference run
+is the priority. A still-based narrated video describes what was observed, but
+it must not be described as newly captured live interaction. The event's
+acceptance of that format and its AMD execution requirement remain separate
+unresolved submission questions.
+
+| Work | Material available now | Remaining action / definition of done |
+| --- | --- | --- |
+| Narration and edit structure | The [four-minute script](demo-script.md), exact source-shot names and existing architecture SVG | Rehearse aloud against the timeline; shorten narration if needed without dropping provenance, the synthetic transition or the AMD limitation. The duration is a target, not a measured voice take. |
+| Product track without new inference | Six historical screenshots and receipts in `var/mission02-acceptance/run-ai-5p7lbguu/`, from October 14 | Assemble clearly dated stills in source order. Keep the actual repeated appearance text, incomplete uncertainty and held outcome visible; do not animate fabricated clicks or output. |
+| Recovery track without new inference | Fourteen historical screenshots in `var/mission02-acceptance/run-g563yhm_/`; newer accepted headless replay in `run-fc_4k8wo/` | Prefer the already reviewed October 14 sequence for the edit. If using the October 15 replay, inspect every selected shot first; only its final-inventory screenshot was visually reviewed in the preceding continuation. Keep the two runs' dates and receipts distinct. |
+| Titles, transition and end card | Private cover/deck and editable architecture asset | Review the current deck/cover audit before use. Put “AMD visual inference pending” beside the AMD-powered title; label the transition “Separate synthetic recovery scenario.” Add ABO and model credits. |
+| Private capture setup | Existing browser and supported headed launcher | Owner selects an already installed recorder and microphone, checks a short nonsensitive sample, and chooses an ignored private output folder. No recorder, audio quality or screen-capture permission has been verified by this document. |
+| New motion footage, if selected | Supported product and synthetic commands below | Product replay makes one real **local NVIDIA** request; synthetic replay runs no AI. Check actual receipts before using the footage. This audit does not execute either recording command or alter the NVIDIA environment. |
+| Final edit | The above sources and approved narration | Assemble locally, export, watch and listen end to end, then record duration, size, SHA-256 and reviewer decision. No final movie or audio take exists yet. |
+| AMD segment | Two preserved HTTP 400 receipts and the pending-support status | Keep a short status card now. Replace it only after provider clarification, fresh quota, explicit approval, one bounded attempt and successful application integration provide actual evidence. |
+
+The immediate review package is the script, shot list and release checklist.
+The remaining hands-on tasks are recorder/audio setup, optional new local motion
+capture, narration, editing, export and full review. None requires a third AMD
+request. Publishing, deploying, changing visibility and submitting remain owner
+decisions after reviewing concrete artifacts.
 
 ## What the recording can establish
 
@@ -57,6 +90,10 @@ ground truth, hands-on rebuilding or an operator time-saving measurement.
    replay uses a 1440 × 1000 desktop viewport and briefly checks mobile layouts;
    it does not natively produce a 16:9 movie. Place its capture on the canvas
    without stretching or cropping out provider labels, warnings or decisions.
+   For a 1920 × 1080 edit, a full 1440 × 1000 image can be scaled uniformly to
+   fit with side margins. Use the margins for a source/date/provider caption.
+   A detail crop is acceptable only when a separate context shot keeps the
+   relevant evidence and state understandable; disclose crops in the credits.
 5. Start application capture only after automatic sign-in has completed and the
    workbench is visible. A separate login shot may show empty fields only.
    Never include a populated Operator token field, even if it appears masked.
@@ -142,6 +179,12 @@ separate. Use a visible “Inference wait shortened” caption for time compress
 and retain the uncut source. Do not run extra inference merely to improve an
 output or conceal an earlier failure.
 
+Use the historical wording and 38.568 / 47.187-second numbers only with the
+October 14 source run. A newly recorded run can return different text and take
+a different time. For that route, replace those script sentences with the new
+receipt's observation and timing, or omit timing entirely. Preserve the model's
+actual limitations; do not edit the application text to match the narration.
+
 ## Edit and review the final cut
 
 Use the existing script as a provisional four-minute sequence: problem and
@@ -158,6 +201,12 @@ The [private pitch deck](pitch-deck.md) is a Mission 05 evidence snapshot. Its
 original PPTX and builder are unchanged. Do not narrate a historic slide as a
 current successful AMD result. Keep the title qualification prominent: **AMD
 deployment planned; visual qualification pending**.
+
+Keep the AMD status card modular so a late support response does not force a
+new product or recovery recording. An email response alone changes the support
+status, not the inference claim. If qualification is still blocked at final
+review, retain the pending wording and have the owner confirm eligibility with
+the organizer; do not remove the limitation to make the submission look complete.
 
 Retain Amazon Berkeley Objects / Amazon.com **CC BY 4.0** attribution, source and
 license links, and identify crops or overlays; see the [source notices](real-product-evaluation.md#source-license-and-attribution).
