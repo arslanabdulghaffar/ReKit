@@ -10,7 +10,11 @@ React operator workbench. Local GPU inference and a server-configured remote
 vision adapter are implemented. The remote adapter has offline qualification;
 actual AMD deployment and inference remain required, uncompleted gates.
 
-The [Block E review](docs/reports/winning-quality-block-e.md) adds an offline
+The [Block F execution review](docs/reports/winning-quality-block-f.md) links the
+AMD decision gate, short owner/reviewer actions and conditional release proposal.
+Actual AMD execution, human assessments and final video remain incomplete.
+
+The accepted [Block E review](docs/reports/winning-quality-block-e.md) adds an offline
 [recorded decision-evidence demonstration](docs/decision-evidence-demo.md), a
 bounded investigation of the unresolved Windows native crash, and an
 [owner capture checklist](docs/block-e-owner-handoff.md). The approved Block D

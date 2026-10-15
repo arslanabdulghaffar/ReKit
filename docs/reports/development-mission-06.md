@@ -19,7 +19,18 @@ of Task 6 remain incomplete.
 
 ## Winning-quality and submission-readiness review
 
-**Current Block E continuation:** the [Block E review](winning-quality-block-e.md)
+**Current Block F continuation:** the [execution-readiness report](winning-quality-block-f.md)
+uses accepted checkpoint `bb0edb6f9e9689c338e44a615c629028b68b378f`.
+On October 16 the owner confirmed no new technical support answer, MI300X access
+or cost facts, human exports or actual motion/narration/final video. The AMD
+decision sheet, short execution card and conditional release proposal make
+those gates actionable; they do not complete them. Application code and the
+approved D/E artifacts are unchanged, all 39 assessments remain pending, and
+the original AMD ledger remains 2/6. No new inference, support contact, resource
+purchase, public deployment, licensing or submission occurred. Mission 06
+remains open; Mission 07 has not begun.
+
+**Accepted Block E continuation:** the [Block E review](winning-quality-block-e.md)
 records the standalone six-state decision artifact, separate three-point labor
 visual, bounded investigation of the unresolved native crash, and executable
 owner capture/reviewer and MI300X access checklists. Accepted starting checkpoint:
