@@ -4,7 +4,12 @@
 sent externally and its reply is being monitored. Do not send a duplicate.
 The exact sent text, recipient, timestamp and delivery status were not inspected;
 the text below is the original preparation draft, not a sent-message receipt.
-The assistant did not send it. No provider reply is recorded yet.
+The assistant did not send it. The user subsequently reports that the technical
+email received a reply directing them to the Chinese Radeon Cloud feedback
+portal. Unable to access that portal, the owner submitted an AMD account-support
+feedback form under Login. This is a support-routing update, not a solution to
+the model/API contract or confirmation of account eligibility. No duplicate
+message or authenticated generation is authorized.
 
 This sanitized draft requests clarification only. It does not
 authorize another API request or change ReKit's provider, schema, or safety

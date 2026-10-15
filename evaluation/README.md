@@ -17,6 +17,20 @@ artifacts and the separate commit, push, and CI record.
 
 ## Mission 04 real-image evaluation and review
 
+Block B freezes the existing paired output collection into a portable private
+review package: twelve listing groups, thirteen cases per variant, thirteen
+original images, and twenty-six pending output assessments. Open
+`var/mission06-offline/block-b-independent-review/index.html`; the
+[Block B report](../docs/reports/winning-quality-block-b.md) records provenance,
+exclusions, reproduction commands and limitations. This creates no new inference
+or human judgments. `package_product_review.py check --package PATH` verifies
+the frozen hashes and separately exported assessments without modifying them.
+
+The independent [canonical synthetic case](../docs/canonical-case.md) is available
+through `run_canonical_case.py` (in-process API receipt) and
+`run_demo.py --mode canonical-recovery` (actual browser). It does not use the
+product review images, outputs or any inference provider.
+
 The existing ABO cache contains 52 catalog images from 48 listing groups, with
 original-byte hashes and source/license provenance in
 [`fixtures/abo-manifest.json`](fixtures/abo-manifest.json). It includes product

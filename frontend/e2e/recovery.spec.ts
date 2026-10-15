@@ -19,6 +19,8 @@ interface BrowserFixture {
   viewer_id: string
   artifacts_dir: string
   real_inference?: boolean
+  canonical_case?: boolean
+  correction_image?: string
   ambiguous_image?: string
   model_dir?: string
   model_revision?: string
@@ -31,6 +33,7 @@ interface BrowserFixture {
     returns: ReturnRecord[]
     components: { component: PhysicalComponent; verification: Verification }[]
     scenario: EconomicScenario
+    canonical?: { correction_component_id: string; controlled_labor_cost_per_minute_cents: number }
     expected: { return_count: number; physical_component_count: number; completed_kit_count: number; modeled_value_cents: number }
   }
 }
@@ -41,6 +44,10 @@ if (manifest.synthetic !== true || manifest.fixture.synthetic !== true || manife
 }
 const fixture = manifest.fixture
 const realInference = manifest.real_inference === true
+const canonical = manifest.canonical_case === true
+if (canonical && (realInference || !manifest.correction_image || !fixture.canonical)) {
+  throw new Error('Canonical recovery requires its synthetic close-up and no inference.')
+}
 if (realInference && (!manifest.ambiguous_image || !manifest.model_dir || !/^[a-f0-9]{40}$/.test(manifest.model_revision ?? '') || !Number.isInteger(manifest.device))) {
   throw new Error('Real browser inference requires an explicit model, GPU device, and synthetic ambiguous image.')
 }
@@ -109,10 +116,10 @@ async function verify(page: Page, request: APIRequestContext, componentId: strin
   const observations = before.events.filter(event => event.kind === 'observation').map(event => event.event_id)
   const inspected = realInference && componentId === fixture.components[0].component.physical_component_id
   if (inspected) expect(observations.length).toBeGreaterThanOrEqual(2)
-  else expect(observations).toHaveLength(2)
+  else expect(observations).toHaveLength(canonical && componentId === fixture.canonical!.correction_component_id && revision === 'A' ? 3 : 2)
   // Manual identity confirmation cites the two original synthetic product views,
   // never an AI assertion or the deliberately unrelated ambiguous illustration.
-  for (const id of observations.slice(0, 2)) await page.locator(`input[name="observation_id"][value="${id}"]`).check()
+  for (const id of canonical ? observations : observations.slice(0, 2)) await page.locator(`input[name="observation_id"][value="${id}"]`).check()
   const reason = `Synthetic manual visible-identity review: ${type} revision ${revision}; no functional or safety claim.`
     + (reviewedRunIds.length ? ` Reviewed unverified AI runs ${reviewedRunIds.join(', ')} and confirmed identity from the original image evidence.` : '')
   await page.getByLabel('Review reason', { exact: true }).fill(reason)
@@ -249,8 +256,7 @@ async function inspectFromUI(page: Page, request: APIRequestContext, componentId
   return run
 }
 
-async function generatePlan(page: Page, description: string, beforeSubmit?: () => Promise<void>): Promise<StoredPlan> {
-  const scenario = fixture.scenario
+async function generatePlan(page: Page, description: string, beforeSubmit?: () => Promise<void>, scenario = fixture.scenario): Promise<StoredPlan> {
   await page.getByRole('button', { name: /03.*Recovery planning/ }).click()
   await page.getByLabel('Scenario description', { exact: true }).fill(description)
   await page.getByRole('combobox', { name: /^Currency/ }).selectOption(scenario.currency)
@@ -284,11 +290,19 @@ async function generatePlan(page: Page, description: string, beforeSubmit?: () =
   return stored
 }
 
-test(realInference ? 'real local vision and human review recover two synthetic kits without AI authority' : 'real images and manual review recover two kits without bypassing incompatible inventory', async ({ page, browser, request }) => {
+async function openPlan(page: Page, planId: string): Promise<void> {
+  await page.getByRole('button', { name: /03.*Recovery planning/ }).click()
+  const row = page.locator('tr').filter({ has: page.getByText(planId, { exact: true }) })
+  await row.getByRole('button', { name: 'Open plan', exact: true }).click()
+  await expect(page.locator('.context-line').getByText(planId, { exact: true })).toBeVisible()
+}
+
+test(canonical ? 'canonical synthetic correction, economic sensitivity and exclusive allocation produce traceable kits' : realInference ? 'real local vision and human review recover two synthetic kits without AI authority' : 'real images and manual review recover two kits without bypassing incompatible inventory', async ({ page, browser, request }) => {
   let stage = 'authentication'
   const pageErrors: string[] = []
   page.on('pageerror', error => pageErrors.push(redact(error.message)))
   const assets: Record<string, ImageAsset[]> = {}
+  let clarificationLabel = ''
   const inference: InferenceAcceptance = { runs: [], ambiguous_result: 'not_run' }
   const screenshots = ['sign-in-empty-desktop.png', 'intake-empty-desktop.png', 'intake-populated-desktop.png',
     'desktop-evidence.png', 'mobile-evidence.png', 'compatibility-denied.png', 'compatibility-approved.png',
@@ -462,7 +476,7 @@ test(realInference ? 'real local vision and human review recover two synthetic k
     await verify(page, request, fixture.components[1].component.physical_component_id, 'body', 'A')
     const unresolvedId = fixture.components[2].component.physical_component_id
     const incompatibleId = fixture.components[3].component.physical_component_id
-    await verify(page, request, incompatibleId, 'adapter', 'B')
+    const mistaken = await verify(page, request, incompatibleId, 'adapter', 'B')
     await capture(page, 'compatibility-denied.png', page.getByText(/Compatibility not established/))
     expect((await get<EvidenceHistory>(request, `/components/${path(unresolvedId)}/history`)).current.state).toBe('unresolved')
     const negative = await generatePlan(page, 'Synthetic negative case: unresolved adapter and incompatible revision B.')
@@ -485,10 +499,60 @@ test(realInference ? 'real local vision and human review recover two synthetic k
 
     stage = 'manual correction and real CPU optimization'
     await verify(page, request, unresolvedId, 'adapter', 'A')
+    if (canonical) {
+      stage = 'additional original evidence invalidates previous human verification'
+      await selectReview(page, incompatibleId, mistaken.current.version)
+      const returned = fixture.components[3].component.source_return_id
+      await page.getByLabel(/^Additional component images/).setInputFiles(manifest.correction_image!)
+      await postFromUI(page, page.getByRole('button', { name: 'Upload another view', exact: true }), `/components/${path(incompatibleId)}/images?return_id=${path(returned)}`, 201)
+      await expect(page.getByText(`Additional views saved for ${incompatibleId}. No new physical stock was created. Select the new view to analyze again.`, { exact: true })).toBeVisible()
+      const newEvidence = await get<EvidenceHistory>(request, `/components/${path(incompatibleId)}/history`)
+      expect(newEvidence.current.state).toBe('review_required')
+      expect(newEvidence.current.version).toBe(mistaken.current.version + 1)
+      expect(newEvidence.events.slice(0, mistaken.events.length)).toEqual(mistaken.events)
+      const stock = await get<InventorySnapshot>(request, '/inventory')
+      expect(stock.items.find(item => item.item.component.physical_component_id === incompatibleId)?.availability).toBe('held')
+      const allAssets = await get<ImageAsset[]>(request, `/components/${path(incompatibleId)}/images`)
+      expect(allAssets).toHaveLength(3)
+      const clarificationIndex = allAssets.findIndex(asset => asset.sha256 === createHash('sha256').update(readFileSync(manifest.correction_image!)).digest('hex'))
+      expect(clarificationIndex).toBeGreaterThanOrEqual(0)
+      clarificationLabel = `Image ${clarificationIndex + 1}`
+      assets[incompatibleId] = [...assets[incompatibleId], ...allAssets.filter(asset => !assets[incompatibleId].some(original => original.asset_id === asset.asset_id))]
+      await capture(page, 'canonical-new-evidence-held.png')
+      screenshots.push('canonical-new-evidence-held.png')
+    }
     await verify(page, request, incompatibleId, 'adapter', 'A')
     await capture(page, 'compatibility-approved.png', page.getByText(/Compatible under the approved policy/))
     const corrected = await get<EvidenceHistory>(request, `/components/${path(incompatibleId)}/history`)
     expect(corrected.events.filter(event => event.kind === 'verification')).toHaveLength(2)
+    let highLabor: StoredPlan | undefined
+    if (canonical) {
+      expect(corrected.events.slice(0, mistaken.events.length)).toEqual(mistaken.events)
+      expect(corrected.current.verification!.supersedes_verification_id).toBe(mistaken.current.verification!.verification_id)
+      expect(corrected.current.verification!.evidence_observation_ids).toHaveLength(3)
+      const comparison = page.getByRole('article', { name: 'Human verification comparison', exact: true })
+      await expect(comparison.getByRole('heading', { name: 'Human correction summary', exact: true })).toBeVisible()
+      await expect(comparison.getByRole('columnheader', { name: 'Previous assertion', exact: true })).toBeVisible()
+      const revision = comparison.getByRole('row').filter({ has: page.getByRole('rowheader', { name: /Revision/ }) })
+      await expect(revision.getByRole('cell').nth(0)).toHaveText('B')
+      await expect(revision.getByRole('cell').nth(1)).toHaveText('A')
+      await comparison.getByRole('link', { name: `View original ${clarificationLabel}`, exact: true }).click()
+      await expect(page.getByLabel(`Original ${clarificationLabel}`, { exact: true })).toBeFocused()
+      await capture(page, 'canonical-correction-history.png', comparison)
+      await page.setViewportSize({ width: 390, height: 844 })
+      await capture(page, 'canonical-correction-mobile.png', comparison)
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      screenshots.push('canonical-correction-history.png', 'canonical-correction-mobile.png')
+      highLabor = await generatePlan(page, 'Canonical synthetic sensitivity: only labor rate changes from 25 to 200 cents per minute.', undefined,
+        { ...fixture.scenario, labor_cost_per_minute_cents: fixture.canonical!.controlled_labor_cost_per_minute_cents })
+      expect(highLabor.plan.status).toBe('OPTIMAL')
+      expect(highLabor.plan.modeled_value_cents).toBe(8500)
+      expect(highLabor.plan.selected_actions).toHaveLength(3)
+      expect(highLabor.plan.selected_actions.every(action => action.kind === 'liquidate')).toBe(true)
+      await expect(page.getByText('USD 85.00', { exact: true }).first()).toBeVisible()
+      await capture(page, 'canonical-high-labor.png')
+      screenshots.push('canonical-high-labor.png')
+    }
     const proposal = await generatePlan(page, 'Synthetic three-return recovery: explicit costs, two operator-confirmed kits.', async () => {
       await capture(page, 'planning-form-desktop.png')
       await page.setViewportSize({ width: 390, height: 844 })
@@ -503,6 +567,25 @@ test(realInference ? 'real local vision and human review recover two synthetic k
     expect(proposal.plan.cash_recovery_cents).toBe(17500)
     expect(proposal.plan.retained_value_cents).toBe(0)
     expect(proposal.plan.labor_minutes).toBe(60)
+    let competing: StoredPlan | undefined
+    if (canonical) {
+      // UI-generated scenario IDs/descriptions differ; every economic input,
+      // catalog/policy and component evidence snapshot is identical except rate.
+      const { scenario_id: baseId, description: baseDescription, ...baseInputs } = proposal.plan.problem.scenario
+      const { scenario_id: changedId, description: changedDescription, ...changedInputs } = highLabor!.plan.problem.scenario
+      expect([baseId, baseDescription, changedId, changedDescription].every(Boolean)).toBe(true)
+      expect(changedInputs).toEqual({ ...baseInputs, labor_cost_per_minute_cents: 200 })
+      expect(highLabor!.plan.problem.inventory).toEqual(proposal.plan.problem.inventory)
+      expect(highLabor!.plan.problem.catalog).toEqual(proposal.plan.problem.catalog)
+      expect(highLabor!.plan.problem.policy).toEqual(proposal.plan.problem.policy)
+      competing = await generatePlan(page, 'Canonical competing allocation: must fail after the chosen plan reserves these identities.')
+      expect(competing.plan.modeled_value_cents).toBe(proposal.plan.modeled_value_cents)
+      writeFileSync(join(manifest.artifacts_dir, 'canonical-economics.json'), JSON.stringify({
+        synthetic: true, baseline: proposal, high_labor: highLabor, competing_plan_id: competing.plan.plan_id,
+        correction_history: corrected, limitation: 'Invented scenario estimates and scripted human verification; no AI or realized savings.',
+      }, null, 2), 'utf8')
+      await openPlan(page, proposal.plan.plan_id)
+    }
     await expect(page.getByText('USD 175.00', { exact: true }).first()).toBeVisible()
     expect(await page.getByRole('heading', { name: 'Selected recovery actions', exact: true }).evaluate(heading => {
       const approval = Array.from(document.querySelectorAll('h2')).find(item => item.textContent === 'Approval & reservation')
@@ -532,6 +615,18 @@ test(realInference ? 'real local vision and human review recover two synthetic k
     await expect(page.locator('.metrics > div').filter({ has: page.getByText('Reserved', { exact: true }) }).locator('strong')).toHaveText('4')
     expect(reserved.completed_kits).toHaveLength(0)
     await capture(page, 'reserved-plan.png')
+    if (canonical) {
+      stage = 'competing approval cannot double allocate reserved identities'
+      await openPlan(page, competing!.plan.plan_id)
+      await page.getByLabel('Approval or cancellation reason', { exact: true }).fill('Synthetic negative probe: these physical identities are already reserved.')
+      await postFromUI(page, page.getByRole('button', { name: 'Approve and reserve', exact: true }), `/plans/${path(competing!.plan.plan_id)}/approve`, 409)
+      await expect(page.getByRole('alert')).toBeVisible()
+      expect(await get<InventorySnapshot>(request, '/inventory')).toEqual(reserved)
+      expect(await get<AuditRecord[]>(request, `/plans/${path(competing!.plan.plan_id)}/audit`)).toHaveLength(1)
+      await capture(page, 'canonical-reservation-conflict.png')
+      screenshots.push('canonical-reservation-conflict.png')
+      await openPlan(page, proposal.plan.plan_id)
+    }
 
     stage = 'explicit physical completion and lineage'
     let firstCompletion: { route: string; body: object } | undefined
@@ -586,6 +681,18 @@ test(realInference ? 'real local vision and human review recover two synthetic k
     await expect(page.getByRole('heading', { name: 'synthetic-browser-kit-1', exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'synthetic-browser-kit-2', exact: true })).toBeVisible()
     await capture(page, 'final-inventory.png')
+    if (canonical) {
+      const sourceButton = page.getByRole('button', { name: `View evidence for ${incompatibleId}`, exact: true })
+      await expect(sourceButton).toBeVisible()
+      await sourceButton.click()
+      await expect(page.getByRole('heading', { name: 'Human correction summary', exact: true })).toBeVisible()
+      await expect(page.getByRole('combobox', { name: 'Component to review', exact: true })).toHaveValue(incompatibleId)
+      await page.getByRole('link', { name: `View original ${clarificationLabel}`, exact: true }).first().click()
+      await expect(page.getByLabel(`Original ${clarificationLabel}`, { exact: true })).toBeFocused()
+      await capture(page, 'canonical-completed-source-lineage.png')
+      screenshots.push('canonical-completed-source-lineage.png')
+      await page.getByRole('button', { name: /05.*Inventory/ }).click()
+    }
     await page.setViewportSize({ width: 390, height: 844 })
     await capture(page, 'final-inventory-mobile.png')
     await page.setViewportSize({ width: 1440, height: 1000 })
@@ -615,6 +722,9 @@ test(realInference ? 'real local vision and human review recover two synthetic k
       screenshots,
       responsive_viewports: [1440, 390, 320], document_overflow_checked: true,
       demo_presentation: manifest.demo_presentation,
+      ...(canonical ? { canonical_case: true, correction_history_preserved: true, new_evidence_requires_review: true,
+        source_images: 'source-manifest.json', economics: 'canonical-economics.json', high_labor_value_cents: 8500,
+        competing_approval_status: 409, inference_executed: false, human_review_scripted: true } : {}),
       ...(realInference ? { real_inference: true, inference_artifact: 'inference-results.json',
         inference_run_ids: inference.runs.map(run => run.start.run_id), ambiguous_result: inference.ambiguous_result,
         human_review: inference.human_review, model_verified_identity: false } : {}),

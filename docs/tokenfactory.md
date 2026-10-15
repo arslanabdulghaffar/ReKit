@@ -25,7 +25,10 @@ are a ceiling, not permission to use them now. Preserve the two original receipt
 and their ledger; do not reset, replay, substitute a model or rotate the configured
 key merely to resume. The user confirms that AMD support was contacted externally;
 the [prepared request](tokenfactory-support-request.md) remains an archived draft,
-not a delivery receipt. Do not send a duplicate. After provider clarification, prepare the exact
+not a delivery receipt. The owner reports a reply directing them to an inaccessible
+Chinese feedback portal, followed by an AMD Login-category account-support form.
+Neither supplies an API-contract solution or verifies access. Do not send a
+duplicate. After definitive provider clarification, prepare the exact
 request change for review; an approved test may make one new synthetic-image
 attempt and then stop. The discovery commands below describe prior authorized
 operations and do not reopen this gate.
@@ -197,8 +200,9 @@ Stop now: request provider/hackathon clarification of this exact model's API
 eligibility and accepted request contract, and the quota/reset discrepancy.
 No third replay, automatic model switch, schema downgrade, guessed route or
 silent local fallback is authorized by these receipts. The user has sent the
-support email externally and is monitoring the reply. Do not duplicate it or
-request the key/account identifiers in chat. No provider response is recorded.
+support email externally and received a portal referral; the later account-support
+submission remains unresolved. Do not duplicate either message or request the
+key/account identifiers in chat. No definitive contract solution is recorded.
 
 The [catalog reference](https://amd-aim.github.io/radeon-cloud-docs/api/models/)
 states that the catalog is the same for every key, not account-scoped. Its

@@ -2,13 +2,19 @@
 
 Prepared October 14, 2026 for **NeuralFoundry — Forging Intelligent Systems.**
 Readiness review: October 15. AMD support has been contacted externally, as
-confirmed by the user; a response is pending. Two preserved generation attempts
+confirmed by the user. The reply referred them to a portal they could not access;
+an account-support form is now submitted, with no definitive API solution.
+Two preserved generation attempts
 returned HTTP 400. This script authorizes no additional AMD call.
 Target duration: **4:00**. This is a recording plan, not a recorded or uploaded
 video. Source captures below are actual successful Mission 05 runs on the polished
 UI. Historical measurements remain in the [Mission 04 report](reports/development-mission-04.md).
 Use the [recording workflow](demo-recording-workflow.md) for private capture,
 current provider status, evidence checks and final export review.
+
+For the next cut, use the [Block B recording and deck recommendations](reports/winning-quality-block-b.md#recording-and-deck-recommendations)
+and verified canonical source sequence. The historical narration below is retained
+for its original dated assets; do not mix its text/timings with a new inference run.
 
 ## Reproduce and record
 
@@ -91,7 +97,7 @@ Keep these editorial captions visible at the relevant points:
 | Historical source shots | `Actual local run · October 14, 2026 · still image` |
 | Transition and recovery | `Separate synthetic recovery scenario · CPU CP-SAT · no AI in this track` |
 | Economics | `USD 175 modeled value · synthetic assumptions` |
-| Closing | `AMD support response pending · 2 attempts returned HTTP 400 · Mission 06 open` |
+| Closing | `AMD API solution pending · 2 attempts returned HTTP 400 · Mission 06 open` |
 
 These are editing instructions, not text already burned into footage. Keep the
 closing provider-status segment separate so a later response can be reflected

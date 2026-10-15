@@ -19,6 +19,20 @@ of Task 6 remain incomplete.
 
 ## Winning-quality and submission-readiness review
 
+**Current Block B continuation:** the owner reports that AMD's technical reply
+referred them to the Chinese Radeon Cloud feedback portal. After access failed,
+they submitted an AMD account-support form under Login. This is not confirmation
+of model access, API compatibility or quota; a definitive contract solution is
+still pending. No duplicate contact or new AMD request is authorized.
+
+The [Block B implementation report](winning-quality-block-b.md) records the
+canonical synthetic case, economic comparisons, independent-review package,
+focused UI improvements and fresh local validation. This supersedes the earlier
+offline-only continuation's scope below: Block B includes approved software and
+local NVIDIA regression work, while preserving the original AMD attempts at 2/6.
+Mission 06 remains incomplete until actual AMD visual inference and application
+integration succeed. Mission 07 has not begun.
+
 The user accepted the offline continuation at
 `86e970ae85d5ab59d264e28d7d5ec0de86b2d854`, with both CPU jobs successful in
 [run 38613148428](https://github.com/arslanabdulghaffar/ReKit/actions/runs/38613148428).
@@ -581,8 +595,9 @@ The latest instruction supersedes the earlier bounded-probe authorization:
 **any subsequent AMD API call requires fresh quota evidence and new user
 approval**. Provider clarification must support a concrete reviewed request
 change before one new synthetic attempt. Do not interpret the four unused
-attempts as permission to continue. No provider response or new approval has
-arrived during this continuation.
+attempts as permission to continue. At that checkpoint no provider response had
+arrived. The later Block B portal referral and account-support submission are
+recorded above; neither provides a definitive API solution or new authorization.
 
 Stop after the two HTTP 400 outcomes. The user has already contacted AMD support
 externally; wait for its clarification of the enabled MiMo model ID/account eligibility and accepted strict-schema

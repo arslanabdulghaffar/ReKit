@@ -1,0 +1,21 @@
+{
+  "case_id": "canonical-evidence-to-kit-v1",
+  "synthetic": true,
+  "scenario_estimate": true,
+  "base_fixture": "tests/fixtures/synthetic_recovery.json",
+  "description": "Invented diagrams, returns, scripted human assertions and economic assumptions. No inference, real-return inspection, independent human judgment or hidden functional/safety evidence.",
+  "correction_component_id": "synthetic-adapter-002",
+  "initial_revision": "B",
+  "controlled_labor_cost_per_minute_cents": 200,
+  "returns": [
+    {"return_id": "synthetic-return-bodies", "liquidation_value_cents": 8000, "liquidation_labor_minutes": 5},
+    {"return_id": "synthetic-return-adapter-001", "liquidation_value_cents": 1000, "liquidation_labor_minutes": 2},
+    {"return_id": "synthetic-return-adapter-002", "liquidation_value_cents": 1500, "liquidation_labor_minutes": 3}
+  ],
+  "expected": {
+    "baseline": {"two_rebuilds": 17500, "liquidate_all_returns": 10250, "retain_all": 1600},
+    "changed_labor": {"two_rebuilds": 7000, "liquidate_all_returns": 8500, "retain_all": 1600},
+    "baseline_action_counts": {"rebuild": 2},
+    "changed_labor_action_counts": {"liquidate": 3}
+  }
+}

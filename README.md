@@ -31,6 +31,11 @@ actual AMD deployment and inference remain required, uncompleted gates.
 - A synthetic three-return example producing two kits, negative API scenarios,
   exhaustive-search planner checks, real SQLite race/rollback tests, and a small
   greedy comparison. These are software tests, not customer or model benchmarks.
+- A [canonical synthetic evidence-to-kit case](docs/canonical-case.md) preserving
+  an incorrect revision assertion, source-linked human correction, feasible
+  economic alternatives and a labor-cost sensitivity, with exclusive reservation
+  and completed-kit lineage. The [Block B report](docs/reports/winning-quality-block-b.md)
+  records actual validation and the pending independent visual-review package.
 - An optional, qualified local Qwen3-VL-2B GPU provider with bounded image inputs,
   serialized requests, cached weights, and measured real image-to-text execution.
   [Local qualification](docs/local-inference.md) records its pinned model, license,
@@ -65,6 +70,7 @@ Choose the real-image inspection or separate synthetic recovery replay:
 ```powershell
 .\.venv\Scripts\python.exe evaluation/run_demo.py --mode product-ai --headed --slow-mo-ms 100 --hold-seconds 60 --device 1
 .\.venv\Scripts\python.exe evaluation/run_demo.py --mode synthetic-recovery --headed --slow-mo-ms 100 --hold-seconds 60
+.\.venv\Scripts\python.exe evaluation/run_demo.py --mode canonical-recovery --headed --slow-mo-ms 100 --hold-seconds 60
 ```
 
 Run one at a time. The launcher uses existing software, temporary loopback-only

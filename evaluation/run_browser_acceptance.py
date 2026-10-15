@@ -107,12 +107,14 @@ def _load_product_sources() -> dict:
     }
 
 
-def _prepare(*, real_inference: bool = False, real_product_images: bool = False, model_dir: Path | None = None,
+def _prepare(*, real_inference: bool = False, real_product_images: bool = False, canonical_case: bool = False, model_dir: Path | None = None,
              device: int = 1, headed: bool = False, slow_mo_ms: int = 0,
              hold_seconds: int = 0) -> tuple[Path, dict]:
     presentation = _presentation(headed=headed, slow_mo_ms=slow_mo_ms, hold_seconds=hold_seconds)
-    if type(real_inference) is not bool or type(real_product_images) is not bool:
+    if type(real_inference) is not bool or type(real_product_images) is not bool or type(canonical_case) is not bool:
         raise RuntimeError("Inference and real-product options must be explicit booleans")
+    if canonical_case and (real_inference or real_product_images or model_dir is not None):
+        raise RuntimeError("The canonical synthetic case cannot be combined with inference or product-image modes")
     if real_product_images and not real_inference:
         raise RuntimeError("Real product images require explicit --real-inference opt-in")
     if type(device) is not int or device < 0:
@@ -122,11 +124,15 @@ def _prepare(*, real_inference: bool = False, real_product_images: bool = False,
     product_sources = _load_product_sources() if real_product_images else None
     _checked_directory(OUTPUT, ROOT)
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    run_dir = Path(tempfile.mkdtemp(prefix="run-ai-" if real_inference else "run-", dir=OUTPUT))
+    run_dir = Path(tempfile.mkdtemp(prefix="run-canonical-" if canonical_case else "run-ai-" if real_inference else "run-", dir=OUTPUT))
     state = run_dir / "state"
     state.mkdir(mode=0o700)
     try:
         fixture = json.loads((FIXTURES / "synthetic_recovery.json").read_text(encoding="utf-8"))
+        if canonical_case:
+            from canonical_case import load_case, render_image
+
+            fixture = load_case()
         if fixture.get("synthetic") is not True or fixture["scenario"].get("scenario_estimate") is not True:
             raise RuntimeError("Browser acceptance requires explicitly synthetic inputs")
         if real_product_images:
@@ -142,7 +148,9 @@ def _prepare(*, real_inference: bool = False, real_product_images: bool = False,
                 "components": [{"component": {"physical_component_id": PRODUCT_COMPONENT_ID,
                                               "source_return_id": "photo-demo-return", "registered_at": timestamp}}],
             }
-        image_dir = state / "input-images"
+        # Canonical originals are public-safe synthetic diagrams, retained with
+        # their hash manifest after the disposable credentials/database are removed.
+        image_dir = run_dir / "input-evidence" if canonical_case else state / "input-images"
         image_dir.mkdir()
         images = {}
         for index, record in enumerate([] if real_product_images else fixture["components"]):
@@ -150,6 +158,11 @@ def _prepare(*, real_inference: bool = False, real_product_images: bool = False,
             identity = record["verification"]["identity"]
             paths = []
             for view in (1, 2):
+                if canonical_case:
+                    path = image_dir / f"{component_id}-view-{view}.png"
+                    path.write_bytes(render_image(component_id, view))
+                    paths.append(str(path))
+                    continue
                 image = Image.new("RGB", (720, 440), "#eef1e9")
                 drawing = ImageDraw.Draw(image)
                 drawing.text((24, 24), "SYNTHETIC TEST IMAGE - NOT A PRODUCT PHOTOGRAPH", fill="#171c17")
@@ -171,9 +184,24 @@ def _prepare(*, real_inference: bool = False, real_product_images: bool = False,
             "fixture": fixture, "images": images, "artifacts_dir": str(run_dir),
             "state_dir": str(state),
             "real_inference": real_inference,
+            "canonical_case": canonical_case,
             "real_product_images": real_product_images, "simulated_intake": True,
             "demo_presentation": presentation,
         }
+        if canonical_case:
+            component_id = fixture["canonical"]["correction_component_id"]
+            correction_path = image_dir / f"{component_id}-view-3.png"
+            correction_path.write_bytes(render_image(component_id, 3, clarified=True))
+            manifest["correction_image"] = str(correction_path)
+            sources = [{"physical_component_id": owner, "path": str(Path(path).relative_to(run_dir)),
+                        "sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest()}
+                       for owner, paths in images.items() for path in paths]
+            sources.append({"physical_component_id": component_id, "path": str(correction_path.relative_to(run_dir)),
+                            "sha256": hashlib.sha256(correction_path.read_bytes()).hexdigest()})
+            (run_dir / "source-manifest.json").write_text(json.dumps({
+                "synthetic": True, "fixture": fixture, "images": sources,
+                "limitation": "Scripted human fixture review; no model execution or independent visual validation.",
+            }, indent=2), encoding="utf-8")
         if product_sources is not None:
             manifest.update(product_sources)
         if real_inference:
@@ -337,6 +365,7 @@ def _finish(manifest_path: Path, manifest: dict, processes: list, logs: list,
         "browser_status": status, "browser_exit_code": browser_exit_code,
         "browser_run": len(processes) == 3, "synthetic": True,
         "real_inference_enabled": manifest.get("real_inference", False),
+        "canonical_case": manifest.get("canonical_case", False),
         "real_product_images": manifest.get("real_product_images", False), "simulated_intake": True,
         "demo_presentation": manifest.get("demo_presentation", _presentation()),
         "finished_at": datetime.now(UTC).isoformat(),
@@ -356,14 +385,16 @@ def _finish(manifest_path: Path, manifest: dict, processes: list, logs: list,
         raise RuntimeError(_redact("; ".join(cleanup_errors + reporting_errors), manifest))
 
 
-def run(*, check_only: bool = False, real_inference: bool = False, real_product_images: bool = False,
+def run(*, check_only: bool = False, real_inference: bool = False, real_product_images: bool = False, canonical_case: bool = False,
         model_dir: Path | None = None, device: int = 1, headed: bool = False,
         slow_mo_ms: int = 0, hold_seconds: int = 0) -> int:
     _presentation(headed=headed, slow_mo_ms=slow_mo_ms, hold_seconds=hold_seconds)
     # Budget pacing for up to 1,000 browser actions plus the bounded final hold.
     browser_timeout = (900 if real_inference else 300) + slow_mo_ms + hold_seconds
-    if type(real_inference) is not bool or type(real_product_images) is not bool:
+    if type(real_inference) is not bool or type(real_product_images) is not bool or type(canonical_case) is not bool:
         raise RuntimeError("Inference and real-product options must be explicit booleans")
+    if canonical_case and (real_inference or real_product_images or model_dir is not None):
+        raise RuntimeError("The canonical synthetic case cannot be combined with inference or product-image modes")
     if real_product_images and not real_inference:
         raise RuntimeError("Real product images require explicit --real-inference opt-in")
     if type(device) is not int or device < 0:
@@ -379,7 +410,7 @@ def run(*, check_only: bool = False, real_inference: bool = False, real_product_
         for port in (8000, 5173):
             _port_free(port)
     manifest_path, manifest = _prepare(real_inference=real_inference, real_product_images=real_product_images,
-                                       model_dir=model_dir, device=device, headed=headed,
+                                       canonical_case=canonical_case, model_dir=model_dir, device=device, headed=headed,
                                        slow_mo_ms=slow_mo_ms, hold_seconds=hold_seconds)
     run_dir, state = Path(manifest["artifacts_dir"]), Path(manifest["state_dir"])
     processes, logs = [], []
@@ -391,7 +422,10 @@ def run(*, check_only: bool = False, real_inference: bool = False, real_product_
         if check_only:
             app = _application(manifest)
             try:
-                for paths in ([] if real_product_images else manifest["images"].values()):
+                synthetic_paths = [] if real_product_images else list(manifest["images"].values())
+                if canonical_case:
+                    synthetic_paths.append([manifest["correction_image"]])
+                for paths in synthetic_paths:
                     for path in paths:
                         with Image.open(path) as image:
                             image.load()
@@ -406,7 +440,8 @@ def run(*, check_only: bool = False, real_inference: bool = False, real_product_
                 if app.state.inference is not None:
                     app.state.inference.close()
             status = "setup_passed"
-            _console(json.dumps({"setup": "passed", "synthetic_images": 0 if real_product_images else sum(len(paths) for paths in manifest["images"].values()) + int(real_inference),
+            _console(json.dumps({"setup": "passed", "synthetic_images": 0 if real_product_images else sum(len(paths) for paths in manifest["images"].values()) + int(real_inference) + int(canonical_case),
+                                 "canonical_case": canonical_case,
                                  "real_product_images": real_product_images, "simulated_intake": True,
                                  "original_product_images": len(manifest.get("product_sources", [])),
                                  "registered_components": len(app.state.inventory.inventory().items), "browser_run": False,
@@ -458,6 +493,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="Check disposable fixture setup without starting servers or a browser")
     parser.add_argument("--real-inference", action="store_true", help="Run actual GPU inference: two synthetic inspections, or one joint inspection with --real-product-images")
     parser.add_argument("--real-product-images", action="store_true", help="Use a verified original ABO pair with simulated intake; requires --real-inference")
+    parser.add_argument("--canonical-case", action="store_true", help="Replay the synthetic correction, economics and exclusive-reservation case; no inference")
     parser.add_argument("--model-dir", type=Path, help="Server-controlled verified local checkpoint directory; never downloaded by this runner")
     parser.add_argument("--device", type=int, default=1, help="Single CUDA GPU index for the optional real inference scenario")
     parser.add_argument("--headed", action="store_true", help="Show the owned browser for a local demonstration")
@@ -473,7 +509,7 @@ def main() -> int:
         return 0
     try:
         return run(check_only=arguments.check, real_inference=arguments.real_inference,
-                   real_product_images=arguments.real_product_images,
+                   real_product_images=arguments.real_product_images, canonical_case=arguments.canonical_case,
                    model_dir=arguments.model_dir, device=arguments.device, headed=arguments.headed,
                    slow_mo_ms=arguments.slow_mo_ms, hold_seconds=arguments.hold_seconds)
     except (RuntimeError, OSError) as error:

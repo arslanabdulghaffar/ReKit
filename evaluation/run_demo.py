@@ -15,7 +15,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 MIN_FREE_VRAM_BYTES = 7 * 1024**3
-MODES = ("product-ai", "synthetic-recovery")
+MODES = ("product-ai", "synthetic-recovery", "canonical-recovery")
 
 
 class DemoError(RuntimeError):
@@ -28,7 +28,7 @@ class DemoError(RuntimeError):
 
 def _options(mode: str, device: int, headed: bool, slow_mo_ms: int, hold_seconds: int) -> None:
     if mode not in MODES:
-        raise DemoError("options", "Choose product-ai or synthetic-recovery explicitly.")
+        raise DemoError("options", "Choose product-ai, synthetic-recovery or canonical-recovery explicitly.")
     if type(device) is not int or device < 0:
         raise DemoError("options", "Device must be a nonnegative integer.")
     if type(headed) is not bool:
@@ -122,7 +122,7 @@ def _frontend() -> dict:
             "browser": {"source": selected[1], "installed": True}}
 
 
-def _fixtures() -> dict:
+def _fixtures(raw: dict | None = None) -> dict:
     """Validate the fixture graph in memory; create no database or verified stock."""
     try:
         from rekit.catalog.compatibility import check_compatibility
@@ -133,7 +133,7 @@ def _fixtures() -> dict:
         from rekit.recovery.models import DispositionPolicy, EconomicScenario, RecoveryProblem, ReturnContents
 
         directory = ROOT / "tests" / "fixtures"
-        raw = _json(directory / "synthetic_recovery.json")
+        raw = _json(directory / "synthetic_recovery.json") if raw is None else raw
         catalog = Catalog.model_validate_json((directory / "synthetic_catalog.json").read_bytes())
         policy = DispositionPolicy.model_validate_json((directory / "synthetic_disposition_policy.json").read_bytes())
         if (raw.get("synthetic") is not True or catalog.synthetic is not True
@@ -236,6 +236,15 @@ def preflight(mode: str, *, device: int = 1, headed: bool = False,
     except Exception:
         raise DemoError("ports", "Both loopback ports 127.0.0.1:8000 and :5173 must be free; no existing process was stopped.") from None
     report["loopback_ports"] = [8000, 5173]
+    if mode == "canonical-recovery":
+        try:
+            from canonical_case import load_case
+            case = load_case()
+            _fixtures(raw=case)
+            report["canonical_case"] = {"case_id": case["fixture_id"], "synthetic": True,
+                                         "inference_enabled": False, "original_images": 9}
+        except Exception:
+            raise DemoError("fixtures", "The canonical synthetic case configuration is invalid.") from None
     if mode == "product-ai":
         report["inference_dependencies"], report["model"] = _product()
         report["gpu"] = _cuda(device)
@@ -257,7 +266,8 @@ def run(mode: str, *, check: bool = False, headed: bool = False, slow_mo_ms: int
     print(json.dumps(report, ensure_ascii=True), flush=True)
     if check:
         return 0
-    return _runner().run(real_inference=mode == "product-ai", real_product_images=mode == "product-ai",
+    options = {"canonical_case": True} if mode == "canonical-recovery" else {}
+    return _runner().run(**options, real_inference=mode == "product-ai", real_product_images=mode == "product-ai",
                          device=device, headed=headed, slow_mo_ms=slow_mo_ms, hold_seconds=hold_seconds)
 
 

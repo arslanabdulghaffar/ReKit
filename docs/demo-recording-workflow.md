@@ -2,9 +2,15 @@
 
 This is an offline preparation guide, not a recorded video or a submission.
 Reviewed October 15, 2026. The user confirms that the AMD support email was sent
-externally; a response is pending. Do not send another message or issue another
+externally. The reply referred the owner to a feedback portal; access failed and
+an account-support form was submitted. A definitive API solution is pending.
+Do not send another message or issue another
 AMD inference request from this workflow. Mission 06 remains open and the
 original two charged generation attempts remain preserved.
+The [Block B report](reports/winning-quality-block-b.md) is the newer source for
+canonical recovery captures, current tests and the separate NVIDIA regression.
+Its new `canonical-recovery` mode is recommended for the next recovery recording;
+the historical source notes below remain dated evidence. No movie has been made.
 The commands below were checked against the existing launcher and browser specs.
 The continuation passed both local preflight modes and a separate headless
 synthetic replay. It performed no model inference. The headed recording commands

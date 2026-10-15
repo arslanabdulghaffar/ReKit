@@ -612,7 +612,7 @@ def test_product_cli_passes_explicit_flags_and_check_without_running_model(monke
     calls = []
     monkeypatch.setattr(runner, "run", lambda **options: calls.append(options) or 0)
     assert runner.main() == 0
-    assert calls == [{"check_only": True, "real_inference": True, "real_product_images": True,
+    assert calls == [{"check_only": True, "real_inference": True, "real_product_images": True, "canonical_case": False,
                       "model_dir": None, "device": 1, "headed": False, "slow_mo_ms": 0, "hold_seconds": 0}]
 
 
@@ -646,3 +646,32 @@ def test_headed_deadline_includes_bounded_pacing_and_hold_and_keeps_cleanup(sand
     assert runner.run(headed=True, slow_mo_ms=500, hold_seconds=120) == 0
     assert timeouts == [920]
     assert_cleaned(sandbox, read_result(sandbox))
+
+
+@pytest.mark.parametrize("options", [
+    {"canonical_case": 1}, {"canonical_case": True, "real_inference": True},
+    {"canonical_case": True, "real_product_images": True},
+    {"canonical_case": True, "model_dir": Path("unused-model")},
+])
+def test_canonical_mode_rejects_mixed_provider_options_before_state(prepared_root, monkeypatch, options):
+    monkeypatch.setattr(runner, "_prepare", lambda **kwargs: pytest.fail("Mixed mode created credentials"))
+    with pytest.raises(RuntimeError, match="booleans|cannot be combined"):
+        runner.run(**options)
+    assert not runner.OUTPUT.exists()
+
+
+def test_canonical_sources_survive_cleanup_without_credentials(prepared_root, optional_imports_blocked, monkeypatch):
+    monkeypatch.syspath_prepend(str(SCRIPT.parent))
+    manifest_path, manifest = runner._prepare(canonical_case=True)
+    assert manifest["canonical_case"] and not manifest["real_inference"]
+    run_dir = Path(manifest["artifacts_dir"])
+    source = json.loads((run_dir / "source-manifest.json").read_text(encoding="utf-8"))
+    assert len(source["images"]) == 9
+    assert all(len(paths) == 2 for paths in manifest["images"].values())
+    runner._finish(manifest_path, manifest, [], [], status="setup_passed", browser_output=b"", browser_exit_code=None, error=None)
+    assert not Path(manifest["state_dir"]).exists()
+    for entry in source["images"]:
+        assert hashlib.sha256((run_dir / entry["path"]).read_bytes()).hexdigest() == entry["sha256"]
+    for file in run_dir.rglob("*.json"):
+        raw = file.read_text(encoding="utf-8")
+        assert manifest["operator_token"] not in raw and manifest["viewer_token"] not in raw

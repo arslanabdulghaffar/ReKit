@@ -9,10 +9,11 @@ inventory or reuse an operational database. Choose one mode explicitly.
 
 ```powershell
 .\.venv\Scripts\python.exe evaluation/run_demo.py --mode synthetic-recovery --check
+.\.venv\Scripts\python.exe evaluation/run_demo.py --mode canonical-recovery --check
 .\.venv\Scripts\python.exe evaluation/run_demo.py --mode product-ai --check --device 1
 ```
 
-Both checks require the existing Python 3.12 environment, Node.js 26 or newer,
+All checks require the existing Python 3.12 environment, Node.js 26 or newer,
 installed frontend dependencies, Chrome or Edge, and valid synthetic catalog and
 policy files. They check the fixed IPv4 addresses `127.0.0.1:8000` and
 `127.0.0.1:5173`; a busy port stops the launcher. Stop your own ReKit servers
@@ -39,6 +40,7 @@ between browser actions, and leave the final screen visible for 60 seconds:
 ```powershell
 .\.venv\Scripts\python.exe evaluation/run_demo.py --mode product-ai --headed --slow-mo-ms 100 --hold-seconds 60 --device 1
 .\.venv\Scripts\python.exe evaluation/run_demo.py --mode synthetic-recovery --headed --slow-mo-ms 100 --hold-seconds 60
+.\.venv\Scripts\python.exe evaluation/run_demo.py --mode canonical-recovery --headed --slow-mo-ms 100 --hold-seconds 60
 ```
 
 Allow the automated replay to finish before interacting with its final screen.
@@ -51,7 +53,7 @@ and let cleanup finish.
 
 | Option | Meaning |
 | --- | --- |
-| `--mode` | Required: `product-ai` or `synthetic-recovery`. There is no automatic fallback. |
+| `--mode` | Required: `product-ai`, `synthetic-recovery` or `canonical-recovery`. There is no automatic fallback. |
 | `--headed` | Show the installed browser; without it, acceptance runs headlessly. |
 | `--slow-mo-ms` | Browser-action delay from 0 to 500 milliseconds; a nonzero delay requires `--headed`. |
 | `--hold-seconds` | Final inspection window from 0 to 120 seconds; a nonzero window requires `--headed`. |
@@ -86,6 +88,15 @@ measurements, not semantic accuracy or AMD qualification.
 | --- | --- |
 | `product-ai` | Upload two original ABO fan-view files into one simulated return/component; make one real joint local NVIDIA inference request; display unverified observations, source hashes and uncertainty; record an operator-role rejection requesting better evidence. The component stays unknown/held, with zero verifications, reservations or completed kits. Reuploading the originals checks deduplication, not newly captured evidence. |
 | `synthetic-recovery` | Register three incomplete synthetic returns and four distinct components, upload labeled synthetic images, exercise explicit operator-role verification and compatibility checks, and run actual CPU CP-SAT. Approval reserves four components; two separate completion confirmations produce two kits and four consumed parts with audit/lineage. No AI runs in this mode. |
+| `canonical-recovery` | Use the same catalog and physical IDs in a fresh synthetic case. Preserve an incorrect revision B assertion, add an original close-up and correct to A; compare baseline rebuild and higher-labor liquidation plans; reject a competing reservation; complete two kits. Nine original synthetic diagrams and a hash manifest survive cleanup. No AI or ABO images are used. |
+
+The [canonical case](canonical-case.md) is the recommended recovery story for the
+next recording. The [Block B report](reports/winning-quality-block-b.md) links
+actual browser receipts and screenshots. Its retained source manifest and
+`canonical-economics.json` complement the API receipt's three complete feasible
+alternatives. Browser-created scenario IDs/descriptions differ; economic inputs
+are unchanged except labor rate. The API comparison additionally keeps those
+metadata fields identical. None of these synthetic estimates measures savings.
 
 ABO catalog views do not establish an actual customer return or one physical
 object. The photo mode supplies no matching identity catalog; empty candidates

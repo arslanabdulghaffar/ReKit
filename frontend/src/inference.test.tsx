@@ -327,11 +327,34 @@ describe('inspection requests and explicit human actions', () => {
     expect(await screen.findByText('Controlled blue housing observation.')).toBeInTheDocument()
     expect(screen.getAllByText('Run image 1: Image 2 in the gallery').length).toBeGreaterThan(0)
     expect(screen.getByText('Run image 2: Image 1 in the gallery')).toBeInTheDocument()
+    const sourceDetails = screen.getByText('Source images & run provenance').closest('details')!
+    expect(sourceDetails.open).toBe(false)
+    await user.click(screen.getAllByRole('link', { name: 'Run image 1: Image 2 in the gallery' })[0])
+    expect(sourceDetails.open).toBe(true)
+    expect(document.getElementById(`run-source-${run.start.run_id}-1`)).toHaveFocus()
+    expect(within(document.getElementById(`run-source-${run.start.run_id}-1`)!).getAllByText(assets[1].asset_id).length).toBeGreaterThan(0)
     expect(screen.getByRole('heading', { name: 'Suggested components — unverified' })).toBeInTheDocument()
     const writes = calls.filter(call => call.method === 'POST')
     expect(writes).toHaveLength(1)
     expect(JSON.parse(String(writes[0].init.body)).asset_ids).toEqual([assets[1].asset_id, assets[0].asset_id])
     expect(properties.onProposal).not.toHaveBeenCalled()
+  })
+
+  it.each(['sha256', 'observation_id', 'physical_component_id', 'return_id'] as const)('does not link or display a run source with mismatched %s provenance', async field => {
+    const run = completedRun()
+    const calls = transport([run])
+    const properties = props()
+    properties.assets[0][field] = 'different-source-value'
+    const user = userEvent.setup()
+    render(<InferencePanel {...properties} />)
+    await screen.findByText('Controlled blue housing observation.')
+    expect(screen.queryByRole('link', { name: 'Run image 1: Image 1 in the gallery' })).not.toBeInTheDocument()
+    expect(screen.getAllByText('Run image 1: original source unavailable or mismatched').length).toBeGreaterThan(0)
+    await user.click(screen.getByText('Source images & run provenance'))
+    expect(screen.getByText(/original view is unavailable or its component, return, observation, or hash does not match/)).toBeVisible()
+    expect(screen.queryByRole('img', { name: `Run image 1: evidence for ${componentId}` })).not.toBeInTheDocument()
+    expect(calls.some(call => call.path === `/api/assets/${assets[0].asset_id}/content`)).toBe(false)
+    expect(calls.filter(call => call.method !== 'GET')).toHaveLength(0)
   })
 
   it('submits one or two selected asset IDs with the current version and no authority overrides', async () => {

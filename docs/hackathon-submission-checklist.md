@@ -8,8 +8,9 @@ change, spending or authenticated AMD call.
 
 ## Readiness at a glance
 
-Mission 06 remains open. The user confirms AMD support was emailed externally;
-its reply is being monitored. Do not send a duplicate or consume another attempt.
+Mission 06 remains open. AMD's reply referred the owner to a feedback portal;
+access failed and the owner submitted an account-support form under Login.
+No definitive API solution is available. Do not duplicate contact or consume another attempt.
 The original two HTTP 400 attempts remain charged. The owner's approximately
 four-day horizon is a planning assumption, not a confirmed cutoff.
 
@@ -20,6 +21,7 @@ four-day horizon is a planning assumption, not a confirmed cutoff.
 | Concrete recording workflow | [Script](demo-script.md) and [workflow](demo-recording-workflow.md) now distinguish dated stills from fresh footage and identify immediate work, manual capture and AMD dependencies. |
 | Judge-access and release assessment | [Release review](submission-release-review.md) proposes a disposable CPU viewer demo and records security/licensing gaps. No host or license selected. |
 | Improvement priorities | [Winning-quality assessment](winning-quality-assessment.md) links judge criteria to measured strengths, gaps, proposed improvements and acceptance criteria. No Mission 07 or major new feature started. |
+| Block B implementation | [Current implementation report](reports/winning-quality-block-b.md): canonical evidence-to-kit case, complete economic alternatives, focused source/correction/lineage UI and twelve-group pending review package. These are synthetic workflow and software results, not independent visual accuracy or AMD qualification. |
 
 | Remaining blocker | Owner / dependency | Completion evidence required |
 | --- | --- | --- |
@@ -158,7 +160,9 @@ eligibility. See the [current report](reports/development-mission-06.md).
   those rejections do not prove model execution. Two of six attempts remain
   charged. The [current report](reports/development-mission-06.md) and
   [retained support draft](tokenfactory-support-request.md) describe the blocker.
-  The user confirms external support contact; no reply is recorded yet.
+  The owner reports a reply referring them to a portal they could not access,
+  followed by an account-support form under Login. No definitive API solution or
+  model-access confirmation is available.
   Further API calls require provider clarification, fresh quota evidence and new
   user approval. Local NVIDIA execution does not verify AMD eligibility. Preserve
   actual model, input, output and failure evidence before application acceptance;

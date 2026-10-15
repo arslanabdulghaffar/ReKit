@@ -32,7 +32,7 @@ def mocked_preflight(demo, monkeypatch):
         run=lambda **kwargs: calls.append(("run", kwargs)) or 0)
     monkeypatch.setattr(demo, "_python", lambda: {"version": "3.12.10", "repository_venv": True})
     monkeypatch.setattr(demo, "_frontend", lambda: {"node_version": "26.0.0"})
-    monkeypatch.setattr(demo, "_fixtures", lambda: {"synthetic": True})
+    monkeypatch.setattr(demo, "_fixtures", lambda **kwargs: {"synthetic": True})
     monkeypatch.setattr(demo, "_runner", lambda: runner)
     return calls, runner
 
@@ -64,6 +64,30 @@ def test_check_runs_preflight_including_ports_but_never_starts_runner(demo, mock
     assert demo.run("synthetic-recovery", check=True) == 0
     assert mocked_preflight[0] == [("port", 8000), ("port", 5173)]
     assert json.loads(capsys.readouterr().out)["state_created"] is False
+
+
+def test_canonical_preflight_and_runner_never_enable_inference(demo, mocked_preflight, monkeypatch, capsys):
+    for name in ("_product", "_cuda"):
+        monkeypatch.setattr(demo, name, lambda *args: pytest.fail("Canonical mode must not load AI"))
+    mocked_preflight[1]._load_product_sources = lambda: pytest.fail("Canonical mode must not use ABO")
+    assert demo.run("canonical-recovery") == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["canonical_case"]["original_images"] == 9
+    assert report["canonical_case"]["inference_enabled"] is False
+    assert mocked_preflight[0][-1] == ("run", {
+        "canonical_case": True, "real_inference": False, "real_product_images": False,
+        "device": 1, "headed": False, "slow_mo_ms": 0, "hold_seconds": 0,
+    })
+
+
+def test_canonical_amended_graph_rejects_unknown_return(demo):
+    from canonical_case import load_case
+
+    case = load_case()
+    assert demo._fixtures(raw=case)["fixture_graph_validated"]
+    case["scenario"]["returns"][0]["return_id"] = "unknown-return"
+    with pytest.raises(demo.DemoError, match="references are invalid"):
+        demo._fixtures(raw=case)
 
 
 @pytest.mark.parametrize("kwargs", [

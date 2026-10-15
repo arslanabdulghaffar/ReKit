@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { ApiClient, ApiError, idPath, newId } from './api';
 import type { Actor, Catalog, CurrentEvidence, EvidenceHistory, IdentityCandidate, ImageAsset, InferenceRun, InferenceStatus, UploadResult } from './types';
 import { AssetPreview, Badge, Field, Notice, Section, can, dateTime, errorText, isConflict } from './ui';
+import { focusEvidence } from './evidence-history';
 
 export interface InferencePanelProps {
   api: ApiClient; actor: Actor; componentId: string; history: EvidenceHistory;
@@ -29,6 +30,7 @@ export function InferencePanel({ api, actor, componentId, history, assets, locke
   const [reason, setReason] = useState('');
   const rejection = useRef<{ key: string; body: { rejection_id: string; expected_version: number; reason: string } } | null>(null);
   const scope = useRef(0);
+  const sourceDetails = useRef<HTMLDetailsElement>(null);
   const updated = useRef(onUpdated); updated.current = onUpdated;
   const run = runs.find(item => item.start.run_id === runId) ?? null;
   const tokenFactoryStatus = status?.provider === 'amd-tokenfactory';
@@ -192,10 +194,16 @@ export function InferencePanel({ api, actor, componentId, history, assets, locke
     const index = assets.findIndex(asset => asset.asset_id === assetId);
     return index >= 0 ? `Image ${index + 1}` : 'Unavailable view';
   };
-  const sources = (indices: number[]) => <small className="inference-sources">{indices.map(index => {
+  const runAsset = (input: InferenceRun['start']['inputs'][number]) => assets.find(asset => asset.asset_id === input.asset_id
+    && asset.sha256 === input.sha256 && asset.observation_id === input.observation_id
+    && asset.physical_component_id === run?.start.physical_component_id && asset.return_id === run?.start.source_return_id);
+  const runImageId = (index: number) => `run-source-${run?.start.run_id}-${index}`;
+  const sources = (indices: number[]) => <small className="inference-sources">{indices.map((index, position) => {
     const input = run?.start.inputs[index - 1];
-    return `Run image ${index}: ${input ? imageLabel(input.asset_id) : 'unavailable reference'} in the gallery`;
-  }).join(' · ')}</small>;
+    return <span key={`${index}-${position}`}>{position > 0 && ' · '}{input && runAsset(input)
+      ? <a href={`#${runImageId(index)}`} onClick={event => { event.preventDefault(); if (sourceDetails.current) sourceDetails.current.open = true; focusEvidence(runImageId(index)); }}>{`Run image ${index}: ${imageLabel(input.asset_id)} in the gallery`}</a>
+      : `Run image ${index}: original source unavailable or mismatched`}</span>;
+  })}</small>;
   const canAnalyze = reviewer && !locked && !busy && !loading && !status?.busy && !pending && !!status?.provider && selected.length >= 1 && selected.length <= 2 && !retry;
   return <Section eyebrow="2 · UNVERIFIED AI SUGGESTIONS" title="AI-assisted inspection" aside={<Badge value={loading ? 'checking' : status?.status ?? 'unknown'} />}>
     <p>AI output is unverified. Compare each claim with its images and uncertainty. Only explicit human verification can establish an eligible identity.</p>
@@ -230,9 +238,9 @@ export function InferencePanel({ api, actor, componentId, history, assets, locke
       {rejected.map(event => <Notice key={event.event_id}>{String(event.payload.reason)}</Notice>)}
       {outcome?.failure_reason && <Notice danger>{outcome.failure_reason} Continue manual inspection, or retry with a new request when the provider is ready.</Notice>}
       {outcome?.status === 'succeeded' && <Notice>Analysis finished. Compare the suggestions with the original views before recording a human decision.</Notice>}
-      <details><summary>Source images & run provenance</summary><p>Run image numbers below follow this request’s recorded input order, not the current gallery order.</p><div className="asset-grid">{run.start.inputs.map((input, index) => {
-        const asset = assets.find(item => item.asset_id === input.asset_id);
-        return <div key={input.asset_id}><h3>Run image {index + 1} · Gallery {imageLabel(input.asset_id)}</h3><code>{input.asset_id}</code><p><code>SHA-256 {input.sha256}</code></p><small>Observation {input.observation_id}</small>{asset ? <AssetPreview api={api} asset={asset} label={`Run image ${index + 1}`} /> : <Notice danger>The original view is unavailable in this component’s current image list. Check the recorded asset and hash before relying on this claim.</Notice>}</div>;
+      <details ref={sourceDetails}><summary>Source images & run provenance</summary><p>Run image numbers below follow this request’s recorded input order, not the current gallery order. These inputs were recorded at evidence version {run.start.evidence_version}.</p><div className="asset-grid">{run.start.inputs.map((input, index) => {
+        const asset = runAsset(input);
+        return <div key={input.asset_id} id={runImageId(index + 1)} tabIndex={-1} className="evidence-target" aria-label={`Original run image ${index + 1}`}><h3>Run image {index + 1} · Gallery {asset ? imageLabel(input.asset_id) : 'unavailable or mismatched'}</h3><code>{input.asset_id}</code><p><code>SHA-256 {input.sha256}</code></p><small>Observation {input.observation_id}</small>{asset ? <AssetPreview api={api} asset={asset} label={`Run image ${index + 1}`} /> : <Notice danger>The original view is unavailable or its component, return, observation, or hash does not match this run. Check the recorded source before relying on this claim.</Notice>}</div>;
       })}</div><pre>{JSON.stringify({ start: run.start, completed_at: outcome?.completed_at ?? null, metrics: outcome?.metrics ?? null, applied_event_ids: outcome?.applied_event_ids ?? [] }, null, 2)}</pre></details>
       {outcome?.output && <>
         <div className="inference-output-grid"><div><h3>Model observations</h3>{outcome.output.observations.length ? outcome.output.observations.map((observation, index) => <article className="inference-claim" key={index}><Badge value={observation.kind} /><p>{observation.text}</p>{sources(observation.image_indices)}</article>) : <p className="muted">No visual observations were returned.</p>}</div>
