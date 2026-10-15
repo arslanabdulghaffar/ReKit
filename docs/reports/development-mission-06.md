@@ -19,7 +19,20 @@ of Task 6 remain incomplete.
 
 ## Winning-quality and submission-readiness review
 
-**Current Block B continuation:** the owner reports that AMD's technical reply
+**Current Block C continuation:** the [Block C report](winning-quality-block-c.md)
+records judge-facing assumptions/calculations and newly cited evidence, the
+unchanged review package's usability checks and reviewer guide, a separate
+seven-slide deck/cover candidate and a labeled silent-stills video draft.
+The accepted baseline is `609190e623c2561b067b871383fabfba1b1b2606`.
+Fresh local checks pass 1,485 backend and 91 frontend tests, build, canonical and
+existing synthetic browser replays. NVIDIA model/CUDA preflight is read-only;
+the presentation retains the actual prior Block B NVIDIA result. No new model
+inference, AMD request, independent human judgment or operational inventory was
+created. The original two AMD attempts and original presentation remain intact.
+Mission 06 remains open; Mission 07 has not started. Historical statements below
+about no candidate/movie describe their earlier checkpoint.
+
+**Accepted Block B checkpoint:** the owner reports that AMD's technical reply
 referred them to the Chinese Radeon Cloud feedback portal. After access failed,
 they submitted an AMD account-support form under Login. This is not confirmation
 of model access, API compatibility or quota; a definitive contract solution is

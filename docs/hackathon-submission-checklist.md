@@ -22,13 +22,14 @@ four-day horizon is a planning assumption, not a confirmed cutoff.
 | Judge-access and release assessment | [Release review](submission-release-review.md) proposes a disposable CPU viewer demo and records security/licensing gaps. No host or license selected. |
 | Improvement priorities | [Winning-quality assessment](winning-quality-assessment.md) links judge criteria to measured strengths, gaps, proposed improvements and acceptance criteria. No Mission 07 or major new feature started. |
 | Block B implementation | [Current implementation report](reports/winning-quality-block-b.md): canonical evidence-to-kit case, complete economic alternatives, focused source/correction/lineage UI and twelve-group pending review package. These are synthetic workflow and software results, not independent visual accuracy or AMD qualification. |
+| Block C review candidates | [Block C report](reports/winning-quality-block-c.md): clearer immutable assumptions and selected-action calculations, [reviewer guide](independent-review-guide.md), separate seven-slide [deck/cover](pitch-deck.md#block-c-candidate-for-owner-review), and [recording storyboard](block-c-recording-storyboard.md) with a labeled silent-stills draft. All human assessments remain pending; release approval is still required. |
 
 | Remaining blocker | Owner / dependency | Completion evidence required |
 | --- | --- | --- |
 | Actual AMD visual inference and integration | AMD support, then owner approval of concrete request and fresh quota | One approved synthetic attempt first, preserving 2/6 history; validated output, application provenance and separately approved acceptance. A successful stand-alone call alone is insufficient. |
 | Exact online cutoff, eligibility and form | Owner / organizer | Explicit cutoff and timezone, source/date, track, required fields, limits and judge access expectations from the signed-in form or organizer. |
 | Independent visual-quality evidence | Human reviewer | Completed existing assessment records with visible evidence and denominators; no invented labels or accuracy. |
-| Title and deck release copy | Owner review, then bounded asset revision | Decide neutral title versus adjacent pending qualifier; apply approved slide updates, render and inspect the new release copy. |
+| Title and deck release copy | Owner review of separate Block C candidate | Approve the neutral title, seven-slide deck and cover against the actual form. Candidate renders are inspected; original deck and submission fields are preserved. |
 | Final video | Recorder/narrator/editor | Actual captured or clearly labeled still-based movie, readable 16:9 edit, attribution, full playback/privacy review, duration/size/hash and final approval. |
 | Judge application URL | Owner authorization plus isolated hosting work | Reviewed host/cost/access proposal and fresh-session deployed acceptance. A recording or static frontend alone does not supply the working API. |
 | Public source and rights | Owner license/visibility decisions | Contributor rights, chosen license, third-party notices, exact release/history/media scan and approval. Repository stays private until then. |

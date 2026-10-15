@@ -536,6 +536,7 @@ test(canonical ? 'canonical synthetic correction, economic sensitivity and exclu
       const revision = comparison.getByRole('row').filter({ has: page.getByRole('rowheader', { name: /Revision/ }) })
       await expect(revision.getByRole('cell').nth(0)).toHaveText('B')
       await expect(revision.getByRole('cell').nth(1)).toHaveText('A')
+      await expect(comparison.getByText('Newly cited in this correction', { exact: true })).toHaveCount(1)
       await comparison.getByRole('link', { name: `View original ${clarificationLabel}`, exact: true }).click()
       await expect(page.getByLabel(`Original ${clarificationLabel}`, { exact: true })).toBeFocused()
       await capture(page, 'canonical-correction-history.png', comparison)
@@ -550,8 +551,15 @@ test(canonical ? 'canonical synthetic correction, economic sensitivity and exclu
       expect(highLabor.plan.selected_actions).toHaveLength(3)
       expect(highLabor.plan.selected_actions.every(action => action.kind === 'liquidate')).toBe(true)
       await expect(page.getByText('USD 85.00', { exact: true }).first()).toBeVisible()
+      const highLaborAssumptions = page.getByLabel('Assumptions behind this proposal', { exact: true })
+      await expect(highLaborAssumptions).toContainText('USD 2.00 / minute')
+      await expect(highLaborAssumptions).toContainText('60 minutes')
+      await expect(highLaborAssumptions).toContainText('10 minutes')
+      await expect(highLaborAssumptions).toContainText('4 components / 3 source returns')
+      await expect(page.getByLabel('Selected action calculation', { exact: true })).toHaveCount(3)
       await capture(page, 'canonical-high-labor.png')
-      screenshots.push('canonical-high-labor.png')
+      await capture(page, 'canonical-high-labor-assumptions.png', highLaborAssumptions)
+      screenshots.push('canonical-high-labor.png', 'canonical-high-labor-assumptions.png')
     }
     const proposal = await generatePlan(page, 'Synthetic three-return recovery: explicit costs, two operator-confirmed kits.', async () => {
       await capture(page, 'planning-form-desktop.png')
@@ -592,6 +600,26 @@ test(canonical ? 'canonical synthetic correction, economic sensitivity and exclu
       return approval !== undefined && Boolean(heading.compareDocumentPosition(approval) & Node.DOCUMENT_POSITION_FOLLOWING)
     })).toBe(true)
     await capture(page, 'plan-overview.png')
+    if (canonical) {
+      const assumptions = page.getByLabel('Assumptions behind this proposal', { exact: true })
+      await expect(assumptions).toContainText('USD 0.25 / minute')
+      await expect(assumptions).toContainText('4 components / 3 source returns')
+      await expect(assumptions).toContainText('demand limit 2')
+      const calculations = page.getByLabel('Selected action calculation', { exact: true })
+      await expect(calculations).toHaveCount(2)
+      for (const calculation of await calculations.all()) {
+        await expect(calculation).toContainText('Gross estimate USD 100.00')
+        await expect(calculation).toContainText('labor USD 7.50')
+        await expect(calculation).toContainText('other costs USD 5.00')
+        await expect(calculation).toContainText('net cash estimate USD 87.50')
+      }
+      await capture(page, 'canonical-assumptions-desktop.png', assumptions)
+      await page.setViewportSize({ width: 390, height: 844 })
+      await capture(page, 'canonical-assumptions-mobile.png', assumptions)
+      await capture(page, 'canonical-calculation-mobile.png', calculations.first())
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      screenshots.push('canonical-assumptions-desktop.png', 'canonical-assumptions-mobile.png', 'canonical-calculation-mobile.png')
+    }
     const beforeApproval = await get<InventorySnapshot>(request, '/inventory')
     expect(beforeApproval.completed_kits).toHaveLength(0)
     expect(beforeApproval.items.every(entry => entry.availability === 'available')).toBe(true)
@@ -724,7 +752,8 @@ test(canonical ? 'canonical synthetic correction, economic sensitivity and exclu
       demo_presentation: manifest.demo_presentation,
       ...(canonical ? { canonical_case: true, correction_history_preserved: true, new_evidence_requires_review: true,
         source_images: 'source-manifest.json', economics: 'canonical-economics.json', high_labor_value_cents: 8500,
-        competing_approval_status: 409, inference_executed: false, human_review_scripted: true } : {}),
+        competing_approval_status: 409, inference_executed: false, human_review_scripted: true,
+        visible_assumptions_checked: true, selected_calculations_checked: true, newly_cited_observation_label_checked: true } : {}),
       ...(realInference ? { real_inference: true, inference_artifact: 'inference-results.json',
         inference_run_ids: inference.runs.map(run => run.start.run_id), ambiguous_result: inference.ambiguous_result,
         human_review: inference.human_review, model_verified_identity: false } : {}),

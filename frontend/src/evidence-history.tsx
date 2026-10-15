@@ -72,7 +72,10 @@ export function VerificationSummary({ history, assets }: { history: EvidenceHist
       {fields.map(field => <tr key={field.label}><th scope="row">{field.label}{previous && field.value(previous) !== field.value(current) && <> <Badge value="changed" /></>}</th>{assertions.map(assertion => <td key={assertion.verification_id}>{field.value(assertion)}</td>)}</tr>)}
       <tr><th scope="row">Recorded by</th>{assertions.map(assertion => <td key={assertion.verification_id}><strong>{assertion.operator_id}</strong><small>{dateTime(assertion.verified_at)}</small></td>)}</tr>
       <tr><th scope="row">Assertion provenance</th>{assertions.map(assertion => <td key={assertion.verification_id}><code>{assertion.verification_id}</code><small>{eventVersion(history, assertion.verification_id) === null ? 'Assertion evidence version unavailable' : `Evidence version ${eventVersion(history, assertion.verification_id)} at assertion`}</small></td>)}</tr>
-      <tr><th scope="row">Supporting original evidence</th>{assertions.map(assertion => <td key={assertion.verification_id}>{assertion.evidence_observation_ids.map(id => <ObservationSource key={id} history={history} observationId={id} assets={assets} />)}</td>)}</tr>
+      <tr><th scope="row">Supporting original evidence</th>{assertions.map(assertion => <td key={assertion.verification_id}>{assertion.evidence_observation_ids.map(id => <div key={id}>
+        {previous && assertion.verification_id === current.verification_id && !previous.evidence_observation_ids.includes(id) && <small className="new-citation">Newly cited in this correction</small>}
+        <ObservationSource history={history} observationId={id} assets={assets} />
+      </div>)}</td>)}</tr>
     </tbody></table></div>
     {previous && <p className="muted">Latest assertion explicitly supersedes <code>{previous.verification_id}</code>. Current component evidence version: {history.current.version}.</p>}
   </article>;

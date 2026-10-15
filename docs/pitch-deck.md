@@ -1,5 +1,53 @@
 # ReKit pitch deck
 
+## Block C candidate for owner review
+
+The separate, revised seven-slide candidate uses the accepted Block B results
+at `609190e623c2561b067b871383fabfba1b1b2606`. The original Mission 05 deck,
+cover, builder and counted submission descriptions below remain unchanged.
+The neutral cover says **ReKit — Recover compatible kits across returns** with
+**AMD visual inference pending** prominently visible. It is a candidate, not an
+approved submission title or published asset.
+
+Selected private directory:
+`var/mission06-submission/block-c-deck-20261015-192428-1ac2f7/`.
+Open `ReKit-Block-C-candidate.pptx`; `ReKit-Block-C-cover.png` is the separate
+1920 × 1080 cover. All seven slide renders are under `slides/`.
+
+| Slide | Evidence-led story |
+| --- | --- |
+| 1 | Recover compatible kits across returns while preserving component evidence and decisions. |
+| 2 | Three invented returns contain four unique components; the approved kit needs an A body and A adapter. Additional views do not create stock. |
+| 3 | B fails policy; a new A close-up leads to a scripted human correction without erasing B. Actual recorded comparison and original diagram. |
+| 4 | Complete feasible rebuild, liquidation and retention alternatives: $175 / $102.50 / $16 at $0.25 labor/minute; $70 / $85 / $16 at $2/minute. Identical inputs otherwise; noncash retention and synthetic estimates disclosed. |
+| 5 | Atomic reservation, actual 409 conflict and two kit records with four unique consumed source components. Actual inventory capture. |
+| 6 | Actual local NVIDIA output with its repetition, unfinished uncertainty and held status; accepted Block B 1,485 / 76 software results; 26 assessments still pending. |
+| 7 | AMD remains unresolved after two HTTP 400 attempts. Provider clarification, fresh quota and explicit approval precede any further request. |
+
+Reproduce only after closing your PowerPoint session:
+
+```powershell
+powershell.exe -NoProfile -File scripts/build_block_c_deck.ps1
+```
+
+The new builder writes a fresh private directory, validates the recorded inputs,
+uses native editable text/tables and crops embedded original PNGs without
+changing their bytes. Installed PowerPoint is the local fallback because the
+presentation artifact runtime is unavailable. Geometry, text extents, Open XML,
+source hashes and all seven rendered slides were checked. Office creator
+metadata identifies NeuralFoundry; source notes retain provenance and credits.
+Earlier failed drafts are retained separately and are not the selected candidate.
+
+The [Block C report](reports/winning-quality-block-c.md) records validation and
+limitations. Use the [new storyboard](block-c-recording-storyboard.md) for the
+actual canonical narrative and replaceable AMD segment. Its silent stills draft
+is separate from this seven-slide presentation and from final motion footage.
+Detailed lineage identifiers are best shown with the focused browser view;
+the slide establishes the two-kit structure. Owner release approval, exact form
+requirements, final recording and independent assessment remain outstanding.
+
+## Preserved Mission 05 deck
+
 Seven slides, 16:9, for **NeuralFoundry — Forging Intelligent Systems.**
 The requested title is **ReKit — AMD-Powered Visual Recovery Intelligence**.
 Every use must retain **AMD deployment planned; qualification pending** until

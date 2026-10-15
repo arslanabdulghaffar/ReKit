@@ -47,6 +47,8 @@ it('compares explicit superseding assertions and uses component event positions,
   expect(screen.getByText(previous.reason)).toBeInTheDocument();
   expect(screen.getByText(current.reason)).toBeInTheDocument();
   expect(screen.getAllByText('Added at evidence version 4 · observation-closeup')).toHaveLength(1);
+  const addedCitation = screen.getByText('Newly cited in this correction');
+  expect(addedCitation.parentElement).toContainElement(screen.getByRole('link', { name: 'View original Image 2' }));
   expect(JSON.stringify(value)).toBe(frozen);
 });
 
@@ -77,6 +79,7 @@ it('does not invent prior values or assertion versions when a history response i
   expect(screen.getByText('Assertion evidence version unavailable')).toBeInTheDocument();
   expect(screen.queryByRole('columnheader', { name: 'Previous assertion' })).not.toBeInTheDocument();
   expect(screen.queryByText(previous.reason)).not.toBeInTheDocument();
+  expect(screen.queryByText('Newly cited in this correction')).not.toBeInTheDocument();
 });
 
 it('does not link external, missing-record, or different-component evidence as a managed original', () => {
@@ -97,6 +100,16 @@ it('preserves first-verification semantics without fabricating a correction', ()
   expect(screen.getByRole('heading', { name: 'Latest human verification' })).toBeInTheDocument();
   expect(screen.queryByText('Human correction summary')).not.toBeInTheDocument();
   expect(screen.queryByText('Changed')).not.toBeInTheDocument();
+  expect(screen.queryByText('Newly cited in this correction')).not.toBeInTheDocument();
+});
+
+it('labels a newly cited older observation without claiming it is a newly captured image', () => {
+  const value = history();
+  value.events = [observation(assets[0], 10), observation(assets[1], 20), assertion(previous, 50), assertion(current, 500)];
+  render(<VerificationSummary history={value} assets={assets} />);
+  expect(screen.getByText('Newly cited in this correction')).toBeInTheDocument();
+  expect(screen.getByText('Added at evidence version 3 · observation-closeup')).toBeInTheDocument();
+  expect(screen.queryByText(/newly captured|new image/i)).not.toBeInTheDocument();
 });
 
 it.each(['reference', 'return', 'component'] as const)('does not navigate a contradictory observation %s association', field => {
